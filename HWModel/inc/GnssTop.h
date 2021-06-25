@@ -9,6 +9,9 @@
 #include "TeFifoMem.h"
 //#include "AeFifo.h"
 #include "TrackingEngine.h"
+#include "AcqEngine.h"
+
+#define MAX_BLOCK_SIZE 25000	// usually defined as samples per millisecond at maximum possible sampling rate
 
 typedef void (*InterruptFunction)();
 
@@ -27,28 +30,21 @@ public:
 //	reg_uint PreProcessEnable;			// 8bit
 	reg_uint MeasurementNumber;			// 10bit
 	reg_uint MeasurementCount;			// 10bit
-//	reg_uint DataReadyIntMask;			// 1bit
 	reg_uint ReqCount;					// 10bit
-	reg_uint InterruptFlag;				// 3bit, bit8~10
+	reg_uint InterruptFlag;				// 4bit, bit8~11
+	reg_uint IntMask;					// 4bit, bit8~11
 
 
-	int Process(int ReadBlockSize, int RoundNumber);
+	int Process(int ReadBlockSize);
 
 	unsigned int MemCodeBuffer[128*100];
 	CIfFile IfFile;
 	CTeFifoMem TeFifo;
-//	CNoiseCalculate NoiseCalculate[FREQ_NUMBER];
-//	CAeFifo AeFifo;
 	CTrackingEngine TrackingEngine;
-//	CAcqEngine AcqEngine;
+	CAcqEngine AcqEngine;
 	complex_int *FileData;
-//	unsigned char *SampleRequant;
-//	U8 *FIFOInputData[FREQ_NUMBER];
-//	S8 *IFData[FREQ_NUMBER];
-//	S8 *ChDataI[FREQ_NUMBER], *ChDataQ[FREQ_NUMBER];
-//	S8 *InputData[FREQ_NUMBER], *OutputI[FREQ_NUMBER], *OutputQ[FREQ_NUMBER];
-//	S16 *ResampleI, *ResampleQ;
-//	U8 *RequantData;
+	unsigned char *SampleQuant;
+
 	InterruptFunction InterruptService;
 };
 

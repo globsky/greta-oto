@@ -13,10 +13,10 @@ input clk,   // system clock
 input rst_b, // reset signal, low active
 
 // signal of TE control and state
-input te_start,
-output te_running,
-output te_ready,
-output te_over,
+input te_start,			// trigger TE start/restart
+output te_running,	// indicator of whether TE is running (1) or waiting for CPU trigger restart (0)
+output te_ready,		// flag of coherent data ready in any channel, valid when te_over is active
+output te_over,			// active for one cycle when TE finished one data block processing
 
 // interface to TE FIFO
 input fifo_ready,					// fifo data ready
@@ -91,28 +91,28 @@ always @(posedge clk or negedge rst_b)
 	end
 	else if (te_reg_cs & te_wr)
 	begin
-		case(te_addr)
-			`TE_CHANNEL_ENABLE_ADDR: te_channel_enable <= te_d4wt;
-			`TE_POLYNOMIAL_ADDR    : te_polynomial     <= te_d4wt;
-			`TE_CODE_LENGTH_ADDR   : te_code_length    <= te_d4wt;
-			`TE_POLYNOMIAL2_ADDR   : te_polynomial2    <= te_d4wt;
-			`TE_CODE_LENGTH2_ADDR  : te_code_length2   <= te_d4wt;
+		case(te_addr[5:0])
+			`TE_CHANNEL_ENABLE     : te_channel_enable <= te_d4wt;
+			`TE_POLYNOMIAL         : te_polynomial     <= te_d4wt;
+			`TE_CODE_LENGTH        : te_code_length    <= te_d4wt;
+			`TE_POLYNOMIAL2        : te_polynomial2    <= te_d4wt;
+			`TE_CODE_LENGTH2       : te_code_length2   <= te_d4wt;
 		endcase
 	end
 
 //read registers
 always @ (*) begin
 	if (te_reg_cs & te_rd)
-		case(te_addr)
-			`TE_CHANNEL_ENABLE_ADDR   : te_reg_d4rd = te_channel_enable;
-			`TE_COH_DATA_READY_ADDR   : te_reg_d4rd = te_coh_data_ready;
-			`TE_OW_PROTECT_CHAN_ADDR  : te_reg_d4rd = te_channel_ow_protect;
-			`TE_OW_PROTECT_ADDR_ADDR  : te_reg_d4rd = {20'h0, te_ow_protect_addr, 2'b00};
-			`TE_OW_PROTECT_VALUE_ADDR : te_reg_d4rd = te_ow_protect_value;
-			`TE_POLYNOMIAL_ADDR       : te_reg_d4rd = te_polynomial;
-			`TE_CODE_LENGTH_ADDR      : te_reg_d4rd = te_code_length;
-			`TE_POLYNOMIAL2_ADDR      : te_reg_d4rd = te_polynomial2;
-			`TE_CODE_LENGTH2_ADDR     : te_reg_d4rd = te_code_length2;
+		case(te_addr[5:0])
+			`TE_CHANNEL_ENABLE        : te_reg_d4rd = te_channel_enable;
+			`TE_COH_DATA_READY        : te_reg_d4rd = te_coh_data_ready;
+			`TE_OW_PROTECT_CHANNEL    : te_reg_d4rd = te_channel_ow_protect;
+			`TE_OW_PROTECT_ADDR       : te_reg_d4rd = {20'h0, te_ow_protect_addr, 2'b00};
+			`TE_OW_PROTECT_VALUE      : te_reg_d4rd = te_ow_protect_value;
+			`TE_POLYNOMIAL            : te_reg_d4rd = te_polynomial;
+			`TE_CODE_LENGTH           : te_reg_d4rd = te_code_length;
+			`TE_POLYNOMIAL2           : te_reg_d4rd = te_polynomial2;
+			`TE_CODE_LENGTH2          : te_reg_d4rd = te_code_length2;
 			`TE_CURR_STATE_MACHINE    : te_reg_d4rd = {12'h0, next_te_state, 12'h0, cur_te_state};
 			default                   : te_reg_d4rd = 32'h0;
 		endcase
@@ -158,7 +158,7 @@ always @ (*) begin
 end
 
 assign te_over  = (cur_te_state == TE_FINISH);
-assign te_running = (cur_te_state != WAIT_CPU);
+assign te_running = (cur_te_state != WAIT_CPU) && (cur_te_state != STAND_BY);
 assign dumping_state = (cur_te_state == DUMP_STATE);
 
 // wait 5 clock cycles after last FIFO data for correlator finish
@@ -645,7 +645,7 @@ assign ow_protect_channel = ((overwrite_protect[0] & physical_channel_en[0]) ? l
 always @(posedge clk or negedge rst_b)
 	if (!rst_b)
 		te_coh_data_ready <= 32'h0;
-	else if (te_reg_cs & te_wr & (te_addr == `TE_COH_DATA_READY_ADDR))
+	else if (te_reg_cs & te_wr & (te_addr[5:0] == `TE_COH_DATA_READY))
 		te_coh_data_ready <= te_d4wt;
 	else if ((cur_te_state == COHERENT_SUM) && coherent_sum_done)
 		te_coh_data_ready <= te_coh_data_ready | coh_ready_channel;
@@ -657,7 +657,7 @@ assign te_ready = |te_coh_data_ready;
 always @(posedge clk or negedge rst_b)
 	if (!rst_b)
 		te_channel_ow_protect <= 32'h0;
-	else if (te_reg_cs & te_wr & (te_addr == `TE_OW_PROTECT_CHAN_ADDR))
+	else if (te_reg_cs & te_wr & (te_addr[5:0] == `TE_OW_PROTECT_CHANNEL))
 		te_channel_ow_protect <= te_d4wt;
 	else if ((cur_te_state == COHERENT_SUM) && coherent_sum_done)
 		te_channel_ow_protect <= te_channel_ow_protect | ow_protect_channel;
@@ -670,7 +670,7 @@ assign ow_protect_valid = overwrite_protect & coherent_sum_valid & physical_chan
 always @(posedge clk or negedge rst_b)
 	if (!rst_b)
 		te_ow_protect_addr  <= 10'h0;
-	else if (te_reg_cs & te_wr & (te_addr == `TE_OW_PROTECT_ADDR_ADDR))
+	else if (te_reg_cs & te_wr & (te_addr[5:0] == `TE_OW_PROTECT_ADDR))
 		te_ow_protect_addr  <= te_d4wt[11:2];
 	else begin
 		if (ow_protect_valid[3])
@@ -686,7 +686,7 @@ always @(posedge clk or negedge rst_b)
 always @(posedge clk or negedge rst_b)
 	if (!rst_b)
 		te_ow_protect_value <= 32'h0;
-	else if (te_reg_cs & te_wr & (te_addr == `TE_OW_PROTECT_VALUE_ADDR))
+	else if (te_reg_cs & te_wr & (te_addr[5:0] == `TE_OW_PROTECT_VALUE))
 		te_ow_protect_value <= te_d4wt;
 	else begin
 		if (ow_protect_valid[3])

@@ -16,7 +16,6 @@ input rst_b, // reset signal, low active
 input te_enable,	// enable flag from tracking engines
 input fifo_clear,	// clear FIFO from external
 input [TRIGGER_WIDTH-1:0] fifo_trigger_in,	// trigger signal from other FIFO
-//output te_en_o,
 output fifo_trigger_out,	// trigger signal to other FIFO
 
 // latch signals				
@@ -54,7 +53,7 @@ localparam GUARD_WIDTH = ADDR_WIDTH - 8;
 //----------------------------------------------------------
 // internal registers
 //----------------------------------------------------------
-reg[TRIGGER_WIDTH-1:0] trigger_source;
+reg [TRIGGER_WIDTH-1:0] trigger_source;
 reg dummy_write;
 reg fifo_clear_bit;
 reg wait_trigger_bit;
@@ -123,33 +122,26 @@ always @(posedge clk or negedge rst_b)
 		wait_trigger_bit   <= 1'b0;
 	end
 
-reg [31:0] fifo_reg_sel;
 //read registers
 always @ (*) begin
   if(fifo_rd & fifo_cs)
 		case (fifo_addr[4:0])
-			`TE_FIFO_CONFIG       : fifo_reg_sel = {16'h0, trigger_source, 6'h0, wait_trigger, dummy_write};
-			`TE_FIFO_STATUS       : fifo_reg_sel = {{(24-DATA_COUNT_WIDTH){1'b0}}, fifo_data_count, 5'h0, fifo_enable, guard_alarm_flag, overflow_flag};
-			`TE_FIFO_GUARD        : fifo_reg_sel = {{(24-GUARD_WIDTH){1'b0}}, fifo_guard, 8'h0};
-			`TE_FIFO_READ_ADDR    : fifo_reg_sel = {{(32-ADDR_WIDTH){1'b0}}, read_addr};
-			`TE_FIFO_WRITE_ADDR   : fifo_reg_sel = {write_addr_round, write_addr, {CLK_COUNT_WIDTH{1'b0}}};
-			`TE_FIFO_BLOCK_SIZE   : fifo_reg_sel = {{(32-ADDR_WIDTH){1'b0}}, block_size};
-			`TE_FIFO_BLOCK_ADJUST : fifo_reg_sel = {{24{fifo_block_adjust[7]}}, fifo_block_adjust};
-			`TE_FIFO_LWADDR_CPU   : fifo_reg_sel = {cpu_round_lwaddr, cpu_lwaddr};
-			`TE_FIFO_LWADDR_EM    : fifo_reg_sel = {em_round_lwaddr, em_lwaddr};
-			`TE_FIFO_LWADDR_PPS   : fifo_reg_sel = {pps_round_lwaddr, pps_lwaddr};
-			`TE_FIFO_LWADDR_AE    : fifo_reg_sel = {ae_round_lwaddr, ae_lwaddr};
-			default:                fifo_reg_sel = 32'h0;
+			`TE_FIFO_CONFIG       : fifo_d4rd = {16'h0, trigger_source, 6'h0, wait_trigger, dummy_write};
+			`TE_FIFO_STATUS       : fifo_d4rd = {{(24-DATA_COUNT_WIDTH){1'b0}}, fifo_data_count, 5'h0, fifo_enable, guard_alarm_flag, overflow_flag};
+			`TE_FIFO_GUARD        : fifo_d4rd = {{(24-GUARD_WIDTH){1'b0}}, fifo_guard, 8'h0};
+			`TE_FIFO_READ_ADDR    : fifo_d4rd = {{(32-ADDR_WIDTH){1'b0}}, read_addr};
+			`TE_FIFO_WRITE_ADDR   : fifo_d4rd = {write_addr_round, write_addr, {CLK_COUNT_WIDTH{1'b0}}};
+			`TE_FIFO_BLOCK_SIZE   : fifo_d4rd = {{(32-ADDR_WIDTH){1'b0}}, block_size};
+			`TE_FIFO_BLOCK_ADJUST : fifo_d4rd = {{24{fifo_block_adjust[7]}}, fifo_block_adjust};
+			`TE_FIFO_LWADDR_CPU   : fifo_d4rd = {cpu_round_lwaddr, cpu_lwaddr};
+			`TE_FIFO_LWADDR_EM    : fifo_d4rd = {em_round_lwaddr, em_lwaddr};
+			`TE_FIFO_LWADDR_PPS   : fifo_d4rd = {pps_round_lwaddr, pps_lwaddr};
+			`TE_FIFO_LWADDR_AE    : fifo_d4rd = {ae_round_lwaddr, ae_lwaddr};
+			default:                fifo_d4rd = 32'h0;
 		endcase
 	else
-		fifo_reg_sel = 32'h0;
+		fifo_d4rd = 32'h0;
 end
-
-always @(posedge clk or negedge rst_b)
-	if (!rst_b)
-		fifo_d4rd <= 32'h0;
-  else if(fifo_rd & fifo_cs)
-		fifo_d4rd <= fifo_reg_sel;
 
 // wire derived from register value
 assign clear = fifo_clear | fifo_clear_bit;

@@ -68,6 +68,12 @@ void CTrackingEngine::SetRegValue(int Address, U32 Value)
 	case ADDR_OFFSET_TE_CODE_LENGTH:
 		PrnPolyLength[1] = Value;
 		break;
+	case ADDR_OFFSET_TE_POLYNOMIAL2:
+		PrnPolyLength[2] = Value;
+		break;
+	case ADDR_OFFSET_TE_CODE_LENGTH2:
+		PrnPolyLength[3] = Value;
+		break;
 	default:
 		break;
 	}
@@ -92,6 +98,10 @@ U32 CTrackingEngine::GetRegValue(int Address)
 		return PrnPolyLength[0];
 	case ADDR_OFFSET_TE_CODE_LENGTH:
 		return PrnPolyLength[1];
+	case ADDR_OFFSET_TE_POLYNOMIAL2:
+		return PrnPolyLength[2];
+	case ADDR_OFFSET_TE_CODE_LENGTH2:
+		return PrnPolyLength[3];
 	default:
 		return 0;
 	}

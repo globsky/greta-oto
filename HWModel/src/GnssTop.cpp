@@ -5,9 +5,7 @@
 #include "RegAddress.h"
 #include "GnssTop.h"
 
-#define MAX_BLOCK_SIZE 25000
-
-CGnssTop::CGnssTop() : TeFifo(0, 10240), TrackingEngine(&TeFifo, MemCodeBuffer)
+CGnssTop::CGnssTop() : TeFifo(0, 10240), TrackingEngine(&TeFifo, MemCodeBuffer), AcqEngine(MemCodeBuffer)
 {
 	TrackingEngineEnable = 0;
 	MeasurementNumber = 0;
@@ -16,6 +14,7 @@ CGnssTop::CGnssTop() : TeFifo(0, 10240), TrackingEngine(&TeFifo, MemCodeBuffer)
 	InterruptFlag = 0;
 
 	FileData = (complex_int *)malloc(MAX_BLOCK_SIZE * sizeof(complex_int));
+	SampleQuant = (unsigned char *)malloc(MAX_BLOCK_SIZE * sizeof(unsigned char));
 
 	InterruptService = NULL;
 }
@@ -23,6 +22,7 @@ CGnssTop::CGnssTop() : TeFifo(0, 10240), TrackingEngine(&TeFifo, MemCodeBuffer)
 CGnssTop::~CGnssTop()
 {
 	free(FileData);
+	free(SampleQuant);
 }
 
 void CGnssTop::Reset(U32 ResetMask)
@@ -70,13 +70,13 @@ void CGnssTop::SetRegValue(int Address, U32 Value)
 			MeasurementCount = (Value & 0x3ff);
 			break;
 		case ADDR_OFFSET_INTERRUPT_FLAG:
-			InterruptFlag &= ~Value >> 8;
+			InterruptFlag &= ~Value;
 			break;
 		case ADDR_OFFSET_REQUEST_COUNT:
 			ReqCount = (Value & 0x3ff);
 			break;
-//		case ADDR_OFFSET_DATA_READY_INT_MASK:
-//			DataReadyIntMask = Value & 0x1ff;
+		case ADDR_OFFSET_INTERRUPT_MASK:
+			IntMask = Value;
 		default:
 			break;
 		}
@@ -90,11 +90,13 @@ void CGnssTop::SetRegValue(int Address, U32 Value)
 //	case ADDR_BASE_AE_FIFO:
 //		AeFifo.SetRegValue(AddressOffset, Value);
 //		break;
-//	case ADDR_BASE_ACQUIRE_ENGINE:
-//		AcqEngine.SetRegValue(AddressOffset, Value);
-//		if (AddressOffset == ADDR_OFFSET_AE_CONTROL && (Value & 1))	// start fill AE buffer
-//			TeFifo.LatchWriteAddress(3);
-//		break;
+	case ADDR_BASE_ACQUIRE_ENGINE:
+		AcqEngine.SetRegValue(AddressOffset, Value);
+		if (AddressOffset == ADDR_OFFSET_AE_BUFFER_CONTROL && (Value & 0x100))	// latch write address when starting fill AE buffer
+			TeFifo.LatchWriteAddress(3);
+		if (AddressOffset == ADDR_OFFSET_AE_CONTROL && (Value & 0x100))	// if do acquisition, set AE finished interrupt
+			InterruptFlag |= (1 << 11);
+		break;
 	case ADDR_BASE_TE_FIFO:
 		TeFifo.SetRegValue(AddressOffset, Value);
 		break;
@@ -105,6 +107,9 @@ void CGnssTop::SetRegValue(int Address, U32 Value)
 		break;
 	case ADDR_BASE_TE_BUFFER:
 		TrackingEngine.TEBuffer[AddressOffset >> 2] = Value;
+		break;
+	case ADDR_BASE_AE_BUFFER:
+		AcqEngine.ChannelConfig[AddressOffset >> 5][(AddressOffset >> 2) & 0x7] = Value;
 		break;
 	default:
 		break;
@@ -132,8 +137,8 @@ U32 CGnssTop::GetRegValue(int Address)
 			return InterruptFlag;
 		case ADDR_OFFSET_REQUEST_COUNT:
 			return ReqCount;
-//		case ADDR_OFFSET_DATA_READY_INT_MASK:
-//			return DataReadyIntMask & 0x1ff;
+		case ADDR_OFFSET_INTERRUPT_MASK:
+			return IntMask;
 		default:
 			return 0;
 		}
@@ -143,8 +148,8 @@ U32 CGnssTop::GetRegValue(int Address)
 //		return NoiseCalculate[TEindex].GetRegValue(AddressOffset & 0xff);
 //	case ADDR_BASE_AE_FIFO:
 //		return AeFifo.GetRegValue(AddressOffset);
-//	case ADDR_BASE_ACQUIRE_ENGINE:
-//		return AcqEngine.GetRegValue(AddressOffset);
+	case ADDR_BASE_ACQUIRE_ENGINE:
+		return AcqEngine.GetRegValue(AddressOffset);
 	case ADDR_BASE_TE_FIFO:
 		return TeFifo.GetRegValue(AddressOffset);
 	case ADDR_BASE_TRACKING_ENGINE:
@@ -154,47 +159,48 @@ U32 CGnssTop::GetRegValue(int Address)
 	case ADDR_BASE_TE_BUFFER:
 		return TrackingEngine.TEBuffer[AddressOffset >> 2];
 		break;
+	case ADDR_BASE_AE_BUFFER:
+		return AcqEngine.ChannelConfig[AddressOffset >> 5][(AddressOffset >> 2) & 0x7];
+		break;
 	default:
 		return 0;
 	}
 }
 
-int CGnssTop::Process(int ReadBlockSize, int RoundNumber)
+int CGnssTop::Process(int ReadBlockSize)
 {
-	int i, RoundCount = 0;
-	int ReachThreshold;
+	int i;
+	int ReachThreshold = 0;
+	int SampleNumber;
 
-	while (RoundCount != RoundNumber)
+	IfFile.ReadFile(ReadBlockSize, FileData);
+	if (AcqEngine.IsFillingBuffer())
 	{
-		ReachThreshold = 0;
-		while (!ReachThreshold)
-		{
-			IfFile.ReadFile(ReadBlockSize, FileData);
-			for (i = 0; i < ReadBlockSize; i ++)
-				ReachThreshold |= TeFifo.WriteData(FileData[i]);
-		}
-		RoundCount ++;
+		SampleNumber = AcqEngine.RateAdaptor.DoRateAdaptor(FileData, ReadBlockSize, SampleQuant);
+		AcqEngine.WriteSample(SampleNumber, SampleQuant);
+	}
+	for (i = 0; i < ReadBlockSize; i ++)
+		ReachThreshold |= TeFifo.WriteData(FileData[i]);
 
-		if (TrackingEngineEnable)
+	if (TrackingEngineEnable)
+	{
+		InterruptFlag |= TrackingEngine.ProcessData() ? 0x100 : 0;
+		MeasurementCount ++;
+		if (MeasurementCount == MeasurementNumber)
 		{
-			InterruptFlag |= TrackingEngine.ProcessData() ? 0x100 : 0;
-			MeasurementCount ++;
-			if (MeasurementCount == MeasurementNumber)
-			{
-				MeasurementCount = 0;
-				InterruptFlag |= (1 << 9);
-			}
+			MeasurementCount = 0;
+			InterruptFlag |= (1 << 9);
 		}
-		if(ReqCount)
-		{
-			if(ReqCount == 1)
-				InterruptFlag |= (1 << 10);
-			ReqCount--;
-		}
-
-		if (InterruptFlag && InterruptService != NULL )
-			InterruptService();
+	}
+	if(ReqCount)
+	{
+		if(ReqCount == 1)
+			InterruptFlag |= (1 << 10);
+		ReqCount--;
 	}
 
-	return RoundCount;
+	if ((InterruptFlag & IntMask) && InterruptService != NULL )
+		InterruptService();
+
+	return ReachThreshold;
 }
