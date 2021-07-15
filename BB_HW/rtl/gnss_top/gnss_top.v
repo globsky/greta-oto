@@ -307,7 +307,7 @@ ae_top #(.AE_BUFFER_SIZE(16*256)) u_ae_top
 
 	.memcode_addr        (ae_memcode_addr      ),
 	.memcode_rd          (ae_memcode_rd        ),
-	.memcode_read_valid  (ae_memcode_read_valid),
+	.memcode_read_valid  (memcode_read_valid   ),
 	.memcode_data        (ae_memcode_data      ),
 
 	.sample_valid        (sample_valid         ),

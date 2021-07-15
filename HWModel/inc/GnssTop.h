@@ -34,9 +34,6 @@ public:
 	reg_uint InterruptFlag;				// 4bit, bit8~11
 	reg_uint IntMask;					// 4bit, bit8~11
 
-
-	int Process(int ReadBlockSize);
-
 	unsigned int MemCodeBuffer[128*100];
 	CIfFile IfFile;
 	CTeFifoMem TeFifo;
@@ -44,6 +41,9 @@ public:
 	CAcqEngine AcqEngine;
 	complex_int *FileData;
 	unsigned char *SampleQuant;
+
+	int Process(int ReadBlockSize);
+	void SetInputFile(char *FileName) { IfFile.OpenIfFile(FileName); }
 
 	InterruptFunction InterruptService;
 };

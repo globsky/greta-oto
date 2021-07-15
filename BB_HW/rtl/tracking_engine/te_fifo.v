@@ -30,12 +30,12 @@ input [DATA_WIDTH-1:0]	sample_data,	// sample data
 
 // interface to TE
 output fifo_ready,			// fifo data ready
-output fifo_last_data,	// indicate the last data of FIFO
+output reg fifo_last_data,	// indicate the last data of FIFO
 input fifo_read,				// read FIFO command, indicate TE ready to accept data
 input fifo_rewind,			// FIFO read address rewind
 input fifo_skip,				// FIFO skip one block
 output reg fifo_data_valid,	// FIFO data valid signal
-output [DATA_WIDTH-1:0] fifo_data,	// data output to TE
+output reg [DATA_WIDTH-1:0] fifo_data,	// data output to TE
 
 // CPU register read/write interface
 input fifo_cs,	// FIFO cs signal
@@ -109,7 +109,7 @@ always @(posedge clk or negedge rst_b)
 				dummy_write        <= fifo_d4wt[0];
 			end
 			`TE_FIFO_STATUS      : clear_overflow_flag <= fifo_d4wt[0];
-			`TE_FIFO_GUARD       :  fifo_guard <= fifo_d4wt[GUARD_WIDTH+7:8];	// only 8MSB effective
+			`TE_FIFO_GUARD       : fifo_guard <= fifo_d4wt[GUARD_WIDTH+7:8];	// only 8MSB effective
 			`TE_FIFO_BLOCK_SIZE  : block_size <= fifo_d4wt[ADDR_WIDTH-1:0];
 			`TE_FIFO_BLOCK_ADJUST: fifo_block_adjust <= fifo_d4wt[7:0];
 		endcase
@@ -161,8 +161,29 @@ always @(posedge clk or negedge rst_b)
 		wait_trigger <= 1'b0;
 
 //----------------------------------------------------------
+// FIFO RAM
+//----------------------------------------------------------
+reg read_fifo_valid;
+reg write_fifo_valid;
+reg [4*DATA_WIDTH-1:0] data_to_write;
+wire [4*DATA_WIDTH-1:0] ram_read_data;
+reg [ADDR_WIDTH-3:0] addr_to_write;
+reg [ADDR_WIDTH-1:0] cur_read_addr;
+
+spram #(.RAM_SIZE(FIFO_SIZE/4), .ADDR_WIDTH(ADDR_WIDTH-2), .DATA_WIDTH(DATA_WIDTH*4)) fifo_ram
+(
+		.clk (clk),
+		.en (read_fifo_valid | write_fifo_valid),
+		.we (write_fifo_valid),
+		.addr (write_fifo_valid ? addr_to_write : cur_read_addr[ADDR_WIDTH-1:2]),
+		.wdata (data_to_write),
+		.rdata (ram_read_data)
+);
+
+//----------------------------------------------------------
 // write FIFO
 //----------------------------------------------------------
+wire to_do_read;
 wire fifo_write_en;
 assign fifo_write_en = sample_valid & fifo_enable;	// FIFO write valid
 
@@ -196,6 +217,48 @@ always @(posedge clk or negedge rst_b)
 		write_addr_round <= 'd0;
 	else if (fifo_write_en & write_rewind)
 		write_addr_round <= write_addr_round + 1;
+
+// write buffering
+reg write_pending;
+reg [3*DATA_WIDTH-1:0] write_shift;
+
+always @(posedge clk or negedge rst_b)
+	if (!rst_b)
+		write_pending <= 1'b0;
+	else if (clear)
+		write_pending <= 1'b0;
+	else if (fifo_write_en && write_addr[1:0] == 2'b11 && ~dummy_write)
+		write_pending <= 1'b1;
+	else if (~to_do_read)
+		write_pending <= 1'b0;
+
+always @(posedge clk or negedge rst_b)
+	if (!rst_b)
+		write_fifo_valid <= 1'b0;
+	else if (clear)
+		write_fifo_valid <= 1'b0;
+	else if (write_pending && ~to_do_read)
+		write_fifo_valid <= 1'b1;
+	else
+		write_fifo_valid <= 1'b0;
+
+always @(posedge clk or negedge rst_b)
+	if (!rst_b)
+		write_shift <= 'd0;
+	else if (fifo_write_en)
+		write_shift <= {write_shift[2*DATA_WIDTH-1:0], sample_data};
+
+always @(posedge clk or negedge rst_b)
+	if (!rst_b)
+		data_to_write <= 'd0;
+	else if (fifo_write_en && write_addr[1:0] == 2'b11)
+		data_to_write <= {write_shift, sample_data};
+
+always @(posedge clk or negedge rst_b)
+	if (!rst_b)
+		addr_to_write <= 'd0;
+	else if (fifo_write_en && write_addr[1:0] == 2'b11)
+		addr_to_write <= write_addr[ADDR_WIDTH-1:2];
 
 //----------------------------------------------------------
 // FIFO data count
@@ -234,16 +297,38 @@ always @(posedge clk or negedge rst_b)
 		overflow_flag <= 1'b0;
 
 assign fifo_ready       = (fifo_data_count >= real_block_size) & fifo_enable;		
-assign fifo_trig_out    = (fifo_data_count == real_block_size);	 
+assign fifo_trigger_out = (fifo_data_count == real_block_size);	 
 assign guard_alarm_flag = (fifo_data_count[ADDR_WIDTH-1:8] >= fifo_guard_th);
 
 //----------------------------------------------------------
 // read FIFO
 //----------------------------------------------------------
-reg read_fifo_valid;
 reg [ADDR_WIDTH-1:0] read_count;
 wire [ADDR_WIDTH-1:0] read_count_next;
 assign read_count_next = read_count + 1;
+
+reg fifo_output, fifo_output_d;
+assign to_do_read = fifo_read || ((cur_read_addr[1:0] == 2'b11) && fifo_output);
+
+always @(posedge clk or negedge rst_b)
+	if (!rst_b)
+		fifo_output <= 1'b0;
+	else if (fifo_read)
+		fifo_output <= 1'b1;
+	else if (read_count_next == real_block_size)
+		fifo_output <= 1'b0;
+
+always @(posedge clk or negedge rst_b)
+	if (!rst_b)
+		fifo_output_d <= 1'b0;
+	else
+		fifo_output_d <= fifo_output;
+
+always @(posedge clk or negedge rst_b)
+	if (!rst_b)
+		fifo_data_valid <= 1'b0;
+	else
+		fifo_data_valid <= fifo_output_d;
 
 always @(posedge clk or negedge rst_b)
 	if (!rst_b)
@@ -254,29 +339,30 @@ always @(posedge clk or negedge rst_b)
 		read_fifo_valid <= 1'b0; 
 	else if (read_count_next == real_block_size)	// deactivate when one block completed
 		read_fifo_valid <= 1'b0;
-	else if (fifo_read)	// active on read FIFO indicator or rewind signal
+	else if (to_do_read)
 		read_fifo_valid <= 1'b1;
-		
+	else
+		read_fifo_valid <= 1'b0;
+
 always @(posedge clk or negedge rst_b)
 	if (!rst_b)
 		read_count <= 'd0;
-	else if (clear | ~read_fifo_valid)
+	else if (clear | ~fifo_output)
 		read_count <= 'd0;
 	else
 		read_count <= read_count_next;
-		
-reg [ADDR_WIDTH-1:0] cur_read_addr;
+
 wire [ADDR_WIDTH-1:0] read_addr_next;
 assign read_addr_next = cur_read_addr + 1;
 
 always @(posedge clk or negedge rst_b)
 	if (!rst_b)
 		cur_read_addr <= 'd0;
-	else if(clear)
+	else if (clear)
 		cur_read_addr <= 'd0;
 	else if (fifo_rewind)
 		cur_read_addr <= read_addr;
-	else if (read_fifo_valid)
+	else if (fifo_output)
 		cur_read_addr <= (read_addr_next == FIFO_SIZE) ? 'd0 : read_addr_next;
 
 always @(posedge clk or negedge rst_b)
@@ -287,25 +373,58 @@ always @(posedge clk or negedge rst_b)
 	else if (fifo_skip)
 		read_addr <= cur_read_addr;
 
-// dual port for FIFO RAM (wider data width can use single port instead)
-dpram_rw #(.RAM_SIZE(FIFO_SIZE), .ADDR_WIDTH(ADDR_WIDTH), .DATA_WIDTH(8)) fifo_ram
-(
-	.clk (clk),
-	.we (fifo_write_en & ~dummy_write),
-	.write_addr (write_addr),
-	.data_in (sample_data),
-	.rd (read_fifo_valid),
-	.read_addr (cur_read_addr),
-	.data_out (fifo_data)
-);
+// output data select
+reg ram_data_valid;
+reg [4*DATA_WIDTH-1:0] fifo_data_latch;
 
 always @(posedge clk or negedge rst_b)
 	if (!rst_b)
-		fifo_data_valid <= 1'b0;
+		ram_data_valid <= 1'b0;
 	else
-		fifo_data_valid <= read_fifo_valid;
+		ram_data_valid <= read_fifo_valid;
 
-assign fifo_last_data = (fifo_data_valid & (read_count == real_block_size));
+always @(posedge clk or negedge rst_b)
+	if (!rst_b)
+		fifo_data_latch <= 'd0;
+	else if (ram_data_valid)
+		fifo_data_latch <= ram_read_data;
+
+// delay 2 cycles for data select and last data
+reg [1:0] read_addr_d, data_sel;
+reg last_output;
+
+always @(posedge clk or negedge rst_b)
+	if (!rst_b)
+		read_addr_d <= 'd0;
+	else
+		read_addr_d <= cur_read_addr[1:0];
+
+always @(posedge clk or negedge rst_b)
+	if (!rst_b)
+		data_sel <= 'd0;
+	else
+		data_sel <= read_addr_d;
+
+always @(posedge clk or negedge rst_b)
+	if (!rst_b)
+		last_output <= 'd0;
+	else
+		last_output <= (fifo_output_d && (read_count == real_block_size));
+
+always @(posedge clk or negedge rst_b)
+	if (!rst_b)
+		fifo_last_data <= 'd0;
+	else
+		fifo_last_data <= last_output;
+
+always @ (*)
+	case(data_sel)
+		2'b00  : fifo_data = fifo_data_latch[4*DATA_WIDTH-1:3*DATA_WIDTH];
+		2'b01  : fifo_data = fifo_data_latch[3*DATA_WIDTH-1:2*DATA_WIDTH];
+		2'b10  : fifo_data = fifo_data_latch[2*DATA_WIDTH-1:1*DATA_WIDTH];
+		2'b11  : fifo_data = fifo_data_latch[1*DATA_WIDTH-1:0];
+		default: fifo_data = 'd0;
+	endcase
 
 //----------------------------------------------------------
 // write address latch on rise edge of signal

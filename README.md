@@ -12,4 +12,6 @@ Change list as below:
 6/25/2021
 	Add top level module and other minor changes.
 	Now this IP is a complete IP with exception of PPS to be added
-
+7/14/2021
+	Change dual port SRAM in TE FIFO to single port SRAM
+	Fix bug in gnss_top module
