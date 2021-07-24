@@ -124,19 +124,19 @@ U32 CTeFifoMem::GetRegValue(int Address)
 	case ADDR_OFFSET_TE_FIFO_READ_ADDR:
 		return ReadAddress;
 	case ADDR_OFFSET_TE_FIFO_WRITE_ADDR:
-		return (WriteAddress << 4) | (WriteAddressRound << 20);
+		return (WriteAddress << CLK_COUNT_WIDTH) | (WriteAddressRound << 20);
 	case ADDR_OFFSET_TE_FIFO_BLOCK_SIZE:
 		return BlockSize;
 	case ADDR_OFFSET_TE_FIFO_BLOCK_ADJ:
 		return BlockSizeAdjust;
 	case ADDR_OFFSET_TE_FIFO_LWADDR_CPU:
-		return (WriteAddressLatchCPU << 4) | (WriteAddressLatchCPURound << 20);
+		return (WriteAddressLatchCPU << CLK_COUNT_WIDTH) | (WriteAddressLatchCPURound << 20);
 	case ADDR_OFFSET_TE_FIFO_LWADDR_EM:
-		return (WriteAddressLatchEM << 4) | (WriteAddressLatchEMRound << 20);
+		return (WriteAddressLatchEM << CLK_COUNT_WIDTH) | (WriteAddressLatchEMRound << 20);
 	case ADDR_OFFSET_TE_FIFO_LWADDR_PPS:
-		return (WriteAddressLatchPPS << 4) | (WriteAddressLatchPPSRound << 20);
+		return (WriteAddressLatchPPS << CLK_COUNT_WIDTH) | (WriteAddressLatchPPSRound << 20);
 	case ADDR_OFFSET_TE_FIFO_LWADDR_AE:
-		return (WriteAddressLatchAE << 4) | (WriteAddressLatchAERound << 20);
+		return (WriteAddressLatchAE << CLK_COUNT_WIDTH) | (WriteAddressLatchAERound << 20);
 	default:
 		return 0;
 	}

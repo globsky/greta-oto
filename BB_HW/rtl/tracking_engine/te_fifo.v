@@ -245,19 +245,19 @@ always @(posedge clk or negedge rst_b)
 always @(posedge clk or negedge rst_b)
 	if (!rst_b)
 		write_shift <= 'd0;
-	else if (fifo_write_en)
+	else if (fifo_write_en && ~dummy_write)
 		write_shift <= {write_shift[2*DATA_WIDTH-1:0], sample_data};
 
 always @(posedge clk or negedge rst_b)
 	if (!rst_b)
 		data_to_write <= 'd0;
-	else if (fifo_write_en && write_addr[1:0] == 2'b11)
+	else if (fifo_write_en && write_addr[1:0] == 2'b11 && ~dummy_write)
 		data_to_write <= {write_shift, sample_data};
 
 always @(posedge clk or negedge rst_b)
 	if (!rst_b)
 		addr_to_write <= 'd0;
-	else if (fifo_write_en && write_addr[1:0] == 2'b11)
+	else if (fifo_write_en && write_addr[1:0] == 2'b11 && ~dummy_write)
 		addr_to_write <= write_addr[ADDR_WIDTH-1:2];
 
 //----------------------------------------------------------

@@ -11,6 +11,9 @@
 
 #include "CommonOps.h"
 
+#define ADDR_WIDTH 14
+#define CLK_COUNT_WIDTH (20 - ADDR_WIDTH)
+
 typedef void (*TriggerFunction)(int Index);
 
 class CTeFifoMem

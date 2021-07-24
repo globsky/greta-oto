@@ -4,6 +4,7 @@
 #include "CommonOps.h"
 #include "RegAddress.h"
 #include "GnssTop.h"
+#include "E1_code.h"
 
 CGnssTop::CGnssTop() : TeFifo(0, 10240), TrackingEngine(&TeFifo, MemCodeBuffer), AcqEngine(MemCodeBuffer)
 {
@@ -13,6 +14,7 @@ CGnssTop::CGnssTop() : TeFifo(0, 10240), TrackingEngine(&TeFifo, MemCodeBuffer),
 	ReqCount = 0;
 	InterruptFlag = 0;
 
+	memcpy(MemCodeBuffer, GalE1Code, sizeof(GalE1Code));	// memory code put in MemCodeBuffer as ROM
 	FileData = (complex_int *)malloc(MAX_BLOCK_SIZE * sizeof(complex_int));
 	SampleQuant = (unsigned char *)malloc(MAX_BLOCK_SIZE * sizeof(unsigned char));
 
@@ -173,7 +175,8 @@ int CGnssTop::Process(int ReadBlockSize)
 	int ReachThreshold = 0;
 	int SampleNumber;
 
-	IfFile.ReadFile(ReadBlockSize, FileData);
+	if (!IfFile.ReadFile(ReadBlockSize, FileData))
+		return -1;
 	if (AcqEngine.IsFillingBuffer())
 	{
 		SampleNumber = AcqEngine.RateAdaptor.DoRateAdaptor(FileData, ReadBlockSize, SampleQuant);
@@ -202,5 +205,5 @@ int CGnssTop::Process(int ReadBlockSize)
 	if ((InterruptFlag & IntMask) && InterruptService != NULL )
 		InterruptService();
 
-	return ReachThreshold;
+	return 0;
 }

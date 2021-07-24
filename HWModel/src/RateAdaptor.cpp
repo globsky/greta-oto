@@ -53,7 +53,7 @@ int CRateAdaptor::DoRateAdaptor(complex_int InputSignal[], int Length, unsigned 
 		// determine how many input samples to generate next down sampled data
 		FillToNext = 0;
 		Nco = CodeRateAdjustNco;
-		while ((Nco & 0xff000000) == 0)
+		while (((Nco & 0xff000000) == 0) && FillToNext <= Length)
 		{
 			FillToNext ++;
 			Nco += CodeRateAdjustRatio;
