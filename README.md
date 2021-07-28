@@ -20,3 +20,5 @@ Change list as below:
 	Put Galileo E1 code in GNSS top as ROM
 	Reduce unnecessary register value change in TE FIFO RTL on dummy write
 	Other minor changes
+7/28/2021
+	Preview version of firmware added. Just a demo code to show how firmware is constructed.
