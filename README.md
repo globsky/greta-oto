@@ -22,3 +22,6 @@ Change list as below:
 	Other minor changes
 7/28/2021
 	Preview version of firmware added. Just a demo code to show how firmware is constructed.
+7/31/2021
+	Add measurement interrupt process and baseband measurement extraction
+	Add basic data stream decode

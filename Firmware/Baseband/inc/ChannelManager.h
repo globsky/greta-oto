@@ -18,6 +18,9 @@
 #define COH_BUF_LEN    (CORRELATOR_NUM * MAX_FFT_NUM)
 #define NONCOH_BUF_LEN (CORRELATOR_NUM * MAX_BIN_NUM)
 
+#pragma pack(push)	// push current alignment
+#pragma pack(4)		// set alignment to 4-byte boundary
+
 struct tag_CHANNEL_STATE;
 
 typedef struct
@@ -29,6 +32,17 @@ typedef struct
 	U32 CorData[20];	// 20 correlation result of peak correlator
 } BIT_SYNC_DATA, *PBIT_SYNC_DATA;
 
+typedef struct
+{
+	int PrevReal, PrevImag;	// accumulated I/Q in previous data period
+	int CurReal, CurImag;	// accumulated I/Q in current data period
+	int TotalAccTime;		// total accumulation period in millisecond
+	int CurrentAccTime;		// current accumulated time in millisecond
+	int DataCount;			// number of decoded symbols
+	int PrevSymbol;			// previous symbol (determine data toggle)
+	U32 DataBuffer[128/4];	// maximum 128 bytes to hold decoded symbols
+} DATA_STREAM, *PDATA_STREAM;
+
 // channel related functions and variables
 typedef struct tag_CHANNEL_STATE
 {
@@ -37,11 +51,12 @@ typedef struct tag_CHANNEL_STATE
 	U8 FreqID;	// system and frequency
 	U8 Svid;	// SVID start from 1
 	U32 State;	// bitwise flags and indicators
-	STATE_BUFFER StateBufferCache;	// local image of state buffer
-	PSTATE_BUFFER StateBufferHW;	// pointer to hardware state buffer
 	// following variable for tracking stage
 	int TrackingTime;		// millisecond at current stage (reset at stage swith or at phase loss lock at final stage)
 	int TrackingTimeout;	// millisecond for current stage timeout (-1 for final stage)
+	// state buffer cache and pointer to hardware buffer
+	STATE_BUFFER StateBufferCache;	// local image of state buffer
+	PSTATE_BUFFER StateBufferHW;	// pointer to hardware state buffer
 	// accumulation number and counter
 	int CoherentNumber;		// same as coherent number settings in CohConfig field of state buffer
 	int FftNumber;			// 1 for PLL only (no FLL), 2 for cross-dot (FLL), 3~8 for FFT
@@ -52,19 +67,21 @@ typedef struct tag_CHANNEL_STATE
 	// following variables for tracking loop
 	int PhaseDiff;	// phase discriminator result
 	int PhaseAcc;	// phase discriminator accumulation value
-	int PhaseAcc2;	// phase discriminator double accumulation value
 	int FrequencyDiff;	// frequency discriminator result
 	int FrequencyAcc;	// frequency discriminator accumulation value
 	int DelayDiff;	// delay discriminator result
 	int DelayAcc;	// delay discriminator accumulation value
 	U32 CarrierFreqBase;	// Wn for carrier frequency control word
 	U32 CodeFreqBase;		// W0 for code frequency control word
+	// buffer for coherent and non-coherent sum
 	U32 CohBuffer[COH_BUF_LEN];	// buffer to hold coherent sums
 	int NoncohBuffer[NONCOH_BUF_LEN];	// buffer to hold noncoherent sums
 	// data for bit sync
 	BIT_SYNC_DATA BitSyncData;
 	int ToggleCount[20];	// toggle count for each position (only BitSyncTask will access this array)
 	int BitSyncResult;		// set by BitSyncTask, -1 for bit sync fail, 0 for bit sync in process, 1~20 as bit sync position, 21 as switch to tracking from bit sync
+	// data for data stream decode
+	DATA_STREAM DataStream;
 } CHANNEL_STATE, *PCHANNEL_STATE;
 
 typedef struct
@@ -78,11 +95,14 @@ typedef struct
 	int RightBinPower;
 } SEARCH_PEAK_RESULT, *PSEARCH_PEAK_RESULT;
 
+#pragma pack(pop)	//restore original alignment
+
 extern CHANNEL_STATE ChannelStateArray[32];
 void InitChannel(PCHANNEL_STATE pChannel);
 void ConfigChannel(PCHANNEL_STATE pChannel, int Doppler, int CodePhase16x);
 PCHANNEL_STATE GetAvailableChannel();
 void SyncCacheWrite(PCHANNEL_STATE ChannelState);
 void ProcessCohSum(int ChannelID);
+int ComposeMeasurement(int ChannelID, PBB_MEASUREMENT Measurement, U32 *DataBuffer);
 
 #endif // __CHANNEL_MANAGER_H__

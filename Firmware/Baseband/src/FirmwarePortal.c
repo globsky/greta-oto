@@ -22,6 +22,9 @@ U32 RequestBuffer[1024];
 TASK_QUEUE BasebandTask;
 TASK_ITEM BasebandItems[32];
 U32 BasebandBuffer[1024];
+TASK_QUEUE PostMeasTask;
+TASK_ITEM PostMeasItems[8];
+U32 PostMeasBuffer[1024];
 
 //*************** Baseband interrupt service routine ****************
 //* this function is a task function
@@ -35,6 +38,8 @@ void InterruptService()
 	
 	if (IntFlag & (1 << 8))		// coherent sum interrupt
 		CohSumInterruptProc();
+	if (IntFlag & (1 << 9))		// measurement interrupt
+		MeasurementProc();
 	if (IntFlag & (1 << 10))	// request interrupt
 		DoTaskQueue(&RequestTask);
 	if (IntFlag & (1 << 11))	// AE interrupt
@@ -62,12 +67,14 @@ void FirmwareInitialize()
 {
 	int i, sv_list[32] = { 3, 4, 7, 8, 9, 14, 16, 27, 30, 0};	// for debug use only
 
+	MeasurementInterval = 100;
+
 	AttachBasebandISR(InterruptService);
 
 	// initial baseband hardware
 	SetRegValue(ADDR_BB_ENABLE, 0x00000100);		// enable TE
 	SetRegValue(ADDR_FIFO_CLEAR, 0x00000100);		// clear FIFO
-	SetRegValue(ADDR_MEAS_NUMBER, 1000);			// measurement number
+	SetRegValue(ADDR_MEAS_NUMBER, MeasurementInterval);	// measurement number
 	SetRegValue(ADDR_MEAS_COUNT, 0);				// measurement count
 	SetRegValue(ADDR_REQUEST_COUNT, 8);				// request count
 	SetRegValue(ADDR_INTERRUPT_MASK, 0x00000f00);	// enable all interrupts
@@ -91,6 +98,7 @@ void FirmwareInitialize()
 	// initial request task queue
 	InitTaskQueue(&RequestTask, RequestItems, 32, RequestBuffer, sizeof(RequestBuffer));
 	InitTaskQueue(&BasebandTask, BasebandItems, 32, BasebandBuffer, sizeof(BasebandBuffer));
+	InitTaskQueue(&PostMeasTask, PostMeasItems, 8, PostMeasBuffer, sizeof(PostMeasBuffer));
 
 	// start acquisition
 	for (i = 0; i < 32; i ++)

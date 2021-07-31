@@ -31,6 +31,7 @@ static void DoTrackingLoop(PCHANNEL_STATE ChannelState);
 static int StageDetermination(PCHANNEL_STATE ChannelState);
 static void SwitchTrackingStage(PCHANNEL_STATE ChannelState, unsigned int TrackingStage);
 static void CollectBitSyncData(PCHANNEL_STATE ChannelState);
+static void DecodeDataStream(PCHANNEL_STATE ChannelState);
 static int BitSyncTask(void *Param);
 
 //*************** Initialize channel state structure ****************
@@ -77,21 +78,29 @@ void ConfigChannel(PCHANNEL_STATE pChannel, int Doppler, int CodePhase16x)
 	{
 		StartPhase %= 1023;	// remnant of code cycle
 		STATE_BUF_SET_PRN_L1CA(pStateBuffer, pChannel->Svid, StartPhase);
+		pChannel->DataStream.TotalAccTime = 20;	// 20ms for GPS L1CA
+		pChannel->State |= DATA_STREAM_1BIT;
 	}
 	else if (pChannel->FreqID == FREQ_E1)
 	{
 		StartPhase %= 4092;	// remnant of code cycle
 		STATE_BUF_SET_PRN_E1(pStateBuffer, pChannel->Svid, StartPhase);
+		pChannel->DataStream.TotalAccTime = 4;	// 4ms for Galileo E1
+		pChannel->State |= DATA_STREAM_4BIT;
 	}
 	else if (pChannel->FreqID == FREQ_B1C)
 	{
 		StartPhase %= 10230;	// remnant of code cycle
 		STATE_BUF_SET_PRN_B1C(pStateBuffer, pChannel->Svid, StartPhase);
+		pChannel->DataStream.TotalAccTime = 10;	// 10ms for BDS B1C
+		pChannel->State |= DATA_STREAM_8BIT;
 	}
 	else if (pChannel->FreqID == FREQ_L1C)
 	{
 		StartPhase %= 10230;	// remnant of code cycle
 		STATE_BUF_SET_PRN_L1C(pStateBuffer, pChannel->Svid, StartPhase);
+		pChannel->DataStream.TotalAccTime = 10;	// 10ms for GPS L1C
+		pChannel->State |= DATA_STREAM_8BIT;
 	}
 	// status fields
 	STATE_BUF_SET_CODE_PHASE(pStateBuffer, (CodePhase16x << 29));
@@ -106,7 +115,7 @@ void ConfigChannel(PCHANNEL_STATE pChannel, int Doppler, int CodePhase16x)
 //*************** Synchronize state buffer cache value to HW ****************
 //* according to different cache dirty field, different value will be written
 // Parameters:
-//   ChannelState: Pointer to channel state structure
+//   ChannelState: pointer to channel state structure
 // Return value:
 //   none
 void SyncCacheWrite(PCHANNEL_STATE ChannelState)
@@ -134,7 +143,7 @@ void SyncCacheWrite(PCHANNEL_STATE ChannelState)
 
 //*************** Synchronize state buffer cache value from HW ****************
 // Parameters:
-//   ChannelState: Pointer to channel state structure
+//   ChannelState: pointer to channel state structure
 //   ReadContent: whether coherent data or status or both synchronize to cache
 // Return value:
 //   none
@@ -143,12 +152,12 @@ void SyncCacheRead(PCHANNEL_STATE ChannelState, int ReadContent)
 	if (ReadContent & SYNC_CACHE_READ_DATA)
 		LoadMemory(ChannelState->StateBufferCache.CoherentSum, (U32 *)(ChannelState->StateBufferHW) + 24, sizeof(U32) * 8);	// copy coherent result to cache
 	if (ReadContent & SYNC_CACHE_READ_STATUS)
-		LoadMemory(&(ChannelState->StateBufferCache.CarrierPhase), (U32 *)(ChannelState->StateBufferHW) + 8, sizeof(U32) * 5);	// copy channel status fields
+		LoadMemory(&(ChannelState->StateBufferCache.PrnCount), (U32 *)(ChannelState->StateBufferHW) + 7, sizeof(U32) * 6);	// copy channel status fields
 }
 
 //*************** Process coherent data of a channel ****************
 // Parameters:
-//   ChannelID: Physical channel ID (start from 0)
+//   ChannelID: physical channel ID (start from 0)
 // Return value:
 //   none
 void ProcessCohSum(int ChannelID)
@@ -186,12 +195,15 @@ void ProcessCohSum(int ChannelID)
 	if (ChannelState->State & STATE_TRACKING_LOOP)
 		DoTrackingLoop(ChannelState);
 
-	if ((ChannelState->State & STAGE_MASK) == STAGE_TRACK)
-		printf("T=%4d I/Q=%6d %6d\n", ChannelState->TrackingTime, (S16)(ChannelState->StateBufferCache.CoherentSum[4] >> 16), (S16)(ChannelState->StateBufferCache.CoherentSum[4] & 0xffff));
+//	if ((ChannelState->State & STAGE_MASK) == STAGE_TRACK)
+//		printf("T=%4d I/Q=%6d %6d\n", ChannelState->TrackingTime, (S16)(ChannelState->StateBufferCache.CoherentSum[4] >> 16), (S16)(ChannelState->StateBufferCache.CoherentSum[4] & 0xffff));
 	
 	// collect correlation result for bit sync if in bit sync stage
 	if ((ChannelState->State & STAGE_MASK) == STAGE_BIT_SYNC)
 		CollectBitSyncData(ChannelState);
+	// do data decode at tracking stage
+	else if (((ChannelState->State & STAGE_MASK) >= STAGE_TRACK) && ((ChannelState->State & DATA_STREAM_MASK) != 0))
+		DecodeDataStream(ChannelState);
 
 	// determine whether tracking stage switch is needed
 	StageDetermination(ChannelState);
@@ -203,6 +215,50 @@ void ProcessCohSum(int ChannelID)
 		printf(" %8d ", CohResultI * CohResultI + CohResultQ * CohResultQ);
 	}
 	printf("\n");*/
+}
+
+//*************** Compose baseband measurement and data stream ****************
+// Parameters:
+//   ChannelID: physical channel ID (start from 0)
+//   Measurement: pointer to baseband measurement structure
+//   DataBuffer: buffer to store data stream
+// Return value:
+//   number of U32 data filled into DataBuffer
+int ComposeMeasurement(int ChannelID, PBB_MEASUREMENT Measurement, U32 *DataBuffer)
+{
+	PCHANNEL_STATE ChannelState = &ChannelStateArray[ChannelID];
+	PSTATE_BUFFER StateBuffer = &(ChannelState->StateBufferCache);
+	int WordNumber;
+
+	LoadMemory(&(ChannelState->StateBufferCache.PrnCount), (U32 *)(ChannelState->StateBufferHW) + 7, sizeof(U32) * 6);	// copy channel status fields
+	memcpy((void *)Measurement, (void *)ChannelState, sizeof(U32) * 3);	// copy first elements of structure
+
+	Measurement->CodeFreq = STATE_BUF_GET_CODE_FREQ(StateBuffer);
+	Measurement->CodeNCO = STATE_BUF_GET_CODE_PHASE(StateBuffer);
+	if (ChannelState->FreqID == FREQ_L1CA)
+		Measurement->CodeCount = StateBuffer->PrnCount >> 14;
+	else if (ChannelState->FreqID == FREQ_E1)
+		Measurement->CodeCount = StateBuffer->PrnCount - (StateBuffer->PrnCount >> 10);	// 4MSB*1023 + 10LSB = (4MSB*1024+10LSB) - 4MSB
+	else// if (ChannelState->FreqID == FREQ_B1C) or (ChannelState->FreqID == FREQ_L1C)
+		Measurement->CodeCount = StateBuffer->PrnCount >> 14;
+	Measurement->CodeCount = (Measurement->CodeCount << 1) + STATE_BUF_GET_CODE_SUB_PHASE(StateBuffer);
+
+	Measurement->CarrierFreq = STATE_BUF_GET_CARRIER_FREQ(StateBuffer);
+	Measurement->CarrierNCO = STATE_BUF_GET_CARRIER_PHASE(StateBuffer);
+	Measurement->CarrierCount = STATE_BUF_GET_CARRIER_COUNT(StateBuffer);
+	// fill data stream here
+	Measurement->DataNumber = ChannelState->DataStream.DataCount;
+	Measurement->DataStreamAddr = DataBuffer;
+	WordNumber = (Measurement->DataNumber + 31) / 32;
+	memcpy(Measurement->DataStreamAddr, ChannelState->DataStream.DataBuffer, sizeof(U32) * Measurement->DataNumber);
+	if ((Measurement->DataNumber & 0x1f) != 0)	// last DWORD not fill to the end
+		DataBuffer[WordNumber-1] <<= (32 - (Measurement->DataNumber & 0x1f));	// shift to MSB
+	ChannelState->DataStream.DataCount= 0;
+
+	Measurement->CN0 = 4650;
+	Measurement->LockIndicator = 100;
+
+	return WordNumber;
 }
 
 //*************** Do 8 point FFT on coherent buffer and accumulate to noncoherent buffer ****************
@@ -326,14 +382,6 @@ static void FFT8(int InputReal[8], int InputImag[8], int OutputReal[8], int Outp
     {
         OutputReal[i] >>= 3;
         OutputImag[i] >>= 3;
-/*        if (OutputReal[i] > 32767)
-            OutputReal[i] = 32767;
-        else if (OutputReal[i] < -32768)
-            OutputReal[i] = -32768;
-        if (OutputImag[i] > 32767)
-            OutputImag[i] = 32767;
-        else if (OutputImag[i] < -32768)
-            OutputImag[i] = -32768;*/
     }
 }
 
@@ -571,7 +619,7 @@ void DoTrackingLoop(PCHANNEL_STATE ChannelState)
 		ChannelState->FrequencyAcc += ChannelState->FrequencyDiff;
 		ChannelState->CarrierFreqBase += ((fll_k1 * ChannelState->FrequencyDiff + fll_k2 * ChannelState->FrequencyAcc / 4) >> 13);
 		CarrierFreq = ChannelState->CarrierFreqBase;
-		printf("SV%02d Doppler = %5d %5d\n", ChannelState->Svid, (int)(((S64)ChannelState->CarrierFreqBase * SAMPLE_FREQ) >> 32) - IF_FREQ, (int)(((S64)CarrierFreq * SAMPLE_FREQ) >> 32) - IF_FREQ);
+//		printf("SV%02d Doppler = %5d %5d\n", ChannelState->Svid, (int)(((S64)ChannelState->CarrierFreqBase * SAMPLE_FREQ) >> 32) - IF_FREQ, (int)(((S64)CarrierFreq * SAMPLE_FREQ) >> 32) - IF_FREQ);
 	}
 	// DLL update
 	if (ChannelState->State & TRACKING_UPDATE_DLL)
@@ -586,7 +634,7 @@ void DoTrackingLoop(PCHANNEL_STATE ChannelState)
 		ChannelState->PhaseAcc += ChannelState->PhaseDiff;
 		ChannelState->CarrierFreqBase += ((pll_k2 * ChannelState->PhaseDiff + pll_k3 * ChannelState->PhaseAcc) >> 15);
 		CarrierFreq = ChannelState->CarrierFreqBase + ((pll_k1 * ChannelState->PhaseDiff) >> 13);
-		printf("SV%02d Doppler = %5d %5d ", ChannelState->Svid, (int)(((S64)ChannelState->CarrierFreqBase * SAMPLE_FREQ) >> 32) - IF_FREQ, (int)(((S64)CarrierFreq * SAMPLE_FREQ) >> 32) - IF_FREQ);
+//		printf("SV%02d Doppler = %5d %5d ", ChannelState->Svid, (int)(((S64)ChannelState->CarrierFreqBase * SAMPLE_FREQ) >> 32) - IF_FREQ, (int)(((S64)CarrierFreq * SAMPLE_FREQ) >> 32) - IF_FREQ);
 	}
 	if (ChannelState->State & (TRACKING_UPDATE_PLL | TRACKING_UPDATE_FLL))
 		STATE_BUF_SET_CARRIER_FREQ(StateBuffer, CarrierFreq);
@@ -661,13 +709,19 @@ void SwitchTrackingStage(PCHANNEL_STATE ChannelState, unsigned int TrackingStage
 	}
 	else if (TrackingStage == STAGE_TRACK)
 	{
+		// set coherent/FFT/non-coherent number
 		ChannelState->CoherentNumber = 5;
 		STATE_BUF_SET_COH_NUMBER(&(ChannelState->StateBufferCache), 5);
+		STATE_BUF_SET_POST_SHIFT(&(ChannelState->StateBufferCache), 2);
 		ChannelState->State |= STATE_CACHE_CONFIG_DIRTY;
 		ChannelState->FftNumber = 1;
 		ChannelState->NonCohNumber= 2;
 		ChannelState->FftCount = 0;
 		ChannelState->NonCohCount = 0;
+		// reset data for data decode, switch to tracking stage at epoch of bit edge
+		ChannelState->DataStream.PrevReal = ChannelState->DataStream.PrevImag = ChannelState->DataStream.PrevSymbol = 0;
+		ChannelState->DataStream.CurReal = ChannelState->DataStream.CurImag = 0;
+		ChannelState->DataStream.DataCount = ChannelState->DataStream.CurrentAccTime = 0;
 	}
 }
 
@@ -688,6 +742,50 @@ void CollectBitSyncData(PCHANNEL_STATE ChannelState)
 		AddTaskToQueue(&BasebandTask, BitSyncTask, BitSyncData, sizeof(BIT_SYNC_DATA));
 		BitSyncData->CorDataCount = 0;
 		BitSyncData->PrevCorData = BitSyncData->CorData[19];	// copy last one to PrevCorData for next 20 result
+	}
+}
+
+//*************** Accumulate coherent data for data decode ****************
+//* update carrier frequency and code frequency acccording to dicriminator output
+// Parameters:
+//   ChannelState: Pointer to channel state structure
+// Return value:
+//   none
+void DecodeDataStream(PCHANNEL_STATE ChannelState)
+{
+	PDATA_STREAM DataStream = &(ChannelState->DataStream);
+	int DataSymbol;
+	int CurIndex;
+
+	// accumulate time and coherent data
+	DataStream->CurrentAccTime += ChannelState->CoherentNumber;
+	DataStream->CurReal += (S16)(ChannelState->StateBufferCache.CoherentSum[4] >> 16);
+	DataStream->CurImag += (S16)(ChannelState->StateBufferCache.CoherentSum[4] & 0xffff);
+
+	// if accumulate time reaches symbol length, decode data symbol
+	if (DataStream->CurrentAccTime >= DataStream->TotalAccTime)
+	{
+		if (1)	// determine by data toggle
+		{
+			// determine symbol toggle
+			DataSymbol = DataStream->CurReal * DataStream->PrevReal + DataStream->CurImag * DataStream->PrevImag;
+			DataSymbol = ((DataSymbol < 0) ? 1 : 0) ^ (DataStream->PrevSymbol);
+			// store to previous values for next symbol
+			DataStream->PrevSymbol = DataSymbol;
+			DataStream->PrevReal = DataStream->CurReal;
+			DataStream->PrevImag = DataStream->CurImag;
+		}
+		else	// PLL lock, determine by sign
+		{
+			DataSymbol = ((DataStream->CurReal < 0) ? 1 : 0);
+		}
+		// put into data stream buffer
+		CurIndex = DataStream->DataCount / 32;
+		DataStream->DataBuffer[CurIndex] <<= 1;
+		DataStream->DataBuffer[CurIndex] |= DataSymbol;
+		DataStream->DataCount ++;
+		DataStream->CurrentAccTime = 0;
+		DataStream->CurReal = DataStream->CurImag = 0;
 	}
 }
 

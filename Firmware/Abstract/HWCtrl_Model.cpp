@@ -108,8 +108,9 @@ void EnableRF()
 	while (Baseband.Process(SAMPLE_COUNT) >= 0)
 	{
 		ProcessCount ++;
-		if (ProcessCount == 2000)
+		if (ProcessCount == 2001)
 			break;
 		DoTaskQueue(&BasebandTask);
+		DoTaskQueue(&PostMeasTask);
 	}
 }

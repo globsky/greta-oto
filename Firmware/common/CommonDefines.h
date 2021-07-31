@@ -74,4 +74,40 @@ do \
 #define AE_STRIDE_INTERVAL(freq) DIVIDE_ROUND((S64)(freq) << 32, 2046000)	// multiply 2^32/2046000
 #define AE_CENTER_FREQ(freq) DIVIDE_ROUND((S64)(freq) << 20, 2046000)	// multiply 2^20/2046000
 
+//==========================
+// baseband measurement send to PVT
+//==========================
+#pragma pack(push)	// push current alignment
+#pragma pack(4)		// set alignment to 4-byte boundary
+
+typedef struct
+{	
+	U8 UserChannel;		// user channel number (reserved for future use)
+	U8 LogicChannel;	// physical channel number (map to hardware logic channel)
+	U8 FreqID;	// system and frequency
+	U8 Svid;	// SVID start from 1
+	U32 State;	// bitwise flags and indicators
+	int TrackingTime;	// millisecond at current stage (reset at stage swith or at phase loss lock at final stage)
+	// above variables same as CHANNEL_STATE
+	S32 CarrierFreq;	// carrier frequency control word
+	U32 CarrierNCO;		// carrier NCO count
+	S32 CarrierCount;	// carrier cycle count
+	U32 CodeFreq;		// code frequency
+	U32 CodeNCO;		// code NCO
+	U32 CodeCount;		// code count in current bit, unit is 1/2 chip
+	U16 DataNumber;		// data number in stream buffer
+	U16 CN0;			// C/N0 in unit of 0.01dB
+	U32 LockIndicator;	// carrier lock indicator
+	U32 *DataStreamAddr;	// address of data in data stream buffer
+} BB_MEASUREMENT, *PBB_MEASUREMENT;
+
+typedef struct
+{
+	int MeasNumber;
+	int MeasInterval;
+	PBB_MEASUREMENT Measurements;
+} BB_MEAS_PARAM, *PBB_MEAS_PARAM;
+
+#pragma pack(pop)	//restore original alignment
+
 #endif	// __COMMON_DEFINES_H__

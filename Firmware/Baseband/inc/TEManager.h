@@ -12,10 +12,13 @@
 #include "CommonDefines.h"
 #include "ChannelManager.h"
 
+extern int MeasurementInterval;
 extern U32 ChannelOccupation;
+extern BB_MEASUREMENT BasebandMeasurement[32];
 
 void UpdateChannels();
 PCHANNEL_STATE GetAvailableChannel();
 void CohSumInterruptProc();
+void MeasurementProc();
 
 #endif // __TE_MANAGER_H__

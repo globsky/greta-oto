@@ -129,21 +129,28 @@ do{ pStateBuffer->PrnConfig = B1CPilotInit[Svid-1]; \
 #define STATE_TRACK_Q  0x80
 #define STATE_TRACK_IQ 0xc0
 
-// bit8~11 for cache state
-#define STATE_CACHE_FREQ_DIRTY   0x100
-#define STATE_CACHE_CONFIG_DIRTY 0x200
-#define STATE_CACHE_CODE_DIRTY   0x400
-#define STATE_CACHE_STATUS_DIRTY 0x800
-#define STATE_CACHE_DIRTY (STATE_CACHE_FREQ_DIRTY | STATE_CACHE_CONFIG_DIRTY | STATE_CACHE_CODE_DIRTY | STATE_CACHE_STATUS_DIRTY)
-
-#define SYNC_CACHE_READ_DATA   1
-#define SYNC_CACHE_READ_STATUS 2
+// bit8~9 for decode data stream type
+#define DATA_STREAM_NONE 0x000	// do not decode data stream
+#define DATA_STREAM_1BIT 0x100	// each symbol occupies 1bit
+#define DATA_STREAM_4BIT 0x200	// each symbol occupies 4bit
+#define DATA_STREAM_8BIT 0x300	// each symbol occupies 8bit
+#define DATA_STREAM_MASK 0x300
 
 // bit16~18 for tracking loop update
 #define TRACKING_UPDATE_PLL 0x10000
 #define TRACKING_UPDATE_FLL 0x20000
 #define TRACKING_UPDATE_DLL 0x40000
 #define TRACKING_UPDATE (TRACKING_UPDATE_PLL | TRACKING_UPDATE_FLL | TRACKING_UPDATE_DLL)
+
+// bit20~23 for cache state
+#define STATE_CACHE_FREQ_DIRTY   0x100000
+#define STATE_CACHE_CONFIG_DIRTY 0x200000
+#define STATE_CACHE_CODE_DIRTY   0x400000
+#define STATE_CACHE_STATUS_DIRTY 0x800000
+#define STATE_CACHE_DIRTY (STATE_CACHE_FREQ_DIRTY | STATE_CACHE_CONFIG_DIRTY | STATE_CACHE_CODE_DIRTY | STATE_CACHE_STATUS_DIRTY)
+
+#define SYNC_CACHE_READ_DATA   1
+#define SYNC_CACHE_READ_STATUS 2
 
 //==========================
 // frequency ID definitions

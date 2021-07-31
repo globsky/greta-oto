@@ -14,6 +14,7 @@
 
 extern TASK_QUEUE RequestTask;
 extern TASK_QUEUE BasebandTask;
+extern TASK_QUEUE PostMeasTask;
 
 void FirmwareInitialize();
 
