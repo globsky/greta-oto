@@ -37,9 +37,7 @@ int AcquisitionTask(void *Param)
 		SetRegValue(ADDR_BASE_AE_BUFFER+i*32+ 8, ConfigData[2]);
 		SetRegValue(ADDR_BASE_AE_BUFFER+i*32+12, ConfigData[3]);
 	}
-#if 0	// start AE
-	SetRegValue(ADDR_AE_CONTROL, 0x100+AcqConfig->AcqChNumber);
-#else	// put in result instead, this is just for input IF file sim_signal_L1CA.bin
+#if defined MODEL_RUN	// put in result instead, this is just for input IF file sim_signal_L1CA.bin
 	SetRegValue(ADDR_BASE_AE_BUFFER+0x10, 0x840088da); SetRegValue(ADDR_BASE_AE_BUFFER+0x14, 0xfbe384ee); SetRegValue(ADDR_BASE_AE_BUFFER+0x18, 0x6a040538); SetRegValue(ADDR_BASE_AE_BUFFER+0x1c, 0x69138698);
 	SetRegValue(ADDR_BASE_AE_BUFFER+0x30, 0x8500881b); SetRegValue(ADDR_BASE_AE_BUFFER+0x34, 0x8df28394); SetRegValue(ADDR_BASE_AE_BUFFER+0x38, 0x350285d2); SetRegValue(ADDR_BASE_AE_BUFFER+0x3c, 0x34f5032a);
 	SetRegValue(ADDR_BASE_AE_BUFFER+0x50, 0x850086a8); SetRegValue(ADDR_BASE_AE_BUFFER+0x54, 0x8d0904ad); SetRegValue(ADDR_BASE_AE_BUFFER+0x58, 0x3602858e); SetRegValue(ADDR_BASE_AE_BUFFER+0x5c, 0x320b8130);
@@ -50,6 +48,8 @@ int AcquisitionTask(void *Param)
 	SetRegValue(ADDR_BASE_AE_BUFFER+0xf0, 0x850087c6); SetRegValue(ADDR_BASE_AE_BUFFER+0xf4, 0x860b03db); SetRegValue(ADDR_BASE_AE_BUFFER+0xf8, 0x5f0c03db); SetRegValue(ADDR_BASE_AE_BUFFER+0xfc, 0x351b8355);
 	SetRegValue(ADDR_BASE_AE_BUFFER+0x110, 0x850087b2); SetRegValue(ADDR_BASE_AE_BUFFER+0x114, 0x971486ae); SetRegValue(ADDR_BASE_AE_BUFFER+0x118, 0x481386ae); SetRegValue(ADDR_BASE_AE_BUFFER+0x11c, 0x36f403d5);
 	SetRegValue(ADDR_AE_CONTROL, 0x100);
+#else	// start AE
+	SetRegValue(ADDR_AE_CONTROL, 0x100+AcqConfig->AcqChNumber);
 #endif
 	return i;
 }

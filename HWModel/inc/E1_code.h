@@ -1,3 +1,11 @@
+//----------------------------------------------------------------------
+// E1_code.h:
+//   Gaileo E1 memory code array (rearranged to 1023bit sections)
+//
+//          Copyright (C) 2020-2029 by Jun Mo, All rights reserved.
+//
+//----------------------------------------------------------------------
+
 unsigned int GalE1Code[100][128] = {
 // for PRN 01 E1B
 {	0xf5d71013, 0x0573541b, 0x9dbd4fd9, 0xe9b20a0d, 0x59d144c5, 0x4bc79355, 0x39d2e758, 0x10fb51e4, 

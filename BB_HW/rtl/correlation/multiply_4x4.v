@@ -10,7 +10,7 @@ module m_multiply_4x4
 (
 input [3:0] value1_i,
 input [3:0] value2_i,
-input [7:0] value_o
+output [7:0] value_o
 );
 
 wire [7:0] shift1, shift2, shift3, shift4;

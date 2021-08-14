@@ -13,7 +13,7 @@ input [8:0] amp2,
 input [8:0] amp3,
 input [8:0] amp4,
 output [8:0] max_amp,
-input [1:0] index
+output [1:0] index
 );
 
 wire [9:0] cmp1, cmp2;

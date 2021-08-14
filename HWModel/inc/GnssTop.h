@@ -1,3 +1,11 @@
+//----------------------------------------------------------------------
+// GnssTop.cpp:
+//   GNSS baseband top module class declaration
+//
+//          Copyright (C) 2020-2029 by Jun Mo, All rights reserved.
+//
+//----------------------------------------------------------------------
+
 #if !defined __BB_TOP_H__
 #define __BB_TOP_H__
 

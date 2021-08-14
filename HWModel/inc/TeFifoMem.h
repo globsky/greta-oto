@@ -40,20 +40,20 @@ public:
 	reg_uint DummyWrite;				// 1bit
 	reg_uint OverflowFlag;				// 2bit, bit0 for overflow, bit1 for guard
 	reg_uint FifoGuard;					// 16bit
-	reg_uint ReadAddress;				// 16bit
-	reg_uint WriteAddress;				// 16bit
-	reg_uint WriteAddressRound;			// 8bit
-	reg_uint CurReadAddress;			// 16bit
-	reg_uint BlockSize;					// 16bit
+	reg_uint ReadAddress;				// 14bit
+	reg_uint WriteAddress;				// 14bit
+	reg_uint WriteAddressRound;			// 12bit
+	reg_uint CurReadAddress;			// 14bit
+	reg_uint BlockSize;					// 14bit
 	reg_int  BlockSizeAdjust;			// 8bit
-	reg_uint WriteAddressLatchCPU;		// 16bit
-	reg_uint WriteAddressLatchEM;		// 16bit
-	reg_uint WriteAddressLatchPPS;		// 16bit
-	reg_uint WriteAddressLatchAE;		// 16bit
-	reg_uint WriteAddressLatchCPURound;	// 8bit
-	reg_uint WriteAddressLatchEMRound;	// 8bit
-	reg_uint WriteAddressLatchPPSRound;	// 8bit
-	reg_uint WriteAddressLatchAERound;	// 8bit
+	reg_uint WriteAddressLatchCPU;		// 14bit
+	reg_uint WriteAddressLatchEM;		// 14bit
+	reg_uint WriteAddressLatchPPS;		// 14bit
+	reg_uint WriteAddressLatchAE;		// 14bit
+	reg_uint WriteAddressLatchCPURound;	// 12bit
+	reg_uint WriteAddressLatchEMRound;	// 12bit
+	reg_uint WriteAddressLatchPPSRound;	// 12bit
+	reg_uint WriteAddressLatchAERound;	// 12bit
 	
 	int RealBlockSize;					// this is a wire instead of register, the value equals to BlockSize + BlockSizeAdjust
 	int GuardThreshold;					// this is a wire instead of register, the value equals to FifoSize - FifoGuard

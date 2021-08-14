@@ -25,3 +25,7 @@ Change list as below:
 7/31/2021
 	Add measurement interrupt process and baseband measurement extraction
 	Add basic data stream decode
+8/13/2021
+	Add baseband simulation model based on SignalSim, firmware can run based on controlled scenario
+	Comments update
+	Fix typo error in RTL

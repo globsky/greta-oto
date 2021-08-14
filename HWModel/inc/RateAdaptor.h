@@ -1,3 +1,11 @@
+//----------------------------------------------------------------------
+// RateAdaptor.cpp:
+//   AE buffer sample rate adjustment class declaration
+//
+//          Copyright (C) 2020-2029 by Jun Mo, All rights reserved.
+//
+//----------------------------------------------------------------------
+
 #include "CommonOps.h"
 
 #define CODE_RATE_FILTER_STAGE 6

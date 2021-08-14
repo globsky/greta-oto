@@ -1,3 +1,11 @@
+//----------------------------------------------------------------------
+// TrackingEngine.cpp:
+//   Tracking engine class implementation
+//
+//          Copyright (C) 2020-2029 by Jun Mo, All rights reserved.
+//
+//----------------------------------------------------------------------
+
 #include <stdio.h>
 #include <malloc.h>
 #include <memory.h>

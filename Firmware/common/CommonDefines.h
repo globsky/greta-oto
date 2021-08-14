@@ -1,5 +1,5 @@
 //----------------------------------------------------------------------
-// CommonTypes:
+// CommonDefines:
 //   Type definitions for entire firmware
 //
 //          Copyright (C) 2020-2029 by Jun Mo, All rights reserved.
@@ -66,6 +66,7 @@ do \
 #define RF_FREQ 1575420000
 #define IF_FREQ_BOC (IF_FREQ + 1023000)
 #define SAMPLE_COUNT (SAMPLE_FREQ / 1000)
+#define GPS_L1_WAVELENGTH 0.19029367279836488
 
 #define DIVIDE_ROUND(divident, divisor) (S32)(((divident) + divisor/2) / divisor)
 #define CARRIER_FREQ(doppler) DIVIDE_ROUND(((S64)(IF_FREQ + (doppler))) << 32, SAMPLE_FREQ)	// multiply 2^32/fs

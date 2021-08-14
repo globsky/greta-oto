@@ -107,6 +107,7 @@ void EnableRF()
 
 	while (Baseband.Process(SAMPLE_COUNT) >= 0)
 	{
+//		printf("ProcessCount=%d\n", ProcessCount);
 		ProcessCount ++;
 		if (ProcessCount == 2001)
 			break;

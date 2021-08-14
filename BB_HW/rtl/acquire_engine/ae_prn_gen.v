@@ -366,7 +366,7 @@ always @(*)
 		6'd61: {insert_index_l1c, weil_index_l1c} = 28'h0480e84;	// for PRN61
 		6'd62: {insert_index_l1c, weil_index_l1c} = 28'h09f525f;	// for PRN62
 		6'd63: {insert_index_l1c, weil_index_l1c} = 28'h44012f3;	// for PRN63
-		default: {insert_index_b1c, weil_index_b1c} = 28'h0;
+		default: {insert_index_l1c, weil_index_l1c} = 28'h0;
 	endcase
 
 endmodule

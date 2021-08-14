@@ -1,6 +1,6 @@
 //----------------------------------------------------------------------
 // GnssTop.cpp:
-//   GNSS baseband top module class implementation
+//   GNSS baseband top module simulator class implementation
 //
 //          Copyright (C) 2020-2029 by Jun Mo, All rights reserved.
 //
@@ -9,44 +9,30 @@
 #include <stdio.h>
 #include <malloc.h>
 #include <memory.h>
-#include "CommonOps.h"
+#include <string.h>
 #include "RegAddress.h"
 #include "GnssTop.h"
-#include "E1_code.h"
+#include "XmlElement.h"
+#include "XmlInterpreter.h"
+#include "Coordinate.h"
 
-CGnssTop::CGnssTop() : TeFifo(0, 10240), TrackingEngine(&TeFifo, MemCodeBuffer), AcqEngine(MemCodeBuffer)
+CGnssTop::CGnssTop()
 {
-	TrackingEngineEnable = 0;
-	MeasurementNumber = 0;
-	MeasurementCount = 0;
-	ReqCount = 0;
-	InterruptFlag = 0;
-
-	memcpy(MemCodeBuffer, GalE1Code, sizeof(GalE1Code));	// memory code put in MemCodeBuffer as ROM
-	FileData = (complex_int *)malloc(MAX_BLOCK_SIZE * sizeof(complex_int));
-	SampleQuant = (unsigned char *)malloc(MAX_BLOCK_SIZE * sizeof(unsigned char));
-
-	InterruptService = NULL;
+	InterruptService = (InterruptFunction)0;
 }
 
 CGnssTop::~CGnssTop()
 {
-	free(FileData);
-	free(SampleQuant);
 }
 
 void CGnssTop::Reset(U32 ResetMask)
 {
-	if (ResetMask & 2)
-		TrackingEngine.Reset();
-	if (ResetMask & 0x100)
-		TeFifo.Reset();
+//	if (ResetMask & 2)
+//		TrackingEngine.Reset();
 }
 
 void CGnssTop::Clear(U32 ClearMask)
 {
-	if (ClearMask & 0x100)
-		TeFifo.Clear();
 }
 
 void CGnssTop::SetRegValue(int Address, U32 Value)
@@ -60,10 +46,7 @@ void CGnssTop::SetRegValue(int Address, U32 Value)
 		{
 		case ADDR_OFFSET_BB_ENABLE:
 			if (Value & 0x100)
-			{
 				TrackingEngineEnable = 1;
-				TeFifo.SetFifoEnable(Value >> 8);
-			}
 			break;
 		case ADDR_OFFSET_BB_RESET:
 			Reset(Value);
@@ -72,7 +55,7 @@ void CGnssTop::SetRegValue(int Address, U32 Value)
 			Clear(Value);
 			break;
 		case ADDR_OFFSET_TRACKING_START:
-			break;	// has no effect in C model
+			break;	// has no effect in Sim model
 		case ADDR_OFFSET_MEAS_NUMBER:
 			MeasurementNumber = (Value & 0x3ff);
 			break;
@@ -91,19 +74,13 @@ void CGnssTop::SetRegValue(int Address, U32 Value)
 			break;
 		}
 		break;
-//	case ADDR_BASE_IF_INTERFACE:
-//		IfInterface.SetRegValue(AddressOffset & 0xff, Value);
-//		break;
-//	case ADDR_BASE_PRE_PROCESS:
-//		NoiseCalculate[TEindex].SetRegValue(AddressOffset & 0xff, Value);
-//		break;
-//	case ADDR_BASE_AE_FIFO:
-//		AeFifo.SetRegValue(AddressOffset, Value);
-//		break;
 	case ADDR_BASE_ACQUIRE_ENGINE:
 		AcqEngine.SetRegValue(AddressOffset, Value);
 		if (AddressOffset == ADDR_OFFSET_AE_BUFFER_CONTROL && (Value & 0x100))	// latch write address when starting fill AE buffer
-			TeFifo.LatchWriteAddress(3);
+		{
+			AcqEngine.SetBufferParam(GpsSatParam, GpsSatNumber, CurTime, &GpsBits);	// set AE buffer parameters
+			TeFifo.LatchWriteAddress(3);	// set AE latch time
+		}
 		if (AddressOffset == ADDR_OFFSET_AE_CONTROL && (Value & 0x100))	// if do acquisition, set AE finished interrupt
 			InterruptFlag |= (1 << 11);
 		break;
@@ -116,7 +93,9 @@ void CGnssTop::SetRegValue(int Address, U32 Value)
 	case ADDR_BASE_PERIPHERIAL:
 		break;
 	case ADDR_BASE_TE_BUFFER:
-		TrackingEngine.TEBuffer[AddressOffset >> 2] = Value;
+		TrackingEngine.SetTEBuffer(AddressOffset >> 2, Value);
+		if (((AddressOffset >> 2) & 0x1f) == STATE_OFFSET_PRN_CONFIG)	// if set PRN_CONFIG, assume initial channel with new SVID
+			TrackingEngine.InitChannel((Address >> 7) & 0x1f, CurTime, GpsSatParam, GpsSatNumber);
 		break;
 	case ADDR_BASE_AE_BUFFER:
 		AcqEngine.ChannelConfig[AddressOffset >> 5][(AddressOffset >> 2) & 0x7] = Value;
@@ -152,12 +131,6 @@ U32 CGnssTop::GetRegValue(int Address)
 		default:
 			return 0;
 		}
-//	case ADDR_BASE_IF_INTERFACE:
-//		return IfInterface.GetRegValue(AddressOffset & 0xff);
-//	case ADDR_BASE_PRE_PROCESS:
-//		return NoiseCalculate[TEindex].GetRegValue(AddressOffset & 0xff);
-//	case ADDR_BASE_AE_FIFO:
-//		return AeFifo.GetRegValue(AddressOffset);
 	case ADDR_BASE_ACQUIRE_ENGINE:
 		return AcqEngine.GetRegValue(AddressOffset);
 	case ADDR_BASE_TE_FIFO:
@@ -167,7 +140,7 @@ U32 CGnssTop::GetRegValue(int Address)
 	case ADDR_BASE_PERIPHERIAL:
 		return 0;
 	case ADDR_BASE_TE_BUFFER:
-		return TrackingEngine.TEBuffer[AddressOffset >> 2];
+		return TrackingEngine.GetTEBuffer(AddressOffset >> 2);
 	case ADDR_BASE_AE_BUFFER:
 		return AcqEngine.ChannelConfig[AddressOffset >> 5][(AddressOffset >> 2) & 0x7];
 	default:
@@ -175,25 +148,55 @@ U32 CGnssTop::GetRegValue(int Address)
 	}
 }
 
+void CGnssTop::SetInputFile(char *FileName)
+{
+	LLA_POSITION StartPos;
+	int i = 0;
+	CXmlElementTree XmlTree;
+	CXmlElement *RootElement, *Element;
+
+	XmlTree.parse(FileName);
+	RootElement = XmlTree.getroot();
+
+	while ((Element = RootElement->GetElement(i ++)) != NULL)
+	{
+		if (strcmp(Element->GetTag(), "Time") == 0)
+			AssignStartTime(Element, UtcTime);
+		else if (strcmp(Element->GetTag(), "Trajectory") == 0)
+			SetTrajectory(Element, StartPos, StartVel, Trajectory);
+		else if (strcmp(Element->GetTag(), "Ephemeris") == 0)
+			NavData.ReadNavFile(Element->GetText());
+		else if (strcmp(Element->GetTag(), "Output") == 0)
+			SetOutputParam(Element, OutputParam);
+	}
+	Trajectory.ResetTrajectoryTime();
+	CurTime = UtcToGpsTime(UtcTime);
+	CurPos = LlaToEcef(StartPos);
+	SpeedLocalToEcef(StartPos, StartVel, CurPos);
+	// Find ephemeris match current time and fill in data to generate bit stream
+	for (i = 1; i <= 32; i ++)
+	{
+		GpsEph[i-1] = NavData.FindEphemeris(CNavData::SystemGps, CurTime, i);
+		GpsBits.SetEphemeris(i, GpsEph[i-1]);
+	}
+	GpsBits.SetIonoUtc(NavData.GetGpsIono(), NavData.GetGpsUtcParam());
+	// calculate visible satellite at start time and calculate satellite parameters
+	GpsSatNumber = GetVisibleSatellite(CurPos, CurTime, OutputParam, GpsSystem, GpsEph, 32, GpsEphVisible);
+	for (i = 0; i < GpsSatNumber; i ++)
+	{
+		GpsSatParam[i] = GetSatelliteParam(CurPos, StartPos, CurTime, GpsSystem, GpsEphVisible[i], NavData.GetGpsIono());
+	}
+	TrackingEngine.SetNavBit(&GpsBits);
+}
+
 int CGnssTop::Process(int ReadBlockSize)
 {
-	int i;
-	int ReachThreshold = 0;
-	int SampleNumber;
+	int ScenarioFinish = StepToNextTime(1);
 
-	if (!IfFile.ReadFile(ReadBlockSize, FileData))
-		return -1;
-	if (AcqEngine.IsFillingBuffer())
-	{
-		SampleNumber = AcqEngine.RateAdaptor.DoRateAdaptor(FileData, ReadBlockSize, SampleQuant);
-		AcqEngine.WriteSample(SampleNumber, SampleQuant);
-	}
-	for (i = 0; i < ReadBlockSize; i ++)
-		ReachThreshold |= TeFifo.WriteData(FileData[i]);
-
+	TeFifo.StepOneBlock();	// to have TE FIFO progress 1 block of data (1ms)
 	if (TrackingEngineEnable)
 	{
-		InterruptFlag |= TrackingEngine.ProcessData() ? 0x100 : 0;
+		InterruptFlag |= TrackingEngine.ProcessData(CurTime, GpsSatParam, GpsSatNumber) ? 0x100 : 0;
 		MeasurementCount ++;
 		if (MeasurementCount == MeasurementNumber)
 		{
@@ -211,5 +214,31 @@ int CGnssTop::Process(int ReadBlockSize)
 	if ((InterruptFlag & IntMask) && InterruptService != NULL )
 		InterruptService();
 
+	// proceed to next millisecond and recalculate satellite paramter
+	return ScenarioFinish;
+}
+
+int CGnssTop::StepToNextTime(int TimeInterval)
+{
+	int i;
+	LLA_POSITION PosLLA;
+
+	if (!Trajectory.GetNextPosVelECEF(TimeInterval / 1000., CurPos))
+		return -1;
+
+	// calculate new satellite parameter
+	PosLLA = EcefToLla(CurPos);
+	CurTime.MilliSeconds += TimeInterval;
+	if (CurTime.MilliSeconds > 604800000)
+	{
+		CurTime.Week ++;
+		CurTime.MilliSeconds -= 604800000;
+	}
+	if ((CurTime.MilliSeconds % 60000) == 0)	// recalculate visible satellite at minute boundary
+		GpsSatNumber = GetVisibleSatellite(CurPos, CurTime, OutputParam, GpsSystem, GpsEph, 32, GpsEphVisible);
+	for (i = 0; i < GpsSatNumber; i ++)
+	{
+		GpsSatParam[i] = GetSatelliteParam(CurPos, PosLLA, CurTime, GpsSystem, GpsEphVisible[i], NavData.GetGpsIono());
+	}
 	return 0;
 }

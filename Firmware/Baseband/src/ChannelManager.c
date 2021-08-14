@@ -176,6 +176,7 @@ void ProcessCohSum(int ChannelID)
 	SyncCacheRead(ChannelState, SYNC_CACHE_READ_DATA);	// copy coherent result to cache
 	memcpy(ChannelState->CohBuffer + ChannelState->FftCount * CORRELATOR_NUM, ChannelState->StateBufferCache.CoherentSum + 1, sizeof(U32) * CORRELATOR_NUM);	// copy coherent result (except Cor0) to coherent buffer
 	ChannelState->FftCount ++;
+//	printf("SV%2d I/Q=%6d %6d\n", ChannelState->Svid, (S16)(ChannelState->StateBufferCache.CoherentSum[4] >> 16), (S16)(ChannelState->StateBufferCache.CoherentSum[4] & 0xffff));
 
 	// perform PLL
 	if ((ChannelState->State & STAGE_MASK) == STAGE_TRACK)	// tracking stage uses PLL (change to more flexible condition in the future)
@@ -208,11 +209,12 @@ void ProcessCohSum(int ChannelID)
 	// determine whether tracking stage switch is needed
 	StageDetermination(ChannelState);
 
-/*	for (i = 0; i < 8; i ++)
+/*	printf("SV%2d", ChannelState->Svid);
+	for (i = 0; i < 8; i ++)
 	{
 		CohResultI = (S16)(ChannelState->StateBufferCache.CoherentSum[i] >> 16);
 		CohResultQ = (S16)(ChannelState->StateBufferCache.CoherentSum[i] & 0xffff);
-		printf(" %8d ", CohResultI * CohResultI + CohResultQ * CohResultQ);
+		printf(" %5d %5d,", CohResultI, CohResultQ);
 	}
 	printf("\n");*/
 }
@@ -510,6 +512,7 @@ void CalcDiscriminator(PCHANNEL_STATE ChannelState, unsigned int Method)
 		Numerator = SearchResult.LeftBinPower - SearchResult.RightBinPower;
 		// atan((L-R)/(2P-R-L))
 		ChannelState->FrequencyDiff = (CordicAtan(Denominator, Numerator, 0) >> 1);
+		ChannelState->FrequencyDiff += (SearchResult.FreqBinDiff << 13);
 	}
 	if (Method & TRACKING_UPDATE_DLL)
 	{
@@ -580,8 +583,8 @@ void SearchPeakFft(int NoncohBuffer[], PSEARCH_PEAK_RESULT SearchResult)
 				MaxBinPos = j;
 			}
 	}
-	SearchResult->CorDiff = MaxCorPos - 3;
-	SearchResult->FreqBinDiff = MaxBinPos - MAX_BIN_NUM / 2;
+	SearchResult->CorDiff = MaxCorPos - 3;	// after remove cor0, now peak position is 3
+	SearchResult->FreqBinDiff = MAX_BIN_NUM / 2 - MaxBinPos;
 	SearchResult->PeakPower = MaxPower;
 	// if early/late/left/right at edge, use the power value at the other side
 	SearchResult->EarlyPower = (MaxCorPos > 0) ? *(MaxPowerPos - MAX_BIN_NUM) : *(MaxPowerPos + MAX_BIN_NUM);

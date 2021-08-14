@@ -1,3 +1,11 @@
+//----------------------------------------------------------------------
+// RateAdaptor.cpp:
+//   AE buffer sample rate adjustment class implementation
+//
+//          Copyright (C) 2020-2029 by Jun Mo, All rights reserved.
+//
+//----------------------------------------------------------------------
+
 #include <memory.h>
 #include <stdio.h>
 #include "RateAdaptor.h"
