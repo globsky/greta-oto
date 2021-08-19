@@ -20,7 +20,8 @@ input	[191:0] coh_d4rd,
 // interface to control the behavior of non-coherent sum
 input active_acc,	// valid coherent data to accumulate into noncoherent RAM, align with coh_d4rd
 input	first_acc,	// first round accumulation, equavelent to NoncohCount == 0, align with coh_d4rd
-input	last_acc,	// last round accumulation, equavelent to NoncohCount == (NonCoherentNumber - 1), align with coh_d4rd
+input	last_acc,	// last round non-coherent accumulation, equavelent to NoncohCount == (NonCoherentNumber - 1), align with coh_d4rd
+input	calc_noise_floor,	// last round channel accumulation, equavelent to NoncohCount/CodeRoundCount/StrideCount all reach end value, align with coh_d4rd
 input	[3:0] max_exp,	// max exponential of coherent data
 
 // non-coherent result output
@@ -143,7 +144,7 @@ always @(posedge clk or negedge rst_b)
 	if (!rst_b)
 		output_noncoh <= 7'h0;
 	else
-		output_noncoh <= {output_noncoh[5:0], coh_data_valid & last_acc};
+		output_noncoh <= {output_noncoh[5:0], coh_data_valid & calc_noise_floor};
 
 reg [9:0] coh_addr_d, read_addr, cor_count;
 wire [9:0] write_addr;

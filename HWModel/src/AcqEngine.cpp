@@ -643,7 +643,7 @@ void CAcqEngine::NonCoherentAcc(unsigned int MaxCohExp, int NoncohCount)
 		}
 
 		AmpSumCor >>= 3;	// to simplify, use truncate instead of round shift, this will introduce less than 3% loss for strong peak and less than 0.5% for weak peak
-		if (NoncohCount == (NonCoherentNumber - 1))		// last round
+		if (NoncohCount == (NonCoherentNumber - 1) && CodeRoundCount == (CodeSpan / (FULL_LENGTH ? 3 : 1) - 1) && (StrideCount == StrideNumber))		// last round
 			NoiseFloor += AmpSumCor;
 
 		// insert the maximum amplitude value within frequency bins to peak sorter
@@ -871,6 +871,7 @@ void CAcqEngine::DoAcquisition()
 		SearchOneChannel();
 
 		// write back result
+		NoiseFloor >>= (PeakSorter.Peaks[0].Exp - NoncohExp);	// adjust noise floor exp to be same as peaks
 		ChannelConfig[i][4] = (Success << 31) | (PeakSorter.Peaks[0].Exp << 24) | (NoiseFloor & 0x7ffff);
 		ChannelConfig[i][5] = (PeakSorter.Peaks[0].Amp << 24) | ((PeakSorter.Peaks[0].FreqPos & 0x1ff) << 15) | PeakSorter.Peaks[0].PhasePos;
 		ChannelConfig[i][6] = (PeakSorter.Peaks[1].Amp << 24) | ((PeakSorter.Peaks[1].FreqPos & 0x1ff) << 15) | PeakSorter.Peaks[1].PhasePos;

@@ -29,3 +29,6 @@ Change list as below:
 	Add baseband simulation model based on SignalSim, firmware can run based on controlled scenario
 	Comments update
 	Fix typo error in RTL
+8/19/2021
+	Fix bug of noise floor uses incorrect EXP in AE result
+	Only calculate noise floor when it will be used to reduce gate toggle

@@ -910,10 +910,13 @@ always @(posedge clk or negedge rst_b)
 	else if (coh_read_finish || last_read_finish)
 		noncoh_valid <= 1'b0;
 
+// non-coherent acc will delay one whole coherent cycle, latch todo_xxx as indicator and latch it after coherent finish
 reg todo_first_acc;		// indicator for next acc to be first time noncoherent
 reg noncoh_first_acc;
 reg todo_last_acc;		// indicator for next acc to be last time noncoherent
 reg noncoh_last_acc;
+reg todo_noise_floor;	// indicator for next acc calculate noise floor
+reg calc_noise_floor;
 
 always @(posedge clk or negedge rst_b)
 	if (!rst_b)
@@ -951,6 +954,24 @@ always @(posedge clk or negedge rst_b)
 	else if (coh_read_finish || last_read_finish)
 		noncoh_last_acc <= 1'b0;
 
+always @(posedge clk or negedge rst_b)
+	if (!rst_b)
+		todo_noise_floor <= 1'b0;
+	else if (start_acquisition)
+		todo_noise_floor <= 1'b0;
+	else if (cur_state == NEXT_NONCOH && (noncoh_count == noncoh_number) && (code_round == code_span) && (stride_count == (stride_number - 1)))
+		todo_noise_floor <= 1'b1;
+	else if (calc_noise_floor)
+		todo_noise_floor <= 1'b0;
+
+always @(posedge clk or negedge rst_b)
+	if (!rst_b)
+		calc_noise_floor <= 1'b0;
+	else if (coh_last_rd)
+		calc_noise_floor <= todo_noise_floor;
+	else if (coh_read_finish || last_read_finish)
+		calc_noise_floor <= 1'b0;
+
 reg [3:0] max_exp_r;
 
 always @(posedge clk or negedge rst_b)
@@ -986,6 +1007,7 @@ noncoh_acc #(.DATA_LENGTH(`MATCH_FILTER_DEPTH)) u_noncoh_acc
 	.active_acc        (noncoh_valid      ),
 	.first_acc         (noncoh_first_acc  ),
 	.last_acc          (noncoh_last_acc   ),
+	.calc_noise_floor  (calc_noise_floor  ),
 	.max_exp           (max_exp_r         ),
 
 	.noncoh_out_amp    (noncoh_out_amp    ),
@@ -1221,6 +1243,7 @@ always @(*)
 reg [31:0] peak_value1, peak_value2, peak_value3;
 reg [3:0] global_exp;
 reg [18:0] noise_floor_save;
+reg [3:0] noise_floor_exp;
 
 always @(posedge clk or negedge rst_b)
 	if (!rst_b)
@@ -1252,11 +1275,20 @@ always @(posedge clk or negedge rst_b)
 	else if (peak_final)
 		noise_floor_save <= noise_floor;
 
+always @(posedge clk or negedge rst_b)
+	if (!rst_b)
+		noise_floor_exp <= 'd0;
+	else if (peak_final)
+		noise_floor_exp <= noncoh_out_exp;
+
+wire [18:0] noise_floor_adjust;
+assign noise_floor_adjust = noise_floor_save >> (global_exp - noise_floor_exp);
+
 // write result back to channel config buffer
 always @(*)
 	case(channel_param_addr[1:0])
 	2'd0:
-		config_buffer_d4wt = {success, 3'h0, global_exp, 5'h00, noise_floor_save};
+		config_buffer_d4wt = {success, 3'h0, global_exp, 5'h00, noise_floor_adjust};
 	2'd1:
 		config_buffer_d4wt = peak_value1;
 	2'd2:
