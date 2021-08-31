@@ -13,9 +13,10 @@
 #include "ChannelManager.h"
 
 extern int MeasurementInterval;
-extern U32 ChannelOccupation;
-extern BB_MEASUREMENT BasebandMeasurement[32];
+extern BB_MEASUREMENT BasebandMeasurement[TOTAL_CHANNEL_NUMBER];
 
+void TEInitialize();
+U32 GetChannelEnable();
 void UpdateChannels();
 PCHANNEL_STATE GetAvailableChannel();
 void CohSumInterruptProc();

@@ -81,6 +81,8 @@ void CTeFifoMem::SetRegValue(int Address, U32 Value)
 			FifoWaitTrigger = 1;
 			FifoEnable = 0;
 		}
+		if (Value & 4)
+			Clear();
 		break;
 	case ADDR_OFFSET_TE_FIFO_STATUS:
 		// set 1 to clear overflow flag

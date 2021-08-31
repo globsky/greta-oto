@@ -15,6 +15,7 @@
 #include "AEManager.h"
 #include "TEManager.h"
 #include "ChannelManager.h"
+#include "PvtEntry.h"
 
 TASK_QUEUE RequestTask;
 TASK_ITEM RequestItems[32];
@@ -25,6 +26,9 @@ U32 BasebandBuffer[1024];
 TASK_QUEUE PostMeasTask;
 TASK_ITEM PostMeasItems[8];
 U32 PostMeasBuffer[1024];
+TASK_QUEUE InputOutputTask;
+TASK_ITEM InputOutputItems[8];
+U32 InputOutputBuffer[1024];
 
 //*************** Baseband interrupt service routine ****************
 //* this function is a task function
@@ -65,9 +69,9 @@ void InterruptService()
 //   none
 void FirmwareInitialize()
 {
-	int i, sv_list[32] = { 3, 4, 7, 8, 9, 14, 16, 27, 30, 0};	// for debug use only
+	int i, sv_list[32] = { 4, 7, 8, 9, 14, 16, 27, 30, 0};	// for debug use only
 
-	MeasurementInterval = 100;
+	MeasurementInterval = 1000;
 
 	AttachBasebandISR(InterruptService);
 
@@ -88,17 +92,15 @@ void FirmwareInitialize()
 	SetRegValue(ADDR_AE_THRESHOLD, 37);
 	SetRegValue(ADDR_AE_BUFFER_CONTROL, 0x300 + 5);	// start fill AE buffer
 
-	ChannelOccupation = 0;
-	memset(ChannelStateArray, 0, sizeof(ChannelStateArray));
-	for (i = 0; i < 32; i ++)
-	{
-		ChannelStateArray[i].LogicChannel = i;
-		ChannelStateArray[i].StateBufferHW = (PSTATE_BUFFER)(ADDR_BASE_TE_BUFFER + i * 128);	// each channel occupy 128 bytes start from ADDR_BASE_TE_BUFFER
-	}
+	// initialize TE manager
+	TEInitialize();
+	MsrProcInit();
+	PvtProcInit((PRECEIVER_INFO)0);
 	// initial request task queue
 	InitTaskQueue(&RequestTask, RequestItems, 32, RequestBuffer, sizeof(RequestBuffer));
 	InitTaskQueue(&BasebandTask, BasebandItems, 32, BasebandBuffer, sizeof(BasebandBuffer));
 	InitTaskQueue(&PostMeasTask, PostMeasItems, 8, PostMeasBuffer, sizeof(PostMeasBuffer));
+	InitTaskQueue(&InputOutputTask, InputOutputItems, 8, InputOutputBuffer, sizeof(InputOutputBuffer));
 
 	// start acquisition
 	for (i = 0; i < 32; i ++)

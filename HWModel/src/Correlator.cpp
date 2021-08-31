@@ -379,7 +379,7 @@ int CCorrelator::ProcessOverflow(S16 DumpDataI[], S16 DumpDataQ[], int CorIndex[
 // return 1 means there is correlator reaches last coherent sum
 int CCorrelator::DumpData(S16 DumpDataI[], S16 DumpDataQ[], int CorIndex[], int &CurrentLength)
 {
-	unsigned int NextCoherentCount = (CoherentCount + 1) & 0x3f;
+	unsigned int NextCoherentCount = (CoherentCount + 1) & 0x1f;
 	int DataReady = 0;
 
 	// fill in coherent data FIFO with accumulated value

@@ -64,6 +64,8 @@ typedef struct tag_CHANNEL_STATE
 	int FftCount;
 	int NonCohCount;
 	int SkipCount;	// number of coherent data to skip
+	int PendingCount;	// indicate how many correlation result stored but not processed
+	U32 PendingCoh[8];	// coherent result stored but not processed
 	// following variables for tracking loop
 	int PhaseDiff;	// phase discriminator result
 	int PhaseAcc;	// phase discriminator accumulation value
@@ -97,12 +99,11 @@ typedef struct
 
 #pragma pack(pop)	//restore original alignment
 
-extern CHANNEL_STATE ChannelStateArray[32];
+extern CHANNEL_STATE ChannelStateArray[TOTAL_CHANNEL_NUMBER];
 void InitChannel(PCHANNEL_STATE pChannel);
 void ConfigChannel(PCHANNEL_STATE pChannel, int Doppler, int CodePhase16x);
-PCHANNEL_STATE GetAvailableChannel();
 void SyncCacheWrite(PCHANNEL_STATE ChannelState);
-void ProcessCohSum(int ChannelID);
+void ProcessCohSum(int ChannelID, unsigned int OverwriteProtect);
 int ComposeMeasurement(int ChannelID, PBB_MEASUREMENT Measurement, U32 *DataBuffer);
 
 #endif // __CHANNEL_MANAGER_H__

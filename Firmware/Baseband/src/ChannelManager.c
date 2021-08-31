@@ -16,8 +16,9 @@
 #include "TaskQueue.h"
 #include "ChannelManager.h"
 
-CHANNEL_STATE ChannelStateArray[32];
+CHANNEL_STATE ChannelStateArray[TOTAL_CHANNEL_NUMBER];
 
+static void ProcessCohData(PCHANNEL_STATE ChannelState);
 static void CohBufferFft(PCHANNEL_STATE ChannelState);
 static void CohBufferAcc(PCHANNEL_STATE ChannelState);
 static void FFT8(int InputReal[8], int InputImag[8], int OutputReal[8], int OutputImag[8]);
@@ -155,26 +156,59 @@ void SyncCacheRead(PCHANNEL_STATE ChannelState, int ReadContent)
 		LoadMemory(&(ChannelState->StateBufferCache.PrnCount), (U32 *)(ChannelState->StateBufferHW) + 7, sizeof(U32) * 6);	// copy channel status fields
 }
 
+//*************** Process coherent sum interrupt of a channel ****************
+// Parameters:
+//   ChannelID: physical channel ID (start from 0)
+//   OverwriteProtect: whether this channel has overwrite protection
+// Return value:
+//   none
+void ProcessCohSum(int ChannelID, unsigned int OverwriteProtect)
+{
+	PCHANNEL_STATE ChannelState = &ChannelStateArray[ChannelID];
+	int CurrentCor, CohCount;
+	int CompleteData;
+//	int i;
+	U32 *CohBuffer;
+//	S16 CohResultI, CohResultQ;
+
+	ChannelState->StateBufferCache.CorrState = GetRegValue((U32)(&(ChannelState->StateBufferHW->CorrState)));	// get CorrState to check CurrentCor
+	CurrentCor = STATE_BUF_GET_CUR_CORR(&(ChannelState->StateBufferCache));
+	CohCount = STATE_BUF_GET_COH_COUNT(&(ChannelState->StateBufferCache));
+	CompleteData = (ChannelState->PendingCount == 0 && CurrentCor != 0) ? (CohCount == 0 && CurrentCor == 1) : 1;
+
+	SyncCacheRead(ChannelState, SYNC_CACHE_READ_DATA);	// copy coherent result to cache
+	CohBuffer = ChannelState->CohBuffer + ChannelState->FftCount * CORRELATOR_NUM;
+	if (CompleteData)
+	{
+		memcpy(ChannelState->PendingCoh + ChannelState->PendingCount, ChannelState->StateBufferCache.CoherentSum + ChannelState->PendingCount, sizeof(U32) * (8 - ChannelState->PendingCount));	// concatinate data
+		memcpy(CohBuffer, ChannelState->PendingCoh + 1, sizeof(U32) * CORRELATOR_NUM);	// copy coherent result (except Cor0) to coherent buffer
+		ChannelState->PendingCount = 0;
+	}
+	if (CompleteData)	// for the case of all 8 coherent result get, do coherent sum result process
+		ProcessCohData(ChannelState);
+	if (CurrentCor && (CohCount == (ChannelState->CoherentNumber - 1)))
+	{
+		memcpy(ChannelState->PendingCoh, ChannelState->StateBufferCache.CoherentSum, sizeof(U32) * CurrentCor);
+		ChannelState->PendingCount = CurrentCor;
+	}
+}
+
 //*************** Process coherent data of a channel ****************
 // Parameters:
 //   ChannelID: physical channel ID (start from 0)
+//   OverwriteProtect: whether this channel has overwrite protection
 // Return value:
 //   none
-void ProcessCohSum(int ChannelID)
+void ProcessCohData(PCHANNEL_STATE ChannelState)
 {
-	PCHANNEL_STATE ChannelState = &ChannelStateArray[ChannelID];
-//	int i;
-//	S16 CohResultI, CohResultQ;
-
 	ChannelState->TrackingTime += ChannelState->CoherentNumber;	// accumulate tracking time
+//	printf("track time %d\n", ChannelState->TrackingTime);
 	if (ChannelState->SkipCount > 0)	// skip coherent result for following process
 	{
 		ChannelState->SkipCount --;
 		return;
 	}
 	
-	SyncCacheRead(ChannelState, SYNC_CACHE_READ_DATA);	// copy coherent result to cache
-	memcpy(ChannelState->CohBuffer + ChannelState->FftCount * CORRELATOR_NUM, ChannelState->StateBufferCache.CoherentSum + 1, sizeof(U32) * CORRELATOR_NUM);	// copy coherent result (except Cor0) to coherent buffer
 	ChannelState->FftCount ++;
 //	printf("SV%2d I/Q=%6d %6d\n", ChannelState->Svid, (S16)(ChannelState->StateBufferCache.CoherentSum[4] >> 16), (S16)(ChannelState->StateBufferCache.CoherentSum[4] & 0xffff));
 
@@ -231,6 +265,7 @@ int ComposeMeasurement(int ChannelID, PBB_MEASUREMENT Measurement, U32 *DataBuff
 	PCHANNEL_STATE ChannelState = &ChannelStateArray[ChannelID];
 	PSTATE_BUFFER StateBuffer = &(ChannelState->StateBufferCache);
 	int WordNumber;
+	int CohCount, CurrentCor;
 
 	LoadMemory(&(ChannelState->StateBufferCache.PrnCount), (U32 *)(ChannelState->StateBufferHW) + 7, sizeof(U32) * 6);	// copy channel status fields
 	memcpy((void *)Measurement, (void *)ChannelState, sizeof(U32) * 3);	// copy first elements of structure
@@ -243,7 +278,13 @@ int ComposeMeasurement(int ChannelID, PBB_MEASUREMENT Measurement, U32 *DataBuff
 		Measurement->CodeCount = StateBuffer->PrnCount - (StateBuffer->PrnCount >> 10);	// 4MSB*1023 + 10LSB = (4MSB*1024+10LSB) - 4MSB
 	else// if (ChannelState->FreqID == FREQ_B1C) or (ChannelState->FreqID == FREQ_L1C)
 		Measurement->CodeCount = StateBuffer->PrnCount >> 14;
-	Measurement->CodeCount = (Measurement->CodeCount << 1) + STATE_BUF_GET_CODE_SUB_PHASE(StateBuffer);
+	Measurement->CodeCount = (Measurement->CodeCount << 1) + STATE_BUF_GET_CODE_SUB_PHASE(StateBuffer) - 4;	// compensate 4 correlator interval to align to COR4
+	CohCount = STATE_BUF_GET_COH_COUNT(StateBuffer);
+	// check whether CurrentCor != 0, if so, CohCount has 1 lag to Cor0
+	CurrentCor = STATE_BUF_GET_CUR_CORR(&(ChannelState->StateBufferCache));
+	if (CurrentCor)
+		CohCount ++;
+	Measurement->CodeCount += (ChannelState->DataStream.CurrentAccTime + CohCount) * 2046;
 
 	Measurement->CarrierFreq = STATE_BUF_GET_CARRIER_FREQ(StateBuffer);
 	Measurement->CarrierNCO = STATE_BUF_GET_CARRIER_PHASE(StateBuffer);
@@ -516,6 +557,7 @@ void CalcDiscriminator(PCHANNEL_STATE ChannelState, unsigned int Method)
 	}
 	if (Method & TRACKING_UPDATE_DLL)
 	{
+//		printf("EPL = %5d %5d %5d\n", SearchResult.EarlyPower, SearchResult.PeakPower, SearchResult.LatePower);
 		Denominator = 2 * SearchResult.PeakPower - SearchResult.EarlyPower - SearchResult.LatePower;
 		Numerator = SearchResult.EarlyPower - SearchResult.LatePower;
 		// (E-L)/(2P-E-L))
@@ -765,6 +807,8 @@ void DecodeDataStream(PCHANNEL_STATE ChannelState)
 	DataStream->CurReal += (S16)(ChannelState->StateBufferCache.CoherentSum[4] >> 16);
 	DataStream->CurImag += (S16)(ChannelState->StateBufferCache.CoherentSum[4] & 0xffff);
 
+//	if (ChannelState->Svid == 30)
+//		printf("DATA %d %d\n", DataStream->CurrentAccTime, DataStream->TotalAccTime);
 	// if accumulate time reaches symbol length, decode data symbol
 	if (DataStream->CurrentAccTime >= DataStream->TotalAccTime)
 	{
@@ -789,7 +833,11 @@ void DecodeDataStream(PCHANNEL_STATE ChannelState)
 		DataStream->DataCount ++;
 		DataStream->CurrentAccTime = 0;
 		DataStream->CurReal = DataStream->CurImag = 0;
+//		if (ChannelState->Svid == 3)
+//			printf(" %d", DataStream->DataCount);
 	}
+//	if (ChannelState->Svid == 3)
+//		printf("\n");
 }
 
 //*************** Task to do bit sync ****************

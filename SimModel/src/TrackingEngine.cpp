@@ -267,7 +267,7 @@ U32 CTrackingEngine::GetTEBuffer(unsigned int Address)
 		return pChannelParam->DumpCount << 16;
 		break;
 	case STATE_OFFSET_CORR_STATE:
-		return (pChannelParam->NHCount << 27) | (pChannelParam->CoherentCount << 21) | (pChannelParam->MsDataCount << 16) | (pChannelParam->CodeSubPhase << 8) | (pChannelParam->Dumping << 7) | (pChannelParam->CurrentCor << 4) | (pChannelParam->MsDataDone << 1) | pChannelParam->CoherentDone;
+		return (pChannelParam->NHCount << 27) | (pChannelParam->CoherentCount << 21) | (pChannelParam->MsDataCount << 16) | (pChannelParam->CodeSubPhase << 8) | (((pChannelParam->CurrentCor == 0) ? 0 : 1) << 7) | (pChannelParam->CurrentCor << 4) | (pChannelParam->MsDataDone << 1) | pChannelParam->CoherentDone;
 	default:
 		return TEBuffer[Address & 0xfff];
 	}
@@ -327,6 +327,8 @@ int CTrackingEngine::ProcessData(GNSS_TIME CurTime, SATELLITE_PARAM GpsSatParam[
 			CohData = ((unsigned int)CohDataI << 16) | ((unsigned int)CohDataQ & 0xffff);
 			TEBuffer[COH_OFFSET(i, CorIndex[j])] = CohData;
 		}
+		if (DataLength)
+			ChannelParam[i].CurrentCor = ((CorIndex[DataLength-1] >> 2) + 1) & 0x7;	// CurrentCor is next to the last output correlator
 	}
 
 	return (CohDataReady != 0);
@@ -373,16 +375,15 @@ void CTrackingEngine::GetCorrelationResult(int ChannelId, GNSS_TIME CurTime, SAT
 	complex_number CorResult[16];
 	double CodeDiff[16];
 	int CorCount = 0, StartIndex = 0;
-	int PreIndex = -1;
 	double Doppler1, Doppler2;
 	double FreqDiff, PhaseDiff;
 	double CarrierPhase;
 	double Amplitude, PeakPosition, NcoPhase, CorPosition, AmpRatio;
 	GNSS_TIME TransmitTime;
 	int CodeDiffIndex, CodeLength;
-	int FrameNumber, BitNumber, DataBit;
+	int FrameNumber, BitNumber, Milliseconds, DataBit;
 
-	// calculate 128x half code length
+	// calculate half of 128x code length
 	CodeLength = (ChannelParam[ChannelId].SystemSel == 0) ? 1023 : ((ChannelParam[ChannelId].SystemSel == 1) ? 4092 : 10230);
 	CodeLength *= 64;
 
@@ -404,14 +405,10 @@ void CTrackingEngine::GetCorrelationResult(int ChannelId, GNSS_TIME CurTime, SAT
 	}
 	while (CorCount < DataLength)
 	{
-		if (PreIndex > CorIndex[CorCount])
-		{
-			GenerateRelativeNoise(CorCount - StartIndex, MaxIndex, CovarMatrix, NOISE_AMP, &CorResult[StartIndex]);
-			StartIndex = CorCount;
-		}
-		CorCount ++;
+		if ((CorIndex[CorCount] >> 2) == 0)	// new round of correlator 0~7, generate 8 Gauss Noise
+			GenerateRelativeNoise(8, MaxIndex, CovarMatrix, NOISE_AMP, ChannelParam[ChannelId].GaussNoise);
+		CorResult[CorCount ++] = ChannelParam[ChannelId].GaussNoise[CorIndex[CorCount] >> 2];
 	}
-	GenerateRelativeNoise(CorCount - StartIndex, MaxIndex, CovarMatrix, NOISE_AMP, &CorResult[StartIndex]);
 //	memset(CorResult, 0, sizeof(CorResult));
 	if (pSatParam)
 	{
@@ -443,12 +440,13 @@ void CTrackingEngine::GetCorrelationResult(int ChannelId, GNSS_TIME CurTime, SAT
 		// calculate signal amplitude
 		Amplitude = 1.4142135 * pow(10, (pSatParam->CN0 - 3000) / 2000.) * NOISE_AMP;
 		Amplitude *= (FreqDiff > 1e-3) ? (sin(FreqDiff) / FreqDiff) : 1.0;
-		TransmitTime = GetTransmitTime(CurTime, pSatParam->TravelTime + pSatParam->IonoDelay / LIGHT_SPEED);
-		FrameNumber = (TransmitTime.MilliSeconds - 1) / 6000;	// previous finished millisecond
-		BitNumber = ((TransmitTime.MilliSeconds - 1) % 6000) / 20;
+		TransmitTime = GetTransmitTime(CurTime, pSatParam->TravelTime + pSatParam->IonoDelay / LIGHT_SPEED + 0.001);	// add one extra millisecond to get previous finished millisecond
+		FrameNumber = TransmitTime.MilliSeconds / 6000;
+		BitNumber = (TransmitTime.MilliSeconds % 6000) / 20;
+		Milliseconds = TransmitTime.MilliSeconds % 20;
 		if (FrameNumber != ChannelParam[ChannelId].CurrentFrame)
 		{
-			NavData->GetFrameData(TransmitTime.MilliSeconds - 1, ChannelParam[ChannelId].Svid, ChannelParam[ChannelId].Bits);
+			NavData->GetFrameData(TransmitTime, ChannelParam[ChannelId].Svid, ChannelParam[ChannelId].Bits);
 			ChannelParam[ChannelId].CurrentFrame = FrameNumber;
 		}
 		PeakPosition = TransmitTime.SubMilliSeconds * 2046;
@@ -466,9 +464,12 @@ void CTrackingEngine::GetCorrelationResult(int ChannelId, GNSS_TIME CurTime, SAT
 		for (i = 0; i < DataLength; i ++)
 		{
 			if ((CorIndex[i] >> 2) == 0)	// new correlator dump uses new bit
+			{
 				ChannelParam[ChannelId].CurrentBit = DataBit = ChannelParam[ChannelId].Bits[BitNumber];
-			if (CodeDiff[i] > CodeLength)
-				CodeDiff[i] -= (CodeLength * 2);
+				BitNumber += (Milliseconds + 1) / 20;	// if there will be next Cor0, check whether next milliseconds move to next bit
+			}
+			if (CodeDiff[i] > CodeLength)	// CodeDiff may be one whole code round difference
+				CodeDiff[i] = fabs(CodeDiff[i] - (CodeLength * 2));
 			CodeDiffIndex = (int)CodeDiff[i];
 			CodeDiff[i] -= CodeDiffIndex;
 			if (CodeDiffIndex < 159)
@@ -524,14 +525,16 @@ int CTrackingEngine::CalculateCounter(int ChannelId, int CorIndex[], int CorPos[
 	DumpRemnant = ChannelParam[ChannelId].DumpCount * 2 + ChannelParam[ChannelId].CodeSubPhase;	// previous remnant 1/2 chip after dumping
 	if (DumpRemnant < 7)	// need to complete remaining correlation result
 	{
-		FirstCor= DumpRemnant;
-		for (i = DumpRemnant; i < 8; i ++)
+		FirstCor = DumpRemnant + 1;
+		for (i = DumpRemnant + 1; i < 8; i ++)
 		{
-			CorPos[DataLength] = DumpRemnant - 1 + DumpRemnant - i;
+			CorPos[DataLength] = DumpRemnant - i;
 			CorIndex[DataLength++] = (i << 2) + (ChannelParam[ChannelId].CoherentCount == 0 ? 1 : 0);
 		}
 		ChannelParam[ChannelId].CoherentDone |= (ChannelParam[ChannelId].CoherentCount == ChannelParam[ChannelId].CoherentNumber - 1) ? 1 : 0;
 		ChannelParam[ChannelId].CoherentCount ++;
+		if (ChannelParam[ChannelId].CoherentNumber)
+			ChannelParam[ChannelId].CoherentCount %= ChannelParam[ChannelId].CoherentNumber;
 	}
 
 	// recalculate CodePhase, CodeSubPhase and PrnCount
@@ -556,13 +559,15 @@ int CTrackingEngine::CalculateCounter(int ChannelId, int CorIndex[], int CorPos[
 
 	// determine remnant correlator to dump after increase DumpCount
 	DumpRemnant = ChannelParam[ChannelId].DumpCount * 2 + ChannelParam[ChannelId].CodeSubPhase;	// previous remnant 1/2 chip after dumping
+	if (NewCoh == 2)
+		NewCoh = NewCoh;
 	while (NewCoh)
 	{
 		for (i = 0; i < 8; i ++)
 		{
-			if (i > DumpRemnant)
+			if (i > DumpRemnant && NewCoh == 1)
 				break;
-			if (FirstCor == i)
+			if (FirstCor == i && ChannelParam[ChannelId].CoherentCount == 0)
 				OverwriteProtect = 2;
 			CorPos[DataLength] = DumpRemnant - i;
 			CorIndex[DataLength++] = (i << 2) + (ChannelParam[ChannelId].CoherentCount == 0 ? 1 : 0) + OverwriteProtect;
@@ -571,11 +576,15 @@ int CTrackingEngine::CalculateCounter(int ChannelId, int CorIndex[], int CorPos[
 		if (FirstCor < 0)
 			FirstCor = 0;
 		NewCoh --;
+		if (i == 8)	// last correlator dumped
+		{
+			ChannelParam[ChannelId].CoherentCount ++;
+			if (ChannelParam[ChannelId].CoherentNumber)
+				ChannelParam[ChannelId].CoherentCount %= ChannelParam[ChannelId].CoherentNumber;
+		}
 	}
-	if (i == 8)	// last correlator dumped
-		ChannelParam[ChannelId].CoherentCount ++;
-	if (ChannelParam[ChannelId].CoherentNumber)
-		ChannelParam[ChannelId].CoherentCount %= ChannelParam[ChannelId].CoherentNumber;
+	if (DataLength > 8)
+		DataLength = DataLength;
 
 	return ChannelParam[ChannelId].CoherentDone;
 }
@@ -596,7 +605,7 @@ void CTrackingEngine::InitChannel(int ChannelId, GNSS_TIME CurTime, SATELLITE_PA
 	TransmitTime.MilliSeconds ++;	// correlation result will be calculated from next millisecond
 	ChannelParam[ChannelId].CurrentFrame = TransmitTime.MilliSeconds / 6000;	// frame number
 	ChannelParam[ChannelId].CurrentBit = 0;
-	NavData->GetFrameData(TransmitTime.MilliSeconds, ChannelParam[ChannelId].Svid, ChannelParam[ChannelId].Bits);
+	NavData->GetFrameData(TransmitTime, ChannelParam[ChannelId].Svid, ChannelParam[ChannelId].Bits);
 }
 
 double CTrackingEngine::NarrowCompensation(int CorIndex, int NarrowFactor)

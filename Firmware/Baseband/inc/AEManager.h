@@ -25,7 +25,7 @@ typedef struct
 	int NoncohNumber;
 	int StrideNumber;
 	int StrideInterval;
-	ACQ_SAT_CONFIG SatConfig[32];
+	ACQ_SAT_CONFIG SatConfig[TOTAL_CHANNEL_NUMBER];
 } ACQ_CONFIG, *PACQ_CONFIG;
 
 ACQ_CONFIG AcqConfig;

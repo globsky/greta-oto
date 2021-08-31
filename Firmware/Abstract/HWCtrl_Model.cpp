@@ -108,10 +108,13 @@ void EnableRF()
 	while (Baseband.Process(SAMPLE_COUNT) >= 0)
 	{
 //		printf("ProcessCount=%d\n", ProcessCount);
-		ProcessCount ++;
-		if (ProcessCount == 2001)
-			break;
+		if (ProcessCount == 31998)
+			ProcessCount = ProcessCount;
 		DoTaskQueue(&BasebandTask);
 		DoTaskQueue(&PostMeasTask);
+		DoTaskQueue(&InputOutputTask);
+		ProcessCount ++;
+//		if (ProcessCount == 50000)
+//			break;
 	}
 }

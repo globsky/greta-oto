@@ -90,7 +90,7 @@ always @(*)
 		2'b00: prn_code_cor3 = prn_code_r[2];
 		2'b01: prn_code_cor3 = advance4 ? advance_bit : prompt_bit;
 		2'b10: prn_code_cor3 = advance8 ? advance_bit : prompt_bit;
-		default: prn_code_cor3 = prn_code_r[1];
+		default: prn_code_cor3 = prn_code_r[2];
 	endcase
 
 // select PRN bit for cor5

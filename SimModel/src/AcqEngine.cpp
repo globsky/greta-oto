@@ -394,7 +394,7 @@ void CAcqEngine::DoAcquisition()
 void CAcqEngine::SetBufferParam(SATELLITE_PARAM SatelliteParam[], int SatVisible, GNSS_TIME Time, NavBit *NavData)
 {
 	int i, j;
-	int FrameNumber, BitNumber;
+	int FrameNumber, BitNumber, MilliSeconds;
 	int TotalBits, BitCount, Start, End;
 	int Bits[1800];
 	GNSS_TIME TransmitTime;
@@ -407,13 +407,13 @@ void CAcqEngine::SetBufferParam(SATELLITE_PARAM SatelliteParam[], int SatVisible
 		// calculate frame count and bit count
 		TransmitTime.MilliSeconds ++;	// time of NEXT code round
 		FrameNumber = TransmitTime.MilliSeconds / 6000;	// frame number
-		TransmitTime.MilliSeconds -= FrameNumber * 6000;	// remaining time in current frame in millisecond
-		BitNumber = TransmitTime.MilliSeconds / 20;	// bit number
-		TransmitTime.MilliSeconds -= BitNumber * 20;	// remaining time in current bit
+		MilliSeconds = TransmitTime.MilliSeconds - FrameNumber * 6000;	// remaining time in current frame in millisecond
+		BitNumber = MilliSeconds / 20;	// bit number
+		MilliSeconds -= BitNumber * 20;	// remaining time in current bit
 		// assign parameters
 		SatParam[i].svid = SatelliteParam[i].svid;
 		SatParam[i].BitLength = 20;
-		SatParam[i].MsCount = TransmitTime.MilliSeconds;
+		SatParam[i].MsCount = MilliSeconds;
 //		SatParam[i].Time2CodeEnd = (1 - TransmitTime.SubMilliSeconds) * 2046.;	// convert to unit of 1/2 code chip (can add compensation of filter delay here)
 		SatParam[i].Time2CodeEnd = (1 - TransmitTime.SubMilliSeconds + 2.5 / SAMPLE_COUNT) * 2046.;	// convert to unit of 1/2 code chip with compensation of filter delay (2.5 samples)
 		SatParam[i].Doppler = (-SatelliteParam[i].RelativeSpeed) / GPS_L1_WAVELENGTH;
@@ -428,14 +428,12 @@ void CAcqEngine::SetBufferParam(SATELLITE_PARAM SatelliteParam[], int SatVisible
 			if ((End - Start) > (TotalBits - BitCount))	// if generated bit stream is longer, truncate the end
 				End = Start + (TotalBits - BitCount);
 			// get navigation bits and copy to BitArray
-			NavData->GetFrameData(FrameNumber * 6000, SatelliteParam[i].svid, Bits);
+			NavData->GetFrameData(TransmitTime, SatelliteParam[i].svid, Bits);
 			for (j = Start; j < End; j ++)
 				SatParam[i].BitArray[BitCount++] = Bits[j];
 			// move to next subframe
 			BitNumber = 0;
-			FrameNumber ++;
-			if (FrameNumber >= 100800)
-				FrameNumber = 0;
+			TransmitTime.MilliSeconds += 6000;
 		}
 	}
 }

@@ -103,14 +103,14 @@ int ProcessAcqResult(void *Param)
 		Doppler = AcqConfig->SatConfig[i].CenterFreq + (Doppler * 2 - 7) * AcqConfig->StrideInterval / 16;
 		if ((NewChannel = GetAvailableChannel()) != NULL)
 		{
-			NewChannel->FreqID = FREQ_L1CA;
+			NewChannel->FreqID = (AcqConfig->SatConfig[i].FreqSvid >> 6);
 			NewChannel->Svid = AcqConfig->SatConfig[i].FreqSvid & 0x3f;
 			InitChannel(NewChannel);
 			ConfigChannel(NewChannel, Doppler, CodePhase);
 		}
 	}
 	UpdateChannels();
-	SetRegValue(ADDR_TE_CHANNEL_ENABLE, ChannelOccupation);
+	SetRegValue(ADDR_TE_CHANNEL_ENABLE, GetChannelEnable());
 
 	return 0;
 }

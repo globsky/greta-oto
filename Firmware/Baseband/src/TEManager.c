@@ -6,6 +6,7 @@
 //
 //----------------------------------------------------------------------
 #include <stdio.h>
+#include <memory.h>
 #include "RegAddress.h"
 #include "BBDefines.h"
 #include "HWCtrl.h"
@@ -13,14 +14,46 @@
 #include "TaskQueue.h"
 #include "ChannelManager.h"
 #include "TEManager.h"
+#include "PvtEntry.h"
+#include "ComposeOutput.h"
 
 int MeasurementInterval;
 U32 ChannelOccupation;
-BB_MEASUREMENT BasebandMeasurement[32];
-U32 DataStreamBuffer[100/4*32];		// 100 8bit symbols x 32 channels
+BB_MEASUREMENT BasebandMeasurement[TOTAL_CHANNEL_NUMBER];
+U32 DataStreamBuffer[100/4*TOTAL_CHANNEL_NUMBER];		// 100 8bit symbols x 32 channels
 BB_MEAS_PARAM MeasurementParam;
 
 int MeasProcTask(void *Param);
+
+//*************** Initialize TE manager ****************
+//* this function is called at initialization stage
+// Parameters:
+//   none
+// Return value:
+//   none
+void TEInitialize()
+{
+	int i;
+
+	ChannelOccupation = 0;
+	MeasurementParam.RunTimeAcc = 0;
+	memset(ChannelStateArray, 0, sizeof(ChannelStateArray));
+	for (i = 0; i < TOTAL_CHANNEL_NUMBER; i ++)
+	{
+		ChannelStateArray[i].LogicChannel = i;
+		ChannelStateArray[i].StateBufferHW = (PSTATE_BUFFER)(ADDR_BASE_TE_BUFFER + i * 128);	// each channel occupy 128 bytes start from ADDR_BASE_TE_BUFFER
+	}
+}
+
+//*************** Get channel enable mask ****************
+// Parameters:
+//   none
+// Return value:
+//   channel enable mask
+U32 GetChannelEnable()
+{
+	return ChannelOccupation;
+}
 
 //*************** Update all channel state in hardware synchronized from cache ****************
 // Parameters:
@@ -32,7 +65,7 @@ void UpdateChannels()
 	int i;
 	U32 ChannelMask;
 
-	for (i = 0, ChannelMask = 1; i < 32; i ++, ChannelMask <<= 1)
+	for (i = 0, ChannelMask = 1; i < TOTAL_CHANNEL_NUMBER; i ++, ChannelMask <<= 1)
 	{
 		if (ChannelOccupation & ChannelMask)
 			SyncCacheWrite(ChannelStateArray + i);
@@ -48,7 +81,7 @@ PCHANNEL_STATE GetAvailableChannel()
 {
 	int i;
 
-	for (i = 0; i < 32; i ++)
+	for (i = 0; i < TOTAL_CHANNEL_NUMBER; i ++)
 	{
 		if ((ChannelOccupation & (1 << i)) == 0)
 		{
@@ -69,11 +102,12 @@ void CohSumInterruptProc()
 	int i;
 	U32 ChannelMask;
 	U32 CohDataReady = GetRegValue(ADDR_TE_COH_DATA_READY);
+	U32 OverwriteProtectChannel = GetRegValue(ADDR_TE_OVERWRITE_PROTECT_CHANNEL);
 
-	for (i = 0, ChannelMask = 1; i < 32; i ++, ChannelMask <<= 1)
+	for (i = 0, ChannelMask = 1; i < TOTAL_CHANNEL_NUMBER; i ++, ChannelMask <<= 1)
 	{
 		if (CohDataReady & ChannelMask)
-			ProcessCohSum(i);
+			ProcessCohSum(i, OverwriteProtectChannel & ChannelMask);
 	}
 	UpdateChannels();
 }
@@ -91,20 +125,22 @@ void MeasurementProc()
 	PBB_MEASUREMENT Msr;
 	int WordNumber;
 
-	for (i = 0, ChannelMask = 1; i < 32; i ++, ChannelMask <<= 1)
+	MeasurementParam.RunTimeAcc += GetRegValue(ADDR_MEAS_NUMBER);
+	for (i = 0, ChannelMask = 1; i < TOTAL_CHANNEL_NUMBER; i ++, ChannelMask <<= 1)
 	{
 		if (ChannelOccupation & ChannelMask)
 		{
-			Msr = &BasebandMeasurement[ch_num++];
+			Msr = &BasebandMeasurement[i];
 			BufferPointer += (WordNumber = ComposeMeasurement(i, Msr, BufferPointer));
 		}
 	}
 
 	// assign measurement parameter structure and add process task to PostMeasTask queue
-	MeasurementParam.MeasNumber = ch_num;
+	MeasurementParam.MeasMask = ChannelOccupation;
 	MeasurementParam.MeasInterval = MeasurementInterval;
 	MeasurementParam.Measurements = BasebandMeasurement;
 	AddTaskToQueue(&PostMeasTask, MeasProcTask, &MeasurementParam, sizeof(BB_MEAS_PARAM));
+//	printf("MSR %d\n", MeasurementParam.RunTimeAcc);
 }
 
 //*************** Task to process baseband measurements ****************
@@ -115,26 +151,15 @@ void MeasurementProc()
 //   0
 int MeasProcTask(void *Param)
 {
-	int i, j;
+	int OutputBasebandMeas = 1;
 	PBB_MEAS_PARAM MeasParam = (PBB_MEAS_PARAM)Param;
 	PBB_MEASUREMENT Msr = MeasParam->Measurements;
-	int WordNumber;
 
-	for (i = 0; i < MeasParam->MeasNumber; i ++)
-	{
-		WordNumber = (Msr[i].DataNumber + 31) / 32;
-		printf("$PBMSR,%2d,%2d,%2d,%10u,%10u,%10u,%5d,%10u,%10u,%5d,%8x,%3d,%4d,%8u\n",
-			Msr[i].LogicChannel, Msr[i].Svid, Msr[i].FreqID, Msr[i].CarrierFreq, Msr[i].CarrierNCO, Msr[i].CarrierCount,
-			Msr[i].CodeCount, Msr[i].CodeFreq, Msr[i].CodeNCO, 2046, Msr[i].State, Msr[i].LockIndicator, Msr[i].CN0, Msr[i].TrackingTime);
-		if (WordNumber > 0)
-		{
-			printf("$PDATA,%d", Msr[i].DataNumber);
-			for (j = 0; j < WordNumber; j ++)
-				printf(",%08x", Msr[i].DataStreamAddr[j]);
-			printf("\n");
-		}
-	}
-	printf("$PMSRP,%3d\n", MeasParam->MeasInterval);
+	if (OutputBasebandMeas)
+		AddTaskToQueue(&InputOutputTask, MeasPrintTask, Param, sizeof(BB_MEAS_PARAM));
+
+	MsrProc(Msr, MeasParam->MeasMask, MeasParam->MeasInterval, MeasurementInterval);
+	PvtProc(MeasParam->MeasInterval);
 
 	return 0;
 }

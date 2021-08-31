@@ -36,7 +36,7 @@ void InitTaskQueue(PTASK_QUEUE TaskQueue, TASK_ITEM ItemArray[], int ItemNumber,
 	// initial link list
 	for (i = 0; i < ItemNumber - 1; i ++)
 		ItemArray[i].pNextItem = &ItemArray[i+1];
-	ItemArray[ItemNumber].pNextItem = 0;
+	ItemArray[ItemNumber-1].pNextItem = 0;
 	// put link list in empty queue and wait queue as empty
 	TaskQueue->AvailableQueue = ItemArray;
 	TaskQueue->WaitQueue = TaskQueue->QueueTail = 0;

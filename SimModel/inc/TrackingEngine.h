@@ -54,6 +54,8 @@ struct ChannelConfig
 	int MsDataCount;
 	int CoherentCount;
 	int NHCount;
+	// store Gauss noise
+	complex_number GaussNoise[8];
 	// variable to get modulation bit
 	int CurrentFrame;	// frame number of data stream filling in Bits
 	int CurrentBitIndex;	// bit index used for current ms correlation result
