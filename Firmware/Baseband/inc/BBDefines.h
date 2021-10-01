@@ -91,21 +91,22 @@ typedef struct
 #define STATE_BUF_SET_MSDATA_COUNT(pStateBuffer, Count)      SET_FIELD((pStateBuffer)->CorrState, 16, 5, Count)
 #define STATE_BUF_SET_CODE_SUB_PHASE(pStateBuffer, SubPhase) SET_FIELD((pStateBuffer)->CorrState, 8, 1, SubPhase)
 
-// PRN configuration
-#define STATE_BUF_SET_PRN_L1CA(pStateBuffer, Svid, StartPhase) \
-do{ pStateBuffer->PrnConfig = CAPrnInit[Svid-1]; \
-	pStateBuffer->PrnCount = (StartPhase) << 14; } while(0)
+// PRN field set value
+#define STATE_BUF_SET_PRN_CONFIG(pStateBuffer, Config) ((pStateBuffer)->PrnConfig = Config)
+#define STATE_BUF_SET_PRN_CONFIG2(pStateBuffer, Config) ((pStateBuffer)->PrnConfig2 = Config)
+#define STATE_BUF_SET_PRN_COUNT(pStateBuffer, Count) ((pStateBuffer)->PrnCount = Count)
 
-#define STATE_BUF_SET_PRN_E1(pStateBuffer, Svid, StartPhase) \
-do{ pStateBuffer->PrnConfig = 0xc0000004 + ((49 + Svid) << 6); \
-	pStateBuffer->PrnCount = ((StartPhase / 1023) << 10) + (StartPhase % 1023); } while(0)
-
-#define STATE_BUF_SET_PRN_B1C(pStateBuffer, Svid, StartPhase) \
-do{ pStateBuffer->PrnConfig = B1CPilotInit[Svid-1]; \
-	pStateBuffer->PrnCount = StartPhase; } while(0)
-
-#define STATE_BUF_SET_PRN_L1C(pStateBuffer, Svid, StartPhase) \
-do{ pStateBuffer->PrnConfig = B1CPilotInit[Svid-1]; \
-	pStateBuffer->PrnCount = StartPhase; } while(0)
+// PRN configuration and count for different signal
+#define PRN_CONFIG_L1CA(Svid) (CAPrnInit[Svid-1])
+#define PRN_CONFIG_E1(Svid)   (0xc0000004 + ((49 + Svid) << 6))
+#define PRN_CONFIG_B1C(Svid)  (B1CPilotInit[Svid-1])
+#define PRN_CONFIG_L1C(Svid)  (L1CPilotInit[Svid-1])
+#define PRN_CONFIG2_E1(Svid)  (0xc0000004 + ((Svid-1) << 6))
+#define PRN_CONFIG2_B1C(Svid) (B1CDataInit[Svid-1])
+#define PRN_CONFIG2_L1C(Svid) (L1CDataInit[Svid-1])
+#define PRN_COUNT_L1CA(StartPhase) ((StartPhase) << 14)
+#define PRN_COUNT_E1(StartPhase)   (((StartPhase / 1023) << 10) + (StartPhase % 1023))
+#define PRN_COUNT_B1C(StartPhase)  (StartPhase)
+#define PRN_COUNT_L1C(StartPhase)  (StartPhase)
 
 #endif	// __BB_DEFINES_H__

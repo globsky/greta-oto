@@ -87,6 +87,8 @@ void FirmwareInitialize()
 	SetRegValue(ADDR_TE_CHANNEL_ENABLE, 0);			// disable all channels
 	SetRegValue(ADDR_TE_POLYNOMIAL, 0x00e98204);	// set L1CA polynomial
 	SetRegValue(ADDR_TE_CODE_LENGTH, 0x00ffc000);	// set L1CA code length
+	SetRegValue(ADDR_TE_NOISE_CONFIG, 1);			// set noise smooth factor
+	SetRegValue(ADDR_TE_NOISE_FLOOR, 800);	// set initial noise floor
 	SetRegValue(ADDR_AE_CARRIER_FREQ, CARRIER_FREQ(0));
 	SetRegValue(ADDR_AE_CODE_RATIO, (int)(2.046e6 / SAMPLE_FREQ * 16777216. + 0.5));
 	SetRegValue(ADDR_AE_THRESHOLD, 37);

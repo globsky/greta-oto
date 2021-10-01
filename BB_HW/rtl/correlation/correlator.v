@@ -117,6 +117,13 @@ output [ 4:0] cor_dump_index,	// index of correlator to dump
 output [15:0] i_coherent_sum,	// I channel data for coherent sum
 output [15:0] q_coherent_sum,	// Q channel data for coherent sum
 output coherent_sum_valid, // coherent sum valid flag
+
+// output data for noise calculation
+output data_down_en,
+output [5:0] i_data_down,
+output [5:0] q_data_down,
+output shift_code,
+
 // control and state signals
 input	fill_finished,			// set this signal when all physical channel fill finish
 output     cor_ready,			// correlator ready to accept input sample
@@ -129,10 +136,6 @@ genvar i_gen;
 //----------------------------------------------------------
 // down_converter instance
 //----------------------------------------------------------
-wire       data_down_en;
-wire [5:0] i_data_down;
-wire [5:0] q_data_down;
-
 m_down_converter u_down_converter
 (
   .clk              (clk             ),
@@ -176,7 +179,6 @@ overflow_gen u_overflow_gen
 //--------------------------------------------------------------
 // prn generate and shift
 //--------------------------------------------------------------
-wire shift_code;
 wire prn_reset;
 wire prn_code1, prn_code2;
 

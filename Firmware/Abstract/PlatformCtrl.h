@@ -26,6 +26,9 @@ void CreateThread(ThreadFunction Thread);
 #define ENTER_CRITICAL DisableInt
 #define EXIT_CRITICAL EnableInt
 
+int __builtin_popcount(unsigned int data);
+int __builtin_clz(unsigned int data);
+
 #ifdef __cplusplus
 }
 #endif

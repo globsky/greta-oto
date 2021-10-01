@@ -33,3 +33,11 @@
 		Add input/output task queue and move baseband measurement output task to this queue
 		Add code to deal with case of partial coherent result output
 		Add PVT function include measurement calculation, frame sync and ephemeris decode and LSQ position fix
+9/30/2021
+	Bug fix
+		Fix bug in rom_arbiter_preempt
+	Function and feature added
+		Add noise floor calculation hardware
+		Add loop filter coefficients calculation method in firmware
+		Add simple CN0 and lock detector calculation method in firmware
+		Move tracking loop and tracking stage related function to corresponding source file

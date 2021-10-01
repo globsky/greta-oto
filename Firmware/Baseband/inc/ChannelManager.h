@@ -84,7 +84,31 @@ typedef struct tag_CHANNEL_STATE
 	int BitSyncResult;		// set by BitSyncTask, -1 for bit sync fail, 0 for bit sync in process, 1~20 as bit sync position, 21 as switch to tracking from bit sync
 	// data for data stream decode
 	DATA_STREAM DataStream;
+	// tracking loop coefficients
+	int pll_k1, pll_k2, pll_k3;	// maximum 3rd order
+	int fll_k1, fll_k2;			// maximum 2nd order
+	int dll_k1, dll_k2;			// maximum 2nd order
+	// C/N0 calculation
+	int PeakPower;		// peak amplitude
+	int SmoothedPower;	// smoothed power
+	int CN0, FastCN0;	// smoothed C/N0 and instantaneous C/N0
+	// lock detector
+	int PLD, FLD, DLD;	// 0 to 100 as indicator of lock quality
+	int LoseLockCounter;
 } CHANNEL_STATE, *PCHANNEL_STATE;
+
+typedef struct
+{
+	int CoherentNumber;		// same as coherent number settings in CohConfig field of state buffer
+	int FftNumber;			// 1 for PLL only (no FLL), 2 for cross-dot (FLL), 3~8 for FFT
+	int NonCohNumber;
+	int NarrowFactor;
+	int PostShift;
+	int BandWidthPLL16x;	// loop filter bandwidth for PLL with scale factor 1/16Hz, bit16~17 as order
+	int BandWidthFLL16x;	// loop filter bandwidth for FLL with scale factor 1/16Hz, bit16~17 as order
+	int BandWidthDLL16x;	// loop filter bandwidth for DLL with scale factor 1/16Hz, bit16~17 as order
+	int TrackingTimeout;	// timeout for current tracking stage, -1 for no timeout
+} TRACKING_CONFIG, *PTRACKING_CONFIG;
 
 typedef struct
 {

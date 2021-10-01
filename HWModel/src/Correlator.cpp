@@ -44,6 +44,7 @@ CCorrelator::CCorrelator(unsigned int PolySettings[], unsigned int *MemCodeAddre
 	PrnGen2[1] = new CGeneralPrn(PolySettings+2);
 	PrnGen2[2] = new CWeilPrn;
 	PrnGen2[3] = new CMemoryPrn(MemCodeAddress);
+	NoiseCalc = NULL;
 	Reset();
 }
 
@@ -245,7 +246,7 @@ int CCorrelator::Correlation(int SampleNumber, complex_int SampleData[], S16 Dum
 	for (i = 0; i < SampleNumber; i ++)
 	{
 		if (JumpCount >= 0)
-			AccumulateSample((S16)SampleData[i].real, (S16)SampleData[i].imag, 8);
+			AccumulateSample(SampleData[i], 8);
 		CodePhaseNew = CodePhase + CodeFreq;
 		if (CodePhaseNew < CodePhase)	// code overflow
 		{
@@ -268,7 +269,7 @@ int CCorrelator::Correlation(int SampleNumber, complex_int SampleData[], S16 Dum
 }
 
 // Add/Sub sample to AccDataI and AccDataQ for each correlator
-void CCorrelator::AccumulateSample(S16 SampleI, S16 SampleQ, int CorCount)
+void CCorrelator::AccumulateSample(complex_int Sample, int CorCount)
 {
 	int j, BitMask;
 	unsigned int PrnValue;
@@ -313,15 +314,17 @@ void CCorrelator::AccumulateSample(S16 SampleI, S16 SampleQ, int CorCount)
 		DEBUG_PRINT(" %1d", (PrnValue & BitMask) ? 1 : 0);
 		if (PrnValue & BitMask)
 		{
-			AccDataI[j] -= SampleI;
-			AccDataQ[j] -= SampleQ;
+			AccDataI[j] -= (S16)Sample.real;
+			AccDataQ[j] -= (S16)Sample.imag;
 		}
 		else
 		{
-			AccDataI[j] += SampleI;
-			AccDataQ[j] += SampleQ;
+			AccDataI[j] += (S16)Sample.real;
+			AccDataQ[j] += (S16)Sample.imag;
 		}
 	}
+	if (NoiseCalc)
+		NoiseCalc->AccumulateSample(Sample);
 //	printf("%1d %1x %04x %04x\n", PrnGen2[PrnIndex]->GetCode(), (PrnCode2 & 0x10) >> 4, AccDataI[0] & 0xffff, AccDataQ[0] & 0xffff);
 }
 
@@ -354,6 +357,8 @@ int CCorrelator::ProcessOverflow(S16 DumpDataI[], S16 DumpDataQ[], int CorIndex[
 			DumpCount = 0;
 			Dumping = 1;
 		}
+		if (NoiseCalc)
+			NoiseCalc->ShiftCode();
 	}
 
 	// shift PrnCode

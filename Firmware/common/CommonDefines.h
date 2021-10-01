@@ -86,6 +86,8 @@ do \
 #define STAGE_BIT_SYNC 0x5
 #define STAGE_TRACK    0x8		// bit3 set as normal tracking, 3LSB for track stage
 
+#define STAGE_CONFIG_INDEX(stage) (((stage) & 0x8) ? ((stage)-7) : 0)
+
 #define STATE_TRACKING_LOOP 0xc
 #define STAGE_MASK          0xf
 
@@ -108,10 +110,10 @@ do \
 #define TRACKING_UPDATE (TRACKING_UPDATE_PLL | TRACKING_UPDATE_FLL | TRACKING_UPDATE_DLL)
 
 // bit20~23 for cache state
-#define STATE_CACHE_FREQ_DIRTY   0x100000
-#define STATE_CACHE_CONFIG_DIRTY 0x200000
-#define STATE_CACHE_CODE_DIRTY   0x400000
-#define STATE_CACHE_STATUS_DIRTY 0x800000
+#define STATE_CACHE_FREQ_DIRTY   0x100000	// carrier and code frequency (8/9) need to sync to HW
+#define STATE_CACHE_CONFIG_DIRTY 0x200000	// CorrConfig, NHConfig and CohConfig (2/3/4) need to sync to HW
+#define STATE_CACHE_CODE_DIRTY   0x400000	// PrnCount, CodePhase, DumpCount and CorrState (7/10/11/12) need to sync to HW
+#define STATE_CACHE_STATUS_DIRTY 0x800000	// CorrState (12) need to be sync to HW
 #define STATE_CACHE_DIRTY (STATE_CACHE_FREQ_DIRTY | STATE_CACHE_CONFIG_DIRTY | STATE_CACHE_CODE_DIRTY | STATE_CACHE_STATUS_DIRTY)
 
 #define SYNC_CACHE_READ_DATA   1

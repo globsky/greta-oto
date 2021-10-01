@@ -38,7 +38,7 @@ always @(posedge clk or negedge rst_b)
 wire [9:0] data_amp;
 reg [9:0] coh_amplitude;
 
-amplitude u1_amplitude
+amplitude #(.DATA_WIDTH(10)) u_amplitude
 (
 	.clk       (clk            ),
 	.rst_b     (rst_b          ),

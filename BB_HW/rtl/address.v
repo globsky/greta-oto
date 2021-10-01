@@ -55,6 +55,8 @@
 `define TE_CODE_LENGTH            'h9
 `define TE_POLYNOMIAL2            'ha
 `define TE_CODE_LENGTH2           'hb
+`define TE_NOISE_CONFIG           'hc
+`define TE_NOISE_FLOOR            'hd
 `define TE_CURR_STATE_MACHINE     'h10
 // Peripheral registers
 `define  PERIPHERAL_BASE          'h1c00

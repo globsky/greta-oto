@@ -45,6 +45,7 @@ void CTrackingEngine::Reset()
 
 	for (i = 0; i < PHYSICAL_CHANNEL_NUMBER; i ++)
 		Correlator[i]->Reset();
+	NoiseCalc.Reset();
 	ChannelEnable = CohDataReady = 0;
 	OverwriteProtectAddr = 0;
 	OverwriteProtectValue = 0;
@@ -82,6 +83,12 @@ void CTrackingEngine::SetRegValue(int Address, U32 Value)
 	case ADDR_OFFSET_TE_CODE_LENGTH2:
 		PrnPolyLength[3] = Value;
 		break;
+	case ADDR_OFFSET_TE_NOISE_CONFIG:
+		NoiseCalc.SetSmoothFactor(Value);
+		break;
+	case ADDR_OFFSET_TE_NOISE_FLOOR:
+		NoiseCalc.SetNoise(Value);
+		break;
 	default:
 		break;
 	}
@@ -110,6 +117,10 @@ U32 CTrackingEngine::GetRegValue(int Address)
 		return PrnPolyLength[2];
 	case ADDR_OFFSET_TE_CODE_LENGTH2:
 		return PrnPolyLength[3];
+	case ADDR_OFFSET_TE_NOISE_CONFIG:
+		return NoiseCalc.SmoothFactor;
+	case ADDR_OFFSET_TE_NOISE_FLOOR:
+		return NoiseCalc.GetNoise();
 	default:
 		return 0;
 	}
@@ -131,6 +142,7 @@ int CTrackingEngine::ProcessData()
 	int ReadNumber;
 	unsigned int CohData;
 	S16 CohDataI, CohDataQ;
+	int FirstRound = 1;
 
 	// clear coherent data ready flag and overwrite protect flag
 	CohDataReady = 0;
@@ -147,6 +159,8 @@ int CTrackingEngine::ProcessData()
 	EnableMask = ChannelEnable;
 	while (EnableMask)
 	{
+		if (FirstRound)
+			Correlator[0]->NoiseCalc = &NoiseCalc;
 		// find at most 4 active channel
 		TrackingChannelCount = 0;
 		while (EnableMask && TrackingChannelCount < PHYSICAL_CHANNEL_NUMBER)
@@ -204,6 +218,8 @@ int CTrackingEngine::ProcessData()
 		}
 		// rewind FIFO read pointer
 		pTeFifo->RewindPointer();
+		FirstRound = 0;
+		Correlator[0]->NoiseCalc = NULL;
 	}
 	pTeFifo->SkipBlock();
 

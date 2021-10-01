@@ -40,7 +40,7 @@ always @(*)
 		default: mem_addr = 0;
 		endcase
 	end
-	else if (preempt3 == 2)	// port 2 has priority
+	else if (preempt2 == 1)	// port 2 has priority
 	begin
 		casez ({rd1, rd0, rd3, rd2})
 		4'b???1: mem_addr = addr2;
@@ -50,7 +50,7 @@ always @(*)
 		default: mem_addr = 0;
 		endcase
 	end
-	else if (preempt3 == 2)	// port 1 has priority
+	else if (preempt1 == 1)	// port 1 has priority
 	begin
 		casez ({rd0, rd3, rd2, rd1})
 		4'b???1: mem_addr = addr1;
@@ -85,7 +85,7 @@ always @(*)
 		default: accept_r = 4'b0000;
 		endcase
 	end
-	else if (preempt3 == 2)	// port 2 has priority
+	else if (preempt2 == 1)	// port 2 has priority
 	begin
 		casez ({rd1, rd0, rd3, rd2})
 		4'b???1: accept_r = 4'b0100;
@@ -95,7 +95,7 @@ always @(*)
 		default: accept_r = 4'b0000;
 		endcase
 	end
-	else if (preempt3 == 2)	// port 1 has priority
+	else if (preempt1 == 1)	// port 1 has priority
 	begin
 		casez ({rd0, rd3, rd2, rd1})
 		4'b???1: accept_r = 4'b0010;

@@ -12,6 +12,7 @@
 #include "CommonOps.h"
 #include "Correlator.h"
 #include "TeFifoMem.h"
+#include "NoiseCalc.h"
 
 #define PHYSICAL_CHANNEL_NUMBER 4
 #define LOGICAL_CHANNEL_NUMBER 32
@@ -41,6 +42,7 @@ public:
 	unsigned int *TEBuffer;
 	CTeFifoMem *pTeFifo;
 	CCorrelator *Correlator[PHYSICAL_CHANNEL_NUMBER];
+	CNoiseCalc NoiseCalc;
 	complex_int *FifoData;
 	complex_int *DownConvertData;
 };

@@ -14,6 +14,7 @@
 #include "WeilPrn.h"
 #include "MemoryPrn.h"
 #include "PrnGen.h"
+#include "NoiseCalc.h"
 
 typedef void (*DumpFunction)(S16 DumpDataI[], S16 DumpDataQ[], int CorIndex[], int DumpDataLength);
 
@@ -27,6 +28,7 @@ public:
 
 	CPrnGen *PrnGen[4];				// pointer to difference PRN generator
 	CPrnGen *PrnGen2[4];			// pointer to difference PRN generator
+	CNoiseCalc *NoiseCalc;			// pointer to noise floor calculator
 
 	reg_uint CarrierFreq;			// 32bit RO
 	reg_uint CodeFreq;				// 32bit RO
@@ -75,7 +77,7 @@ public:
 	void Reset();
 	void DownConvert(int SampleNumber, complex_int InputData[], complex_int OutputData[]);
 	int Correlation(int SampleNumber, complex_int SampleData[], S16 DumpDataI[], S16 DumpDataQ[], int CorIndex[], int &DumpDataLength);
-	virtual void AccumulateSample(S16 SampleI, S16 SampleQ, int CorCount);
+	virtual void AccumulateSample(complex_int Sample, int CorCount);
 	virtual int ProcessOverflow(S16 DumpDataI[], S16 DumpDataQ[], int CorIndex[], int &CurrentLength);
 	int DumpData(S16 DumpDataI[], S16 DumpDataQ[], int CorIndex[], int &CurrentLength);
 
