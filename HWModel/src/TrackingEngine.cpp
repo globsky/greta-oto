@@ -26,7 +26,6 @@ CTrackingEngine::CTrackingEngine(CTeFifoMem *pTeFifo, unsigned int *MemCodeBuffe
 	memset(TEBuffer, 0, TE_BUFFER_SIZE);
 
 	FifoData = (complex_int *)malloc(65536 * sizeof(complex_int));
-	DownConvertData = (complex_int *)malloc(65536 * sizeof(complex_int));
 }
 
 CTrackingEngine::~CTrackingEngine()
@@ -34,7 +33,6 @@ CTrackingEngine::~CTrackingEngine()
 	int i;
 	free(TEBuffer);
 	free(FifoData);
-	free(DownConvertData);
 	for (i = 0; i < PHYSICAL_CHANNEL_NUMBER; i ++)
 		delete Correlator[i];
 }
@@ -170,11 +168,6 @@ int CTrackingEngine::ProcessData()
 			TrackingChannelCount ++;
 		}
 		
-		// fill state buffer for all physical channels
-		for (i = 0; i < TrackingChannelCount; i ++)
-		{
-			Correlator[i]->FillState(&TEBuffer[TrackingChannelIndex[i] << 5]);
-		}
 		// read data from TE FIFO
 		pTeFifo->ReadData(ReadNumber, FifoData);
 //		for (i = 0; i < ReadNumber; i ++)
@@ -183,9 +176,8 @@ int CTrackingEngine::ProcessData()
 		// process all physical channels
 		for (i = 0; i < TrackingChannelCount; i ++)
 		{
-			Correlator[i]->DownConvert(ReadNumber, FifoData, DownConvertData);
 			// if any correlator reaches coherent value, set data ready flag
-			if (Correlator[i]->Correlation(ReadNumber, DownConvertData, DumpDataI, DumpDataQ, CorIndex, DumpCount))
+			if (Correlator[i]->Correlation(&TEBuffer[TrackingChannelIndex[i] << 5], ReadNumber, FifoData, DumpDataI, DumpDataQ, CorIndex, DumpCount))
 				CohDataReady |= 1 << TrackingChannelIndex[i];
 			for (j = 0; j < DumpCount; j ++)
 			{
@@ -210,11 +202,6 @@ int CTrackingEngine::ProcessData()
 				CohData = ((unsigned int)CohDataI << 16) | ((unsigned int)CohDataQ & 0xffff);
 				TEBuffer[COH_OFFSET(TrackingChannelIndex[i], CorIndex[j])] = CohData;
 			}
-		}
-		// dump state buffer for all physical channels
-		for (i = 0; i < TrackingChannelCount; i ++)
-		{
-			Correlator[i]->DumpState(&TEBuffer[TrackingChannelIndex[i] << 5]);
 		}
 		// rewind FIFO read pointer
 		pTeFifo->RewindPointer();

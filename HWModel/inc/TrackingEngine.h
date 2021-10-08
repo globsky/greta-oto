@@ -44,7 +44,6 @@ public:
 	CCorrelator *Correlator[PHYSICAL_CHANNEL_NUMBER];
 	CNoiseCalc NoiseCalc;
 	complex_int *FifoData;
-	complex_int *DownConvertData;
 };
 
 #endif //__TRACKING_ENGINE_H__

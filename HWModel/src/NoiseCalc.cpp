@@ -65,7 +65,7 @@ void CNoiseCalc::ShiftCode()
 		Adjust = Amplitude(NoiseAcc) - (SmoothedNoise >> 8);
 		Adjust >>= (SmoothFactor * 2);
 		SmoothedNoise += Adjust;
-		printf("%d %d %d\n", NoiseAcc.real, NoiseAcc.imag, SmoothedNoise >> 8);
+//		printf("%d %d %d\n", NoiseAcc.real, NoiseAcc.imag, SmoothedNoise >> 8);
 		// reset accumulator
 		NoiseAcc = complex_int(0,0);
 	}

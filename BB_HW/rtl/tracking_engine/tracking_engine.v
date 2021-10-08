@@ -348,6 +348,7 @@ wire [3:0]  prn_code2 [3:0];
 wire [2:0]  current_cor [3:0];
 wire [3:0]  code_sub_phase;
 wire [3:0]  dumping;
+wire [3:0]  overwrite_protect;
 wire [3:0]  msdata_done;
 wire [3:0]  coherent_done;
 wire [15:0] ms_data_sum [3:0];
@@ -379,6 +380,7 @@ dump_state u_dump_state
 		.current_cor_0          (current_cor[0]            ),
 		.code_sub_phase_0       (code_sub_phase[0]         ),
 		.dumping_0              (dumping[0]                ),
+		.overwrite_protect_0    (overwrite_protect[0]      ), 
 		.msdata_done_0          (msdata_done[0]            ),
 		.coherent_done_0        (coherent_done[0]          ),
 		.ms_data_sum_0          (ms_data_sum[0]            ),
@@ -401,6 +403,7 @@ dump_state u_dump_state
 		.current_cor_1          (current_cor[1]            ),
 		.code_sub_phase_1       (code_sub_phase[1]         ),
 		.dumping_1              (dumping[1]                ),
+		.overwrite_protect_1    (overwrite_protect[1]      ), 
 		.msdata_done_1          (msdata_done[1]            ),
 		.coherent_done_1        (coherent_done[1]          ),
 		.ms_data_sum_1          (ms_data_sum[1]            ),
@@ -423,6 +426,7 @@ dump_state u_dump_state
 		.current_cor_2          (current_cor[2]            ),
 		.code_sub_phase_2       (code_sub_phase[2]         ),
 		.dumping_2              (dumping[2]                ),
+		.overwrite_protect_2    (overwrite_protect[2]      ), 
 		.msdata_done_2          (msdata_done[2]            ),
 		.coherent_done_2        (coherent_done[2]          ),
 		.ms_data_sum_2          (ms_data_sum[2]            ),
@@ -445,6 +449,7 @@ dump_state u_dump_state
 		.current_cor_3          (current_cor[3]            ),
 		.code_sub_phase_3       (code_sub_phase[3]         ),
 		.dumping_3              (dumping[3]                ),
+		.overwrite_protect_3    (overwrite_protect[3]      ), 
 		.msdata_done_3          (msdata_done[3]            ),
 		.coherent_done_3        (coherent_done[3]          ),
 		.ms_data_sum_3          (ms_data_sum[3]            ),
@@ -480,7 +485,6 @@ wire [3:0] shift_code;
 
 wire [3:0] coherent_sum_valid;
 wire [3:0] cor_ready;
-wire [3:0] overwrite_protect;
 
 generate
 	for (i_gen = 0; i_gen < 4; i_gen = i_gen + 1)

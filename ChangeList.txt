@@ -41,3 +41,7 @@
 		Add loop filter coefficients calculation method in firmware
 		Add simple CN0 and lock detector calculation method in firmware
 		Move tracking loop and tracking stage related function to corresponding source file
+10/8/2021
+	Function and feature change
+		Minor modification to merge state fill/dump function and down convert function into correlation function
+		Add overwrite protect bit in state buffer, corresponding flag in TE register will be removed later

@@ -153,12 +153,12 @@ void CTeFifoMem::RewindPointer()
 void CTeFifoMem::SkipBlock()
 {
 	// skip read address one block forward
-	CurReadAddress += BlockSize;
-	if (CurReadAddress >= FifoSize)
-		CurReadAddress -= FifoSize;
+	ReadAddress += RealBlockSize;
+	if (ReadAddress >= FifoSize)
+		ReadAddress -= FifoSize;
 
 	// force ReadAddress assigned by CurReadAddress
-	ReadAddress = CurReadAddress;
+	CurReadAddress = ReadAddress;
 	// data count decrease by one block
 	DataCount -= BlockSize;
 	// automatically force BlockSizeAdjust to be 0 and recalculate related wire

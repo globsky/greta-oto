@@ -33,6 +33,7 @@ input [3:0] prn_code2_0,				// prn code2 output
 input [2:0] current_cor_0,			// current correlator output
 input code_sub_phase_0,  // code sub phase output
 input dumping_0,  // dumping flag output
+input overwrite_protect_0, // overwrite protect flag
 input msdata_done_0,	// ms data is ready
 input coherent_done_0,    //coherent data is ready
 input [15:0] ms_data_sum_0,	// ms data sum output
@@ -56,6 +57,7 @@ input [3:0] prn_code2_1,				// prn code2 output
 input [2:0] current_cor_1,			// current correlator output
 input code_sub_phase_1,  // code sub phase output
 input dumping_1,  // dumping flag output
+input overwrite_protect_1, // overwrite protect flag
 input msdata_done_1,	// ms data is ready
 input coherent_done_1,    //coherent data is ready
 input [15:0] ms_data_sum_1,	// ms data sum output
@@ -79,6 +81,7 @@ input [3:0] prn_code2_2,				// prn code2 output
 input [2:0] current_cor_2,			// current correlator output
 input code_sub_phase_2,  // code sub phase output
 input dumping_2,  // dumping flag output
+input overwrite_protect_2, // overwrite protect flag
 input msdata_done_2,	// ms data is ready
 input coherent_done_2,    //coherent data is ready
 input [15:0] ms_data_sum_2,	// ms data sum output
@@ -102,6 +105,7 @@ input [3:0] prn_code2_3,				// prn code2 output
 input [2:0] current_cor_3,			// current correlator output
 input code_sub_phase_3,  // code sub phase output
 input dumping_3,  // dumping flag output
+input overwrite_protect_3, // overwrite protect flag
 input msdata_done_3,	// ms data is ready
 input coherent_done_3,    //coherent data is ready
 input [15:0] ms_data_sum_3,	// ms data sum output
@@ -182,10 +186,10 @@ multiplex_4_1 #(32) multiplex_prn_code
 wire [31:0] cor_state;
 multiplex_4_1 #(32) multiplex_cor_state
 (
-	.data_in_0  ({nh_count_0, 1'b0, coherent_count_0, ms_data_count_0, prn_code2_0, 3'b000, code_sub_phase_0, dumping_0, current_cor_0, 2'b00, msdata_done_0, coherent_done_0}),
-	.data_in_1  ({nh_count_1, 1'b0, coherent_count_1, ms_data_count_1, prn_code2_1, 3'b000, code_sub_phase_1, dumping_1, current_cor_1, 2'b00, msdata_done_1, coherent_done_1}),
-	.data_in_2  ({nh_count_2, 1'b0, coherent_count_2, ms_data_count_2, prn_code2_2, 3'b000, code_sub_phase_2, dumping_2, current_cor_2, 2'b00, msdata_done_2, coherent_done_2}),
-	.data_in_3  ({nh_count_3, 1'b0, coherent_count_3, ms_data_count_3, prn_code2_3, 3'b000, code_sub_phase_3, dumping_3, current_cor_3, 2'b00, msdata_done_3, coherent_done_3}),
+	.data_in_0  ({nh_count_0, 1'b0, coherent_count_0, ms_data_count_0, prn_code2_0, 3'b000, code_sub_phase_0, dumping_0, current_cor_0, 1'b0, overwrite_protect_0, msdata_done_0, coherent_done_0}),
+	.data_in_1  ({nh_count_1, 1'b0, coherent_count_1, ms_data_count_1, prn_code2_1, 3'b000, code_sub_phase_1, dumping_1, current_cor_1, 1'b0, overwrite_protect_1, msdata_done_1, coherent_done_1}),
+	.data_in_2  ({nh_count_2, 1'b0, coherent_count_2, ms_data_count_2, prn_code2_2, 3'b000, code_sub_phase_2, dumping_2, current_cor_2, 1'b0, overwrite_protect_2, msdata_done_2, coherent_done_2}),
+	.data_in_3  ({nh_count_3, 1'b0, coherent_count_3, ms_data_count_3, prn_code2_3, 3'b000, code_sub_phase_3, dumping_3, current_cor_3, 1'b0, overwrite_protect_3, msdata_done_3, coherent_done_3}),
 	.data_sel   (physical_channel_index),
 	.data_out   (cor_state)
 );

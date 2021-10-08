@@ -139,7 +139,7 @@ void CCorrelator::DumpState(unsigned int *StateBuffer)
 	StateBuffer[9] = CarrierCount;
 	StateBuffer[10] = CodePhase;
 	StateBuffer[11] = (PrnCode & 0xff) | ((JumpCount & 0xff) << 8) | (DumpCount << 16);
-	StateBuffer[12] = CoherentDone | (MsDataDone << 1) | (CurrentCor << 4) | (Dumping << 7) | (CodeSubPhase << 8) | ((PrnCode2 & 0x1e) << 11) | (MsDataCount << 16) | (CoherentCount << 21) | (NHCount << 27);
+	StateBuffer[12] = CoherentDone | (MsDataDone << 1) | (OverwriteProtect << 2) | (CurrentCor << 4) | (Dumping << 7) | (CodeSubPhase << 8) | ((PrnCode2 & 0x1e) << 11) | (MsDataCount << 16) | (CoherentCount << 21) | (NHCount << 27);
 	StateBuffer[13] = MsDataSum & 0xffff;
 
 	for (i = 0; i < 8; i ++)
@@ -153,78 +153,77 @@ void CCorrelator::DumpState(unsigned int *StateBuffer)
 	}
 }
 
-// Do down conversion on input data with length SampleNumber
-void CCorrelator::DownConvert(int SampleNumber, complex_int InputData[], complex_int OutputData[])
+// Do down conversion on input data
+complex_int CCorrelator::DownConvert(complex_int InputData)
 {
-	int i, PhaseIndex;
+	int PhaseIndex;
 	complex_int MulResult;
 	unsigned int CarrierPhaseNew;
 
-	for (i = 0; i < SampleNumber; i ++)
+	CarrierPhaseNew = CarrierPhase + CarrierFreq;
+	if (CarrierFreq & 0x80000000)
 	{
-		CarrierPhaseNew = CarrierPhase + CarrierFreq;
-		if (CarrierFreq & 0x80000000)
-		{
-			if (CarrierPhaseNew > CarrierPhase)	// negative freq increase carrier count on underflow
-				CarrierCount --;
-		}
-		else
-		{
-			if (CarrierPhaseNew < CarrierPhase)	// positive freq increase carrier count on overflow
-				CarrierCount ++;
-		}
-		PhaseIndex = CarrierPhase >> 26;
-		MulResult = InputData[i] * DownConvertTable[PhaseIndex];
-		CarrierPhase = CarrierPhaseNew;
-
-		// do convergent right shift by ShiftBits
-		switch (PreShiftBits)
-		{
-		case 0:
-			MulResult.real = CONVERGENT_ROUND_SHIFT(MulResult.real, 3);
-			MulResult.imag = CONVERGENT_ROUND_SHIFT(MulResult.imag, 3);
-			break;
-		case 1:
-			MulResult.real = CONVERGENT_ROUND_SHIFT(MulResult.real, 4);
-			MulResult.imag = CONVERGENT_ROUND_SHIFT(MulResult.imag, 4);
-			break;
-		case 2:
-			MulResult.real = CONVERGENT_ROUND_SHIFT(MulResult.real, 5);
-			MulResult.imag = CONVERGENT_ROUND_SHIFT(MulResult.imag, 5);
-			break;
-		default:
-			MulResult.real >>= 3;
-			MulResult.imag >>= 3;
-			break;
-		}
-
-		// overflow protection to scale down to 6bit
-		if (MulResult.real > 31)
-			MulResult.real = 31;
-		else if (MulResult.real < -31)
-			MulResult.real = -31;
-		if (MulResult.imag > 31)
-			MulResult.imag = 31;
-		else if (MulResult.imag < -31)
-			MulResult.imag = -31;
-
-		OutputData[i] = MulResult;
+		if (CarrierPhaseNew > CarrierPhase)	// negative freq increase carrier count on underflow
+			CarrierCount --;
 	}
+	else
+	{
+		if (CarrierPhaseNew < CarrierPhase)	// positive freq increase carrier count on overflow
+			CarrierCount ++;
+	}
+	PhaseIndex = CarrierPhase >> 26;
+	MulResult = InputData * DownConvertTable[PhaseIndex];
+	CarrierPhase = CarrierPhaseNew;
+
+	// do convergent right shift by ShiftBits
+	switch (PreShiftBits)
+	{
+	case 0:
+		MulResult.real = CONVERGENT_ROUND_SHIFT(MulResult.real, 3);
+		MulResult.imag = CONVERGENT_ROUND_SHIFT(MulResult.imag, 3);
+		break;
+	case 1:
+		MulResult.real = CONVERGENT_ROUND_SHIFT(MulResult.real, 4);
+		MulResult.imag = CONVERGENT_ROUND_SHIFT(MulResult.imag, 4);
+		break;
+	case 2:
+		MulResult.real = CONVERGENT_ROUND_SHIFT(MulResult.real, 5);
+		MulResult.imag = CONVERGENT_ROUND_SHIFT(MulResult.imag, 5);
+		break;
+	default:
+		MulResult.real >>= 3;
+		MulResult.imag >>= 3;
+		break;
+	}
+
+	// overflow protection to scale down to 6bit
+	if (MulResult.real > 31)
+		MulResult.real = 31;
+	else if (MulResult.real < -31)
+		MulResult.real = -31;
+	if (MulResult.imag > 31)
+		MulResult.imag = 31;
+	else if (MulResult.imag < -31)
+		MulResult.imag = -31;
+
+	return MulResult;
 }
 
-// Do correlation on SampleDataI and SampleDataQ with length ClusterNumber
+// Do correlation on SampleData and SampleDataQ with length SampleNumber
 // Output correlation result in DumpDataI/DumpDataQ
 // Bit2~4 of CorIndex indicate which correlator to accumulate
 // bit0 of CorIndex is 1 means first coherent value, store instead of accumulate
 // bit1 of CorIndex is 1 means overwrite protection, store to TE_OVERWRITE_PROTECT_VALUE instead store to coherent buffer
 // DumpDataLength is the actual length of DumpDataI/DumpDataQ/CohAddr
 // return 1 means any correlator reaches last coherent sum
-int CCorrelator::Correlation(int SampleNumber, complex_int SampleData[], S16 DumpDataI[], S16 DumpDataQ[], int CorIndex[], int &DumpDataLength)
+int CCorrelator::Correlation(unsigned int *StateBuffer, int SampleNumber, complex_int SampleData[], S16 DumpDataI[], S16 DumpDataQ[], int CorIndex[], int &DumpDataLength)
 {
 	int i = 0;
 	unsigned int CodePhaseNew;
-	int CodeLength = 0, NewCode = 0;
+	complex_int SampleDown;
 	
+	FillState(StateBuffer);
+
 	// clear overwrite protect registers at the beginning of every round
 	FirstCorIndexValid = 0;
 	FirstCorIndex = 0;
@@ -245,8 +244,9 @@ int CCorrelator::Correlation(int SampleNumber, complex_int SampleData[], S16 Dum
 	// second check whether there is negative jump, skip sample
 	for (i = 0; i < SampleNumber; i ++)
 	{
+		SampleDown = DownConvert(SampleData[i]);
 		if (JumpCount >= 0)
-			AccumulateSample(SampleData[i], 8);
+			AccumulateSample(SampleDown, 8);
 		CodePhaseNew = CodePhase + CodeFreq;
 		if (CodePhaseNew < CodePhase)	// code overflow
 		{
@@ -258,12 +258,16 @@ int CCorrelator::Correlation(int SampleNumber, complex_int SampleData[], S16 Dum
 		}
 		else
 			DEBUG_PRINT(" 0");
-		DEBUG_PRINT(" %1d\n", Dumping);
+		DEBUG_PRINT(" %1d", Dumping);
+		DEBUG_PRINT(" %6d", AccDataI[4]);
+		DEBUG_PRINT(" %08x\n", CodePhaseNew);
 		CodePhase = CodePhaseNew;
 	}
 
 	if (DumpDataOutput)
 		DumpDataOutput(DumpDataI, DumpDataQ, CorIndex, DumpDataLength);
+
+	DumpState(StateBuffer);
 
 	return CoherentDone;
 }
@@ -279,7 +283,7 @@ void CCorrelator::AccumulateSample(complex_int Sample, int CorCount)
 	int PromptBit = (PrnCode & (1 << 4)) ? 1 : 0;
 	int LagBit = (PrnCode & (1 << 5)) ? 1 : 0;
 
-	DEBUG_PRINT("%3d %3d", SampleI, SampleQ);
+	DEBUG_PRINT("%3d %3d", Sample.real, Sample.imag);
 	if (NarrowFactor)
 	{
 		Advance4 = (CodePhase & 0x80000000) ? 1 : 0;
