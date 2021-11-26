@@ -231,7 +231,7 @@ void ProcessCohData(PCHANNEL_STATE ChannelState)
 //	printf("SV%2d I/Q=%6d %6d\n", ChannelState->Svid, (S16)(ChannelState->StateBufferCache.CoherentSum[4] >> 16), (S16)(ChannelState->StateBufferCache.CoherentSum[4] & 0xffff));
 
 	// perform PLL
-	if ((ChannelState->State & STAGE_MASK) == STAGE_TRACK)	// tracking stage uses PLL (change to more flexible condition in the future)
+	if (((ChannelState->State & STAGE_MASK) >= STAGE_TRACK) && (ChannelState->pll_k1 > 0))	// tracking stage uses PLL (change to more flexible condition in the future)
 		CalcDiscriminator(ChannelState, TRACKING_UPDATE_PLL);
 
 	// do FFT and non-coherent accumulation
@@ -247,15 +247,22 @@ void ProcessCohData(PCHANNEL_STATE ChannelState)
 	}
 
 	// do tracking loop
-	if (ChannelState->State & STATE_TRACKING_LOOP)
+	if ((ChannelState->State & STAGE_MASK) >= STAGE_PULL_IN)
 		DoTrackingLoop(ChannelState);
 
-//	if ((ChannelState->State & STAGE_MASK) == STAGE_TRACK)
+//	if ((ChannelState->State & STAGE_MASK) >= STAGE_TRACK)
 //		printf("T=%4d I/Q=%6d %6d\n", ChannelState->TrackingTime, (S16)(ChannelState->StateBufferCache.CoherentSum[4] >> 16), (S16)(ChannelState->StateBufferCache.CoherentSum[4] & 0xffff));
 	
 	// collect correlation result for bit sync if in bit sync stage
 	if ((ChannelState->State & STAGE_MASK) == STAGE_BIT_SYNC)
 		CollectBitSyncData(ChannelState);
+	// keep bit edge at tracking hold
+	else if ((ChannelState->State & STAGE_MASK) == STAGE_HOLD3)
+	{
+		ChannelState->DataStream.CurrentAccTime += ChannelState->CoherentNumber;
+		if (ChannelState->DataStream.CurrentAccTime >= ChannelState->DataStream.TotalAccTime)
+			ChannelState->DataStream.CurrentAccTime = 0;
+	}
 	// do data decode at tracking stage
 	else if (((ChannelState->State & STAGE_MASK) >= STAGE_TRACK) && ((ChannelState->State & DATA_STREAM_MASK) != 0))
 		DecodeDataStream(ChannelState);
@@ -489,5 +496,17 @@ void CalcCN0(PCHANNEL_STATE ChannelState)
 	{
 		ChannelState->SmoothedPower = SignalPowerNorm;
 		ChannelState->CN0 = ChannelState->FastCN0;
+	}
+
+	// count CN0 high and low time
+	if (ChannelState->FastCN0 > 3200)
+	{
+		ChannelState->CN0HighCount += CohRatio * NoncohRatio;
+		ChannelState->CNOLowCount = 0;
+	}
+	else if (ChannelState->FastCN0 < 2500)
+	{
+		ChannelState->CNOLowCount += CohRatio * NoncohRatio;
+		ChannelState->CN0HighCount = 0;
 	}
 }

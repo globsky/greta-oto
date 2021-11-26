@@ -57,8 +57,8 @@ int IntLog10(unsigned int data)
 	int logdata = Log2(data);
 
 	// convert to log10(data)*100
-	logdata = 38532 * (logdata >> 12);
-	return (logdata >> 18);
+	logdata = 9633 * (logdata >> 12);
+	return (logdata >> 16);
 }
 
 //*************** Calculate square root of a integer value ****************

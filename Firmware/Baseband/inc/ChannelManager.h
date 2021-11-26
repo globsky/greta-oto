@@ -75,6 +75,8 @@ typedef struct tag_CHANNEL_STATE
 	int DelayAcc;	// delay discriminator accumulation value
 	U32 CarrierFreqBase;	// Wn for carrier frequency control word
 	U32 CodeFreqBase;		// W0 for code frequency control word
+	U32 CarrierFreqSave;	// carrier frequency control word when PLL/FLL lock
+	U32 CodeFreqSave;		// code frequency control word when DLL lock
 	// buffer for coherent and non-coherent sum
 	U32 CohBuffer[COH_BUF_LEN];	// buffer to hold coherent sums
 	int NoncohBuffer[NONCOH_BUF_LEN];	// buffer to hold noncoherent sums
@@ -92,6 +94,7 @@ typedef struct tag_CHANNEL_STATE
 	int PeakPower;		// peak amplitude
 	int SmoothedPower;	// smoothed power
 	int CN0, FastCN0;	// smoothed C/N0 and instantaneous C/N0
+	int CN0HighCount, CNOLowCount;	// count for CN0 high and low
 	// lock detector
 	int PLD, FLD, DLD;	// 0 to 100 as indicator of lock quality
 	int LoseLockCounter;

@@ -45,3 +45,10 @@
 	Function and feature change
 		Minor modification to merge state fill/dump function and down convert function into correlation function
 		Add overwrite protect bit in state buffer, corresponding flag in TE register will be removed later
+11/25/2021
+	Function and feature added
+		Merge signal power control support from SignalSim and change signal amplitude accordingly
+		Add tracking stage switch (including strong/weak signal tracking and tracking hold)
+	Function and feature change
+		Change logarithm calculation to avoid overflow on large number
+	

@@ -16,12 +16,17 @@
 static TRACKING_CONFIG TrackingConfigTable[] = {
 // Coh FFT NonCoh Narrow Post  BnPLL   BnFLL   BnDLL  Timeout
  {  1,  5,   2,      0,    1,      0,  80|C2,  80|C2,   200,},	// 0 for pull-in
- {  5,  1,   2,      0,    2, 320|C2,   0|C2,  80|C2,    -1,},	// 1 for tracking
+ {  4,  5,   4,      0,    2,      0,      0,      0, 30000,},	// 1 for GPS L1 tracking hold
+ {  5,  1,   4,      0,    2, 320|C2,   0|C2,  80|C2,  5000,},	// 2 for GPS L1 track 0
+ { 20,  1,   4,      0,    3, 240|C2,   0|C2,  40|C2,    -1,},	// 3 for GPS L1 track 1
+ {  4,  5,  16,      0,    3,   0|C2,  80|C2,  40|C2,    -1,},	// 4 for GPS L1 track 2
 };
 
 PTRACKING_CONFIG TrackingConfig[][4] = {	// pointer to TrackingConfigTable for different stage and different signal
 	&TrackingConfigTable[0], &TrackingConfigTable[0], &TrackingConfigTable[0], &TrackingConfigTable[0],
 	&TrackingConfigTable[1], &TrackingConfigTable[1], &TrackingConfigTable[1], &TrackingConfigTable[1],
+	&TrackingConfigTable[2], &TrackingConfigTable[2], &TrackingConfigTable[2], &TrackingConfigTable[2],
+	&TrackingConfigTable[3], &TrackingConfigTable[3], &TrackingConfigTable[3], &TrackingConfigTable[3],
 };
 
 void CalculateLoopCoefficients(PCHANNEL_STATE ChannelState, PTRACKING_CONFIG CurTrackingConfig);
@@ -56,9 +61,19 @@ void SwitchTrackingStage(PCHANNEL_STATE ChannelState, unsigned int TrackingStage
 	ChannelState->FftCount = 0;
 	ChannelState->NonCohCount = 0;
 	ChannelState->TrackingTimeout = CurTrackingConfig->TrackingTimeout;
-	CalculateLoopCoefficients(ChannelState, CurTrackingConfig);
+//	if (TrackingStage >= STAGE_PULL_IN)
+		CalculateLoopCoefficients(ChannelState, CurTrackingConfig);
 
-	if (TrackingStage == STAGE_PULL_IN)
+	if (TrackingStage == STAGE_HOLD3)
+	{
+		// restore carrier and code frequency to values before lose lock
+		ChannelState->CarrierFreqBase = ChannelState->CarrierFreqSave;
+		ChannelState->CodeFreqBase = ChannelState->CodeFreqSave;
+		STATE_BUF_SET_CARRIER_FREQ(&(ChannelState->StateBufferCache), ChannelState->CarrierFreqSave);
+		STATE_BUF_SET_CODE_FREQ(&(ChannelState->StateBufferCache), ChannelState->CodeFreqSave);
+		ChannelState->State |= STATE_CACHE_FREQ_DIRTY;
+	}
+	else if (TrackingStage == STAGE_PULL_IN)
 	{
 	}
 	else if (TrackingStage == STAGE_TRACK)
@@ -76,6 +91,7 @@ void SwitchTrackingStage(PCHANNEL_STATE ChannelState, unsigned int TrackingStage
 	ChannelState->FftNumber = CurTrackingConfig->FftNumber;
 	ChannelState->NonCohNumber = CurTrackingConfig->NonCohNumber;
 	ChannelState->SmoothedPower = 0;
+	ChannelState->PhaseAcc = ChannelState->FrequencyAcc = ChannelState->DelayAcc = 0;
 }
 
 //*************** Determine whether tracking stage need to be changed ****************
@@ -112,11 +128,47 @@ int StageDetermination(PCHANNEL_STATE ChannelState)
 			return 1;
 		}
 	}
+
+	// switch out from hold
+	if (TrackingStage == STAGE_HOLD3 && (ChannelState->FastCN0 > 2800))
+	{
+		SwitchTrackingStage(ChannelState, STAGE_PULL_IN);
+		ChannelState->LoseLockCounter = 0;
+		return 1;
+	}
+
+	// lose lock, switch to hold
+	if (TrackingStage >= STAGE_PULL_IN && ChannelState->LoseLockCounter > 10 && ChannelState->NonCohCount == 0)
+	{
+		SwitchTrackingStage(ChannelState, STAGE_HOLD3);
+		return 1;
+	}
+
+	// CN0 change
+	if (TrackingStage == STAGE_TRACK + 1 && ChannelState->CNOLowCount > 500)	// CN0 low, switch to track 2
+	{
+		SwitchTrackingStage(ChannelState, STAGE_TRACK + 2);
+		return 1;
+	}
+	if (TrackingStage == STAGE_TRACK + 2 && ChannelState->CN0HighCount > 500)	// CN0 high, switch to track 0
+	{
+		SwitchTrackingStage(ChannelState, STAGE_TRACK);
+		return 1;
+	}
+
 	if (ChannelState->TrackingTimeout < 0 || ChannelState->TrackingTime < ChannelState->TrackingTimeout)	// not timeout, do not switch stage
 		return 0;
 	if (TrackingStage == STAGE_PULL_IN)
 	{
 		SwitchTrackingStage(ChannelState, STAGE_BIT_SYNC);
+	}
+	else if (TrackingStage == STAGE_HOLD3)
+	{
+		SwitchTrackingStage(ChannelState, STAGE_RELEASE);
+	}
+	else if (TrackingStage >= STAGE_TRACK)
+	{
+		SwitchTrackingStage(ChannelState, (ChannelState->CN0 > 2500) ? STAGE_TRACK + 1 : STAGE_TRACK + 2);
 	}
 	return 1;
 }

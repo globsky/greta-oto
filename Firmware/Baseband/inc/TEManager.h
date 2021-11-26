@@ -19,6 +19,7 @@ void TEInitialize();
 U32 GetChannelEnable();
 void UpdateChannels();
 PCHANNEL_STATE GetAvailableChannel();
+void ReleaseChannel(int ChannelID);
 void CohSumInterruptProc();
 void MeasurementProc();
 

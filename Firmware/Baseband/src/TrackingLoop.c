@@ -56,6 +56,7 @@ void CalcDiscriminator(PCHANNEL_STATE ChannelState, unsigned int Method)
 	SEARCH_PEAK_RESULT SearchResult;
 	int Denominator, Numerator;
 	S16 CorResutReal, CorResultImag;
+	int NoncohScale = ChannelState->FftNumber * ChannelState->NonCohNumber;
 
 	// for FLL and DLL, search for peak power
 	if (Method & (TRACKING_UPDATE_FLL | TRACKING_UPDATE_DLL))
@@ -66,7 +67,7 @@ void CalcDiscriminator(PCHANNEL_STATE ChannelState, unsigned int Method)
 			SearchPeakFft(ChannelState->NoncohBuffer, &SearchResult);
 		ChannelState->PeakPower = SearchResult.PeakPower * SearchResult.PeakPower;
 	}
-	if (Method & TRACKING_UPDATE_FLL)
+	if ((Method & TRACKING_UPDATE_FLL) && ChannelState->fll_k1 > 0)
 	{
 		Denominator = 2 * SearchResult.PeakPower - SearchResult.LeftBinPower - SearchResult.RightBinPower;
 		Numerator = SearchResult.LeftBinPower - SearchResult.RightBinPower;
@@ -75,8 +76,14 @@ void CalcDiscriminator(PCHANNEL_STATE ChannelState, unsigned int Method)
 		ChannelState->FrequencyDiff += (SearchResult.FreqBinDiff << 13);
 		// lock indicator
 		AdjustLockIndicator(&(ChannelState->FLD), ChannelState->FrequencyDiff >> 10);
+//		printf("FLD=%3d\n", ChannelState->FLD);
+		if (SearchResult.FreqBinDiff)
+			ChannelState->LoseLockCounter += NoncohScale;
+		else
+			ChannelState->LoseLockCounter -= NoncohScale;
+		ChannelState->State |= TRACKING_UPDATE_FLL;
 	}
-	if (Method & TRACKING_UPDATE_DLL)
+	if ((Method & TRACKING_UPDATE_DLL) && ChannelState->dll_k1 > 0)
 	{
 //		printf("EPL = %5d %5d %5d\n", SearchResult.EarlyPower, SearchResult.PeakPower, SearchResult.LatePower);
 		Denominator = 2 * SearchResult.PeakPower - SearchResult.EarlyPower - SearchResult.LatePower;
@@ -86,17 +93,30 @@ void CalcDiscriminator(PCHANNEL_STATE ChannelState, unsigned int Method)
 		ChannelState->DelayDiff += (SearchResult.CorDiff << 14);
 		// lock indicator
 		AdjustLockIndicator(&(ChannelState->DLD), ChannelState->DelayDiff >> 11);
+//		printf("DLD=%3d\n", ChannelState->DLD);
+		if (SearchResult.CorDiff)
+			ChannelState->LoseLockCounter += NoncohScale;
+		else
+			ChannelState->LoseLockCounter -= NoncohScale;
+		ChannelState->State |= TRACKING_UPDATE_DLL;
 	}
-	if (Method & TRACKING_UPDATE_PLL)
+	if ((Method & TRACKING_UPDATE_PLL) && ChannelState->pll_k1 > 0)
 	{
 		CorResutReal = (S16)(ChannelState->StateBufferCache.CoherentSum[4] >> 16);
 		CorResultImag = (S16)(ChannelState->StateBufferCache.CoherentSum[4] & 0xffff);
 		ChannelState->PhaseDiff = CordicAtan(CorResutReal, CorResultImag, 0);
 		// lock indicator
 		AdjustLockIndicator(&(ChannelState->PLD), ChannelState->PhaseDiff >> 9);
-//		printf("PLD=%3d ", ChannelState->PLD);
+//		printf("PLD=%3d\n", ChannelState->PLD);
+		if (ChannelState->PhaseDiff > 4096 || ChannelState->PhaseDiff < -4096)
+			ChannelState->LoseLockCounter ++;
+		else
+			ChannelState->LoseLockCounter --;
+		ChannelState->State |= TRACKING_UPDATE_PLL;
 	}
-	ChannelState->State |= Method;
+	if (ChannelState->LoseLockCounter < 0)
+		ChannelState->LoseLockCounter = 0;
+//	printf("LostCounter=%d\n", ChannelState->LoseLockCounter);
 }
 
 //*************** Do 8 point FFT on coherent buffer and accumulate to noncoherent buffer ****************
@@ -391,6 +411,8 @@ void DoTrackingLoop(PCHANNEL_STATE ChannelState)
 		ChannelState->FrequencyAcc += ChannelState->FrequencyDiff;
 		ChannelState->CarrierFreqBase += ((k1 * ChannelState->FrequencyDiff + k2 * ChannelState->FrequencyAcc / 4) >> 13);
 		CarrierFreq = ChannelState->CarrierFreqBase;
+		if (ChannelState->FLD == 100 && ChannelState->LoseLockCounter == 0)
+			ChannelState->CarrierFreqSave = ChannelState->CarrierFreqBase;
 //		printf("SV%02d Doppler = %5d %5d\n", ChannelState->Svid, (int)(((S64)ChannelState->CarrierFreqBase * SAMPLE_FREQ) >> 32) - IF_FREQ, (int)(((S64)CarrierFreq * SAMPLE_FREQ) >> 32) - IF_FREQ);
 	}
 	// DLL update
@@ -400,6 +422,8 @@ void DoTrackingLoop(PCHANNEL_STATE ChannelState)
 		ChannelState->DelayAcc += ChannelState->DelayDiff;
 		CodeFreq = ChannelState->CodeFreqBase - ((k1 * ChannelState->DelayDiff + k2 * ChannelState->DelayAcc) >> 15);
 		STATE_BUF_SET_CODE_FREQ(StateBuffer, CodeFreq);
+		if (ChannelState->DLD == 100 && ChannelState->LoseLockCounter == 0)
+			ChannelState->CodeFreqSave = CodeFreq;
 	}
 	// PLL update
 	if (ChannelState->State & TRACKING_UPDATE_PLL)
@@ -408,7 +432,13 @@ void DoTrackingLoop(PCHANNEL_STATE ChannelState)
 		ChannelState->PhaseAcc += ChannelState->PhaseDiff;
 		ChannelState->CarrierFreqBase += ((k2 * ChannelState->PhaseDiff + k3 * ChannelState->PhaseAcc) >> 15);
 		CarrierFreq = ChannelState->CarrierFreqBase + ((k1 * ChannelState->PhaseDiff) >> 13);
+		if (ChannelState->PLD == 100 && ChannelState->LoseLockCounter == 0)
+		{
+			ChannelState->CarrierFreqSave = CarrierFreq;//ChannelState->CarrierFreqBase;
+		}
 //		printf("SV%02d Doppler = %5d %5d ", ChannelState->Svid, (int)(((S64)ChannelState->CarrierFreqBase * SAMPLE_FREQ) >> 32) - IF_FREQ, (int)(((S64)CarrierFreq * SAMPLE_FREQ) >> 32) - IF_FREQ);
+//		if (ChannelState->Svid == 4)
+//			printf("SV%02d FREQ=%10d\n", ChannelState->Svid, CarrierFreq);
 	}
 	if (ChannelState->State & (TRACKING_UPDATE_PLL | TRACKING_UPDATE_FLL))
 		STATE_BUF_SET_CARRIER_FREQ(StateBuffer, CarrierFreq);
@@ -431,7 +461,7 @@ void CalculateLoopCoefficients(PCHANNEL_STATE ChannelState, PTRACKING_CONFIG Cur
 	Tc = CurTrackingConfig->CoherentNumber;
 	T = Tc * CurTrackingConfig->FftNumber * CurTrackingConfig->NonCohNumber;
 	// determine PLL coefficients
-	if (CurTrackingConfig->BandWidthPLL16x > 0)
+	if ((CurTrackingConfig->BandWidthPLL16x & 0xffff) > 0)
 	{
 		Order = CurTrackingConfig->BandWidthPLL16x >> 16;
 		BnT = ((CurTrackingConfig->BandWidthPLL16x & 0xffff) * Tc + 5) / 10;	// 16x of 0.01 BnT
@@ -443,7 +473,7 @@ void CalculateLoopCoefficients(PCHANNEL_STATE ChannelState, PTRACKING_CONFIG Cur
 	else
 		ChannelState->pll_k1 = ChannelState->pll_k2 = ChannelState->pll_k3 = 0;
 	// determine FLL coefficients
-	if (CurTrackingConfig->BandWidthFLL16x > 0)
+	if ((CurTrackingConfig->BandWidthFLL16x & 0xffff) > 0)
 	{
 		Order = CurTrackingConfig->BandWidthFLL16x >> 16;
 		BnT = ((CurTrackingConfig->BandWidthFLL16x & 0xffff) * T + 5) / 10;	// 16x of 0.01 BnT
@@ -454,7 +484,7 @@ void CalculateLoopCoefficients(PCHANNEL_STATE ChannelState, PTRACKING_CONFIG Cur
 	else
 		ChannelState->fll_k1 = ChannelState->fll_k2 = 0;
 	// determine DLL coefficients
-	if (CurTrackingConfig->BandWidthDLL16x > 0)
+	if ((CurTrackingConfig->BandWidthDLL16x & 0xffff) > 0)
 	{
 		Order = CurTrackingConfig->BandWidthDLL16x >> 16;
 		BnT = ((CurTrackingConfig->BandWidthDLL16x & 0xffff) * T + 5) / 10;	// 16x of 0.01 BnT

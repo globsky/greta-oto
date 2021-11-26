@@ -68,7 +68,12 @@ void UpdateChannels()
 	for (i = 0, ChannelMask = 1; i < TOTAL_CHANNEL_NUMBER; i ++, ChannelMask <<= 1)
 	{
 		if (ChannelOccupation & ChannelMask)
-			SyncCacheWrite(ChannelStateArray + i);
+		{
+			if ((ChannelStateArray[i].State & STAGE_MASK) == STAGE_RELEASE)
+				ReleaseChannel(i);
+			else
+				SyncCacheWrite(ChannelStateArray + i);
+		}
 	}
 }
 
@@ -90,6 +95,16 @@ PCHANNEL_STATE GetAvailableChannel()
 		}
 	}
 	return (PCHANNEL_STATE)0;
+}
+
+//*************** Release a channel and stop track ****************
+// Parameters:
+//   ChannelID: channel ID (index) to release
+// Return value:
+//   none
+void ReleaseChannel(int ChannelID)
+{
+	ChannelOccupation &= ~(1 << ChannelID);
 }
 
 //*************** Process coherent sum interrupt ****************
