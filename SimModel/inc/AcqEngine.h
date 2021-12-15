@@ -71,7 +71,7 @@ public:
 	void SetRegValue(int Address, U32 Value);
 	U32 GetRegValue(int Address);
 	void DoAcquisition();
-	void SetBufferParam(SATELLITE_PARAM SatelliteParam[], int SatVisible, GNSS_TIME Time, NavBit *NavData);
+	void SetBufferParam(PSATELLITE_PARAM SatelliteParam[], int SatVisible, GNSS_TIME Time, NavBit *NavData);
 
 	static const double Bpsk2PeakValues[160];
 	static const double Boc2PeakValues[160];

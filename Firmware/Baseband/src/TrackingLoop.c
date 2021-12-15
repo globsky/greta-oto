@@ -56,7 +56,8 @@ void CalcDiscriminator(PCHANNEL_STATE ChannelState, unsigned int Method)
 	SEARCH_PEAK_RESULT SearchResult;
 	int Denominator, Numerator;
 	S16 CorResutReal, CorResultImag;
-	int NoncohScale = ChannelState->FftNumber * ChannelState->NonCohNumber;
+	int CohLength = ChannelState->CoherentNumber;
+	int NoncohLength = CohLength * ChannelState->FftNumber * ChannelState->NonCohNumber;
 
 	// for FLL and DLL, search for peak power
 	if (Method & (TRACKING_UPDATE_FLL | TRACKING_UPDATE_DLL))
@@ -78,9 +79,9 @@ void CalcDiscriminator(PCHANNEL_STATE ChannelState, unsigned int Method)
 		AdjustLockIndicator(&(ChannelState->FLD), ChannelState->FrequencyDiff >> 10);
 //		printf("FLD=%3d\n", ChannelState->FLD);
 		if (SearchResult.FreqBinDiff)
-			ChannelState->LoseLockCounter += NoncohScale;
+			ChannelState->LoseLockCounter += NoncohLength;
 		else
-			ChannelState->LoseLockCounter -= NoncohScale;
+			ChannelState->LoseLockCounter -= NoncohLength;
 		ChannelState->State |= TRACKING_UPDATE_FLL;
 	}
 	if ((Method & TRACKING_UPDATE_DLL) && ChannelState->dll_k1 > 0)
@@ -95,9 +96,9 @@ void CalcDiscriminator(PCHANNEL_STATE ChannelState, unsigned int Method)
 		AdjustLockIndicator(&(ChannelState->DLD), ChannelState->DelayDiff >> 11);
 //		printf("DLD=%3d\n", ChannelState->DLD);
 		if (SearchResult.CorDiff)
-			ChannelState->LoseLockCounter += NoncohScale;
+			ChannelState->LoseLockCounter += NoncohLength;
 		else
-			ChannelState->LoseLockCounter -= NoncohScale;
+			ChannelState->LoseLockCounter -= NoncohLength;
 		ChannelState->State |= TRACKING_UPDATE_DLL;
 	}
 	if ((Method & TRACKING_UPDATE_PLL) && ChannelState->pll_k1 > 0)
@@ -109,14 +110,15 @@ void CalcDiscriminator(PCHANNEL_STATE ChannelState, unsigned int Method)
 		AdjustLockIndicator(&(ChannelState->PLD), ChannelState->PhaseDiff >> 9);
 //		printf("PLD=%3d\n", ChannelState->PLD);
 		if (ChannelState->PhaseDiff > 4096 || ChannelState->PhaseDiff < -4096)
-			ChannelState->LoseLockCounter ++;
+			ChannelState->LoseLockCounter += CohLength;
 		else
-			ChannelState->LoseLockCounter --;
+			ChannelState->LoseLockCounter -= CohLength;
 		ChannelState->State |= TRACKING_UPDATE_PLL;
 	}
 	if (ChannelState->LoseLockCounter < 0)
 		ChannelState->LoseLockCounter = 0;
-//	printf("LostCounter=%d\n", ChannelState->LoseLockCounter);
+//	if (ChannelState->Svid == 4)
+//		printf("LostCounter=%d\n", ChannelState->LoseLockCounter);
 }
 
 //*************** Do 8 point FFT on coherent buffer and accumulate to noncoherent buffer ****************
@@ -147,6 +149,21 @@ void CohBufferFft(PCHANNEL_STATE ChannelState)
 			CohImag[j] = (int)((S16)CohResult);
 		}
 		FFT8(CohReal, CohImag, FftResultReal, FftResultImag);
+/*		if ((ChannelState->State & STAGE_MASK) == 3)
+		{
+			printf("COH: ");
+			for (j = 0; j < ChannelState->FftNumber; j ++)
+			{
+				printf("%5d %5d, ", CohReal[j], CohImag[j]);
+			}
+			printf("\n");
+			printf("FFT: ");
+			for (j = MAX_BIN_NUM/2; j < MAX_BIN_NUM; j ++)
+				printf("%8d ", POWER(FftResultReal[j - MAX_BIN_NUM/2], FftResultImag[j - MAX_BIN_NUM/2]));
+			for (j = 0; j < MAX_BIN_NUM/2; j ++)
+				printf("%8d ", POWER(FftResultReal[j + MAX_BIN_NUM/2], FftResultImag[j + MAX_BIN_NUM/2]));
+			printf("\n");
+		}*/
 		// accumulate power, move 0 frequency bin in middle
 		for (j = 0; j < MAX_BIN_NUM/2; j ++)
 			ChannelState->NoncohBuffer[i * MAX_BIN_NUM + j] += POWER(FftResultReal[j + MAX_BIN_NUM/2], FftResultImag[j + MAX_BIN_NUM/2]);

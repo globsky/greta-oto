@@ -15,10 +15,15 @@
 extern "C" {
 #endif
 
-// declare a pointer point to a ISR, only for simulation envirenoment
+// declare a pointer to a ISR, only for simulation envirenoment
 typedef void (*InterruptFunction)();
+// declare a pointer to output debug information, only for simulation envirenoment
+typedef void (*DebugFunction)(void *DebugParam, int DebugValue);
+
 // map interrupt service function
 void AttachBasebandISR(InterruptFunction ISR);
+// map interrupt service function
+void AttachDebugFunc(DebugFunction Function);
 // host read/write
 U32 GetRegValue(int Address);
 void SetRegValue(int Address, U32 Value);

@@ -76,6 +76,8 @@ void CTrackingEngine::Reset()
 	ChannelEnable = CohDataReady = 0;
 	OverwriteProtectAddr = 0;
 	OverwriteProtectValue = 0;
+	SmoothScale = 0;
+	NoiseFloor = 784.0;
 }
 
 void CTrackingEngine::SetRegValue(int Address, U32 Value)
@@ -110,6 +112,12 @@ void CTrackingEngine::SetRegValue(int Address, U32 Value)
 	case ADDR_OFFSET_TE_CODE_LENGTH2:
 		PrnPolyLength[3] = Value;
 		break;
+	case ADDR_OFFSET_TE_NOISE_CONFIG:
+		SmoothScale = Value & 3;
+		break;
+	case ADDR_OFFSET_TE_NOISE_FLOOR:
+		NoiseFloor = (double)Value;
+		break;
 	default:
 		break;
 	}
@@ -138,6 +146,10 @@ U32 CTrackingEngine::GetRegValue(int Address)
 		return PrnPolyLength[2];
 	case ADDR_OFFSET_TE_CODE_LENGTH2:
 		return PrnPolyLength[3];
+	case ADDR_OFFSET_TE_NOISE_CONFIG:
+		return SmoothScale;
+	case ADDR_OFFSET_TE_NOISE_FLOOR:
+		return (int)NoiseFloor;
 	default:
 		return 0;
 	}
@@ -276,7 +288,7 @@ U32 CTrackingEngine::GetTEBuffer(unsigned int Address)
 // process one system
 // input parameter specify the system index
 // return 1 if any correlator in any channel has data ready
-int CTrackingEngine::ProcessData(GNSS_TIME CurTime, SATELLITE_PARAM GpsSatParam[], int GpsSatNumber)
+int CTrackingEngine::ProcessData(GNSS_TIME CurTime, PSATELLITE_PARAM SatParam[], int SatNumber)
 {
 	unsigned int EnableMask;
 	int i, j;
@@ -286,6 +298,7 @@ int CTrackingEngine::ProcessData(GNSS_TIME CurTime, SATELLITE_PARAM GpsSatParam[
 	int DataLength;
 	unsigned int CohData;
 	S16 CohDataI, CohDataQ;
+	complex_number Noise;
 
 	// clear coherent data ready flag and overwrite protect flag
 	CohDataReady = 0;
@@ -296,7 +309,7 @@ int CTrackingEngine::ProcessData(GNSS_TIME CurTime, SATELLITE_PARAM GpsSatParam[
 		if ((ChannelEnable & EnableMask) == 0)
 			continue;
 		// find whether there is visible satellite match current channel
-		pSatParam = FindSatParam(i, GpsSatParam, GpsSatNumber);
+		pSatParam = FindSatParam(i, SatParam, SatNumber);
 
 		// recalculate corresponding counter of channel
 		if (CalculateCounter(i, CorIndex, CorPos, DataLength))
@@ -331,6 +344,10 @@ int CTrackingEngine::ProcessData(GNSS_TIME CurTime, SATELLITE_PARAM GpsSatParam[
 			ChannelParam[i].CurrentCor = ((CorIndex[DataLength-1] >> 2) + 1) & 0x7;	// CurrentCor is next to the last output correlator
 	}
 
+	// update noise floor
+	Noise = GenerateNoise(NOISE_AMP);
+	NoiseFloor += (Noise.abs() - NoiseFloor) / ((double)(1 << (8 + SmoothScale * 2)));
+
 	return (CohDataReady != 0);
 }
 
@@ -344,24 +361,26 @@ int CTrackingEngine::FindSvid(unsigned int ConfigArray[], int ArraySize, U32 Prn
 	return 0;	// not found
 }
 
-SATELLITE_PARAM* CTrackingEngine::FindSatParam(int ChannelId, SATELLITE_PARAM GpsSatParam[], int GpsSatNumber)
+SATELLITE_PARAM* CTrackingEngine::FindSatParam(int ChannelId, PSATELLITE_PARAM SatParam[], int SatNumber)
 {
 	int i;
 	int SystemSel = ChannelParam[ChannelId].SystemSel;
-	int Svid = ChannelParam[ChannelId].Svid;
+	int Svid = ChannelParam[ChannelId].Svid, system;
 
 	switch (SystemSel)
 	{
-	case 0:
-		for (i = 0; i < GpsSatNumber; i ++)
-			if (Svid == GpsSatParam[i].svid)
-				return &GpsSatParam[i];
-		break;
-	case 1:
-	case 2:
-	case 3:
+	case 0: system = GpsSystem; break;
+	case 1: system = BdsSystem; break;
+	case 2: system = GalileoSystem; break;
+	case 3: system = GpsSystem; break;
 	default:
-		break;
+		return (SATELLITE_PARAM *)0;
+	}
+
+	for (i = 0; i < SatNumber; i ++)
+	{
+		if (system == SatParam[i]->system && Svid == SatParam[i]->svid)
+			return SatParam[i];
 	}
 	return (SATELLITE_PARAM *)0;
 }
@@ -589,12 +608,12 @@ int CTrackingEngine::CalculateCounter(int ChannelId, int CorIndex[], int CorPos[
 	return ChannelParam[ChannelId].CoherentDone;
 }
 
-void CTrackingEngine::InitChannel(int ChannelId, GNSS_TIME CurTime, SATELLITE_PARAM GpsSatParam[], int GpsSatNumber)
+void CTrackingEngine::InitChannel(int ChannelId, GNSS_TIME CurTime, PSATELLITE_PARAM SatParam[], int SatNumber)
 {
 	SATELLITE_PARAM *pSatParam;
 	GNSS_TIME TransmitTime;
 
-	pSatParam = FindSatParam(ChannelId, GpsSatParam, GpsSatNumber);
+	pSatParam = FindSatParam(ChannelId, SatParam, SatNumber);
 	if (!pSatParam)
 		return;
 	// initial structure to calculate FreqDiff and PhaseDiff

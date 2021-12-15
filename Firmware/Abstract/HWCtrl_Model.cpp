@@ -17,6 +17,7 @@ extern "C" {
 #define SAMPLE_COUNT (SAMPLE_FREQ / 1000)
 
 static CGnssTop Baseband;
+static DebugFunction DebugFunc = 0;
 
 //*************** Attach ISR to baseband interrupt ****************
 // Parameters:
@@ -24,6 +25,14 @@ static CGnssTop Baseband;
 void AttachBasebandISR(InterruptFunction ISR)
 {
 	Baseband.InterruptService = ISR;
+}
+
+//*************** Attach ISR to baseband interrupt ****************
+// Parameters:
+//   Function: debug function to output tracking status
+void AttachDebugFunc(DebugFunction Function)
+{
+	DebugFunc = Function;
 }
 
 //*************** Host read from baseband ****************
@@ -108,13 +117,15 @@ void EnableRF()
 	while (Baseband.Process(SAMPLE_COUNT) >= 0)
 	{
 //		printf("ProcessCount=%d\n", ProcessCount);
-		if (ProcessCount == 31998)
+		if (ProcessCount == 30070)
 			ProcessCount = ProcessCount;
 		DoTaskQueue(&BasebandTask);
 		DoTaskQueue(&PostMeasTask);
 		DoTaskQueue(&InputOutputTask);
+		if (DebugFunc)
+			DebugFunc((void *)(&Baseband), ProcessCount);
 		ProcessCount ++;
-//		if (ProcessCount == 50000)
-//			break;
+		if (ProcessCount == 40000)
+			break;
 	}
 }

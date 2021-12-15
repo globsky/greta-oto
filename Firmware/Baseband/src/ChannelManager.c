@@ -155,6 +155,13 @@ void SyncCacheWrite(PCHANNEL_STATE ChannelState)
 			SetRegValue((U32)(&(ChannelState->StateBufferHW->NHConfig)),   ChannelState->StateBufferCache.NHConfig);
 			SetRegValue((U32)(&(ChannelState->StateBufferHW->CohConfig)),  ChannelState->StateBufferCache.CohConfig);
 		}
+		if (ChannelState->State & STATE_CACHE_CODE_DIRTY)	// update PrnCount, CodePhase, DumpCount and CorrState
+		{
+			SetRegValue((U32)(&(ChannelState->StateBufferHW->PrnCount)), ChannelState->StateBufferCache.PrnCount);
+			SetRegValue((U32)(&(ChannelState->StateBufferHW->CodePhase)),   ChannelState->StateBufferCache.CodePhase);
+			SetRegValue((U32)(&(ChannelState->StateBufferHW->DumpCount)),  ChannelState->StateBufferCache.DumpCount);
+			SetRegValue((U32)(&(ChannelState->StateBufferHW->CorrState)),  ChannelState->StateBufferCache.CorrState);
+		}
 	}
 	ChannelState->State &= ~STATE_CACHE_DIRTY;	// clear cache dirty flags
 }
@@ -294,7 +301,7 @@ int ComposeMeasurement(int ChannelID, PBB_MEASUREMENT Measurement, U32 *DataBuff
 	int WordNumber;
 	int CohCount, CurrentCor;
 
-	LoadMemory(&(ChannelState->StateBufferCache.PrnCount), (U32 *)(ChannelState->StateBufferHW) + 7, sizeof(U32) * 6);	// copy channel status fields
+	SyncCacheRead(ChannelState, SYNC_CACHE_READ_STATUS);
 	memcpy((void *)Measurement, (void *)ChannelState, sizeof(U32) * 3);	// copy first elements of structure
 
 	Measurement->CodeFreq = STATE_BUF_GET_CODE_FREQ(StateBuffer);
@@ -440,6 +447,7 @@ int BitSyncTask(void *Param)
 	// determine whether bit sync success
 	if (MaxCount >= 5 && MaxCount >= TotalCount / 2)	// at least 5 toggles and max position toggle occupies at least 50%, SUCCESS
 	{
+//		printf("Bitsync found at %d with %d/%d\n", MaxTogglePos, MaxCount, TotalCount);
 		MaxTogglePos += BitSyncData->TimeTag;	// toggle position align to time tag
 		MaxTogglePos %= 20;		// remnant of 20ms
 		BitSyncData->ChannelState->BitSyncResult = MaxTogglePos ? MaxTogglePos : 20;	// set result, which means bit toggle when (TrackTime % 20 == BitSyncResult)

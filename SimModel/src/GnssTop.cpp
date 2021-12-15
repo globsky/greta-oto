@@ -78,7 +78,7 @@ void CGnssTop::SetRegValue(int Address, U32 Value)
 		AcqEngine.SetRegValue(AddressOffset, Value);
 		if (AddressOffset == ADDR_OFFSET_AE_BUFFER_CONTROL && (Value & 0x100))	// latch write address when starting fill AE buffer
 		{
-			AcqEngine.SetBufferParam(GpsSatParam, GpsSatNumber, CurTime, &GpsBits);	// set AE buffer parameters
+			AcqEngine.SetBufferParam(SatParamList, TotalSatNumber, CurTime, &GpsBits);	// set AE buffer parameters
 			TeFifo.LatchWriteAddress(3);	// set AE latch time
 		}
 		if (AddressOffset == ADDR_OFFSET_AE_CONTROL && (Value & 0x100))	// if do acquisition, set AE finished interrupt
@@ -95,7 +95,7 @@ void CGnssTop::SetRegValue(int Address, U32 Value)
 	case ADDR_BASE_TE_BUFFER:
 		TrackingEngine.SetTEBuffer(AddressOffset >> 2, Value);
 		if (((AddressOffset >> 2) & 0x1f) == STATE_OFFSET_PRN_CONFIG)	// if set PRN_CONFIG, assume initial channel with new SVID
-			TrackingEngine.InitChannel((Address >> 7) & 0x1f, CurTime, GpsSatParam, GpsSatNumber);
+			TrackingEngine.InitChannel((Address >> 7) & 0x1f, CurTime, SatParamList, TotalSatNumber);
 		break;
 	case ADDR_BASE_AE_BUFFER:
 		AcqEngine.ChannelConfig[AddressOffset >> 5][(AddressOffset >> 2) & 0x7] = Value;
@@ -151,9 +151,11 @@ U32 CGnssTop::GetRegValue(int Address)
 void CGnssTop::SetInputFile(char *FileName)
 {
 	LLA_POSITION StartPos;
-	int i = 0;
+	int i = 0, index;
 	CXmlElementTree XmlTree;
 	CXmlElement *RootElement, *Element;
+	int ListCount;
+	PSIGNAL_POWER PowerList;
 
 	XmlTree.parse(FileName);
 	RootElement = XmlTree.getroot();
@@ -168,23 +170,59 @@ void CGnssTop::SetInputFile(char *FileName)
 			NavData.ReadNavFile(Element->GetText());
 		else if (strcmp(Element->GetTag(), "Output") == 0)
 			SetOutputParam(Element, OutputParam);
+		else if (strcmp(Element->GetTag(), "PowerControl") == 0)
+			SetPowerControl(Element, PowerControl);
 	}
 	Trajectory.ResetTrajectoryTime();
 	CurTime = UtcToGpsTime(UtcTime);
 	CurPos = LlaToEcef(StartPos);
 	SpeedLocalToEcef(StartPos, StartVel, CurPos);
+
+	for (i = 0; i < TOTAL_GPS_SAT; i ++)
+		GpsSatParam[i].CN0 = (int)(PowerControl.InitCN0 * 100 + 0.5);
+	for (i = 0; i < TOTAL_BDS_SAT; i ++)
+		BdsSatParam[i].CN0 = (int)(PowerControl.InitCN0 * 100 + 0.5);
+	for (i = 0; i < TOTAL_GAL_SAT; i ++)
+		GalSatParam[i].CN0 = (int)(PowerControl.InitCN0 * 100 + 0.5);
+
 	// Find ephemeris match current time and fill in data to generate bit stream
-	for (i = 1; i <= 32; i ++)
+	for (i = 1; i <= TOTAL_GPS_SAT; i ++)
 	{
-		GpsEph[i-1] = NavData.FindEphemeris(CNavData::SystemGps, CurTime, i);
+		GpsEph[i-1] = NavData.FindEphemeris(GpsSystem, CurTime, i);
 		GpsBits.SetEphemeris(i, GpsEph[i-1]);
 	}
+	for (i = 1; i <= TOTAL_BDS_SAT; i ++)
+		BdsEph[i-1] = NavData.FindEphemeris(BdsSystem, CurTime, i);
+	for (i = 1; i <= TOTAL_GAL_SAT; i ++)
+		GalEph[i-1] = NavData.FindEphemeris(GalileoSystem, CurTime, i);
 	GpsBits.SetIonoUtc(NavData.GetGpsIono(), NavData.GetGpsUtcParam());
 	// calculate visible satellite at start time and calculate satellite parameters
-	GpsSatNumber = GetVisibleSatellite(CurPos, CurTime, OutputParam, GpsSystem, GpsEph, 32, GpsEphVisible);
+	GpsSatNumber = (OutputParam.SystemSelect & (1 << GpsSystem)) ? GetVisibleSatellite(CurPos, CurTime, OutputParam, GpsSystem, GpsEph, 32, GpsEphVisible) : 0;
+	BdsSatNumber = (OutputParam.SystemSelect & (1 << BdsSystem)) ? GetVisibleSatellite(CurPos, CurTime, OutputParam, BdsSystem, BdsEph, TOTAL_BDS_SAT, BdsEphVisible) : 0;
+	GalSatNumber = (OutputParam.SystemSelect & (1 << GalileoSystem)) ? GetVisibleSatellite(CurPos, CurTime, OutputParam, GalileoSystem, GalEph, TOTAL_GAL_SAT, GalEphVisible) : 0;
+	TotalSatNumber = GpsSatNumber + BdsSatNumber + GalSatNumber;
+	ListCount = PowerControl.GetPowerControlList(0, PowerList);
+	TotalSatNumber = 0;
 	for (i = 0; i < GpsSatNumber; i ++)
 	{
-		GpsSatParam[i] = GetSatelliteParam(CurPos, StartPos, CurTime, GpsSystem, GpsEphVisible[i], NavData.GetGpsIono());
+		index = GpsEphVisible[i]->svid - 1;
+		GetSatelliteParam(CurPos, StartPos, CurTime, GpsSystem, GpsEphVisible[i], NavData.GetGpsIono(), &GpsSatParam[index]);
+		GetSatelliteCN0(ListCount, PowerList, PowerControl.InitCN0, PowerControl.Adjust, &GpsSatParam[index]);
+		SatParamList[TotalSatNumber ++] = &GpsSatParam[index];
+	}
+	for (i = 0; i < BdsSatNumber; i ++)
+	{
+		index = BdsEphVisible[i]->svid - 1;
+		GetSatelliteParam(CurPos, StartPos, CurTime, BdsSystem, BdsEphVisible[i], NavData.GetGpsIono(), &BdsSatParam[index]);
+		GetSatelliteCN0(ListCount, PowerList, PowerControl.InitCN0, PowerControl.Adjust, &BdsSatParam[index]);
+		SatParamList[TotalSatNumber ++] = &BdsSatParam[index];
+	}
+	for (i = 0; i < GalSatNumber; i ++)
+	{
+		index = GalEphVisible[i]->svid - 1;
+		GetSatelliteParam(CurPos, StartPos, CurTime, GalileoSystem, GalEphVisible[i], NavData.GetGpsIono(), &GalSatParam[index]);
+		GetSatelliteCN0(ListCount, PowerList, PowerControl.InitCN0, PowerControl.Adjust, &GalSatParam[index]);
+		SatParamList[TotalSatNumber ++] = &GalSatParam[index];
 	}
 	TrackingEngine.SetNavBit(&GpsBits);
 }
@@ -196,7 +234,7 @@ int CGnssTop::Process(int ReadBlockSize)
 	TeFifo.StepOneBlock();	// to have TE FIFO progress 1 block of data (1ms)
 	if (TrackingEngineEnable)
 	{
-		InterruptFlag |= TrackingEngine.ProcessData(CurTime, GpsSatParam, GpsSatNumber) ? 0x100 : 0;
+		InterruptFlag |= TrackingEngine.ProcessData(CurTime, SatParamList, TotalSatNumber) ? 0x100 : 0;
 		MeasurementCount ++;
 		if (MeasurementCount == MeasurementNumber)
 		{
@@ -220,12 +258,15 @@ int CGnssTop::Process(int ReadBlockSize)
 
 int CGnssTop::StepToNextTime(int TimeInterval)
 {
-	int i;
+	int i, index;
 	LLA_POSITION PosLLA;
+	int ListCount;
+	PSIGNAL_POWER PowerList;
 
 	if (!Trajectory.GetNextPosVelECEF(TimeInterval / 1000., CurPos))
 		return -1;
 
+	ListCount = PowerControl.GetPowerControlList(TimeInterval, PowerList);
 	// calculate new satellite parameter
 	PosLLA = EcefToLla(CurPos);
 	CurTime.MilliSeconds += TimeInterval;
@@ -235,10 +276,32 @@ int CGnssTop::StepToNextTime(int TimeInterval)
 		CurTime.MilliSeconds -= 604800000;
 	}
 	if ((CurTime.MilliSeconds % 60000) == 0)	// recalculate visible satellite at minute boundary
-		GpsSatNumber = GetVisibleSatellite(CurPos, CurTime, OutputParam, GpsSystem, GpsEph, 32, GpsEphVisible);
+	{
+		GpsSatNumber = (OutputParam.SystemSelect & (1 << GpsSystem)) ? GetVisibleSatellite(CurPos, CurTime, OutputParam, GpsSystem, GpsEph, 32, GpsEphVisible) : 0;
+		BdsSatNumber = (OutputParam.SystemSelect & (1 << BdsSystem)) ? GetVisibleSatellite(CurPos, CurTime, OutputParam, BdsSystem, BdsEph, TOTAL_BDS_SAT, BdsEphVisible) : 0;
+		GalSatNumber = (OutputParam.SystemSelect & (1 << GalileoSystem)) ? GetVisibleSatellite(CurPos, CurTime, OutputParam, GalileoSystem, GalEph, TOTAL_GAL_SAT, GalEphVisible) : 0;
+	}
+	TotalSatNumber = 0;
 	for (i = 0; i < GpsSatNumber; i ++)
 	{
-		GpsSatParam[i] = GetSatelliteParam(CurPos, PosLLA, CurTime, GpsSystem, GpsEphVisible[i], NavData.GetGpsIono());
+		index = GpsEphVisible[i]->svid - 1;
+		GetSatelliteParam(CurPos, PosLLA, CurTime, GpsSystem, GpsEphVisible[i], NavData.GetGpsIono(), &GpsSatParam[index]);
+		GetSatelliteCN0(ListCount, PowerList, PowerControl.InitCN0, PowerControl.Adjust, &GpsSatParam[index]);
+		SatParamList[TotalSatNumber ++] = &GpsSatParam[index];
+	}
+	for (i = 0; i < BdsSatNumber; i ++)
+	{
+		index = BdsEphVisible[i]->svid - 1;
+		GetSatelliteParam(CurPos, PosLLA, CurTime, BdsSystem, BdsEphVisible[i], NavData.GetGpsIono(), &BdsSatParam[index]);
+		GetSatelliteCN0(ListCount, PowerList, PowerControl.InitCN0, PowerControl.Adjust, &BdsSatParam[index]);
+		SatParamList[TotalSatNumber ++] = &BdsSatParam[index];
+	}
+	for (i = 0; i < GalSatNumber; i ++)
+	{
+		index = GalEphVisible[i]->svid - 1;
+		GetSatelliteParam(CurPos, PosLLA, CurTime, GalileoSystem, GalEphVisible[i], NavData.GetGpsIono(), &GalSatParam[index]);
+		GetSatelliteCN0(ListCount, PowerList, PowerControl.InitCN0, PowerControl.Adjust, &GalSatParam[index]);
+		SatParamList[TotalSatNumber ++] = &GalSatParam[index];
 	}
 	return 0;
 }

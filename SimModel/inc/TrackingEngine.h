@@ -37,7 +37,7 @@ struct ChannelConfig
 	int CoherentNumber;
 	int PostShiftBits;
 	// translate from PRN config
-	int SystemSel;
+	int SystemSel;	// 0: GPS L1C/A, 1: Galileo E1, 2: BDS B1C, 3: GPS L1C
 	int Svid;
 	int PrnCount;
 	// state parameters
@@ -89,16 +89,16 @@ public:
 
 	void SetTEBuffer(unsigned int Address, U32 Value);
 	U32 GetTEBuffer(unsigned int Address);
-	int ProcessData(GNSS_TIME CurTime, SATELLITE_PARAM GpsSatParam[], int GpsSatNumber);
+	int ProcessData(GNSS_TIME CurTime, PSATELLITE_PARAM SatParam[], int SatNumber);
 
 	static const double Bpsk4PeakValues[160];
 	static const double Boc4PeakValues[160];
 
 	int FindSvid(unsigned int ConfigArray[], int ArraySize, U32 PrnConfig);
-	SATELLITE_PARAM* FindSatParam(int ChannelId, SATELLITE_PARAM GpsSatParam[], int GpsSatNumber);
+	SATELLITE_PARAM* FindSatParam(int ChannelId, PSATELLITE_PARAM SatParam[], int SatNumber);
 	void GetCorrelationResult(int ChannelId, GNSS_TIME CurTime, SATELLITE_PARAM *pSatParam, int DumpDataI[], int DumpDataQ[], int CorIndex[], int CorPos[], int DataLength);
 	int CalculateCounter(int ChannelId, int CorIndex[], int CorPos[], int &DataLength);
-	void InitChannel(int ChannelId, GNSS_TIME CurTime, SATELLITE_PARAM GpsSatParam[], int GpsSatNumber);
+	void InitChannel(int ChannelId, GNSS_TIME CurTime, PSATELLITE_PARAM SatParam[], int SatNumber);
 	double NarrowCompensation(int CorIndex, int NarrowFactor);
 	double PhaseAverage(double Phase1, double Ratio1, double Phase2, double Ratio2);
 
@@ -107,6 +107,8 @@ public:
 	ChannelConfig ChannelParam[LOGICAL_CHANNEL_NUMBER];
 	CarrierParameter CarrierParam[LOGICAL_CHANNEL_NUMBER];
 	double CovarMatrix2[SUM_N(COR_NUMBER)], CovarMatrix4[SUM_N(COR_NUMBER)], CovarMatrix8[SUM_N(COR_NUMBER)];
+	int SmoothScale;
+	double NoiseFloor;
 };
 
 #endif //__TRACKING_ENGINE_SIM_H__

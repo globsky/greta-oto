@@ -51,4 +51,12 @@
 		Add tracking stage switch (including strong/weak signal tracking and tracking hold)
 	Function and feature change
 		Change logarithm calculation to avoid overflow on large number
-	
+12/14/2021
+	Function and feature added
+		Add noise floor calculation in SimModel
+		Add variables for BDS and Galileo in GNSS top level model
+		Add a hook function to be called on every round of hardware process in SimModel
+		Extend code search range on tracking hold
+		Add example of main function for simulation on C model and SimModel
+	Bug fix
+		Change LoseLockCounter update method to avoid reacquisition error

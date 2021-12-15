@@ -77,6 +77,7 @@ typedef struct tag_CHANNEL_STATE
 	U32 CodeFreqBase;		// W0 for code frequency control word
 	U32 CarrierFreqSave;	// carrier frequency control word when PLL/FLL lock
 	U32 CodeFreqSave;		// code frequency control word when DLL lock
+	int CodeSearchCount;	// counter on search range on correlator acquisition or tracking hold
 	// buffer for coherent and non-coherent sum
 	U32 CohBuffer[COH_BUF_LEN];	// buffer to hold coherent sums
 	int NoncohBuffer[NONCOH_BUF_LEN];	// buffer to hold noncoherent sums

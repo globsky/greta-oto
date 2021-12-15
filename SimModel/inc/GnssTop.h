@@ -24,6 +24,10 @@ typedef void (*InterruptFunction)();
 typedef int S32;
 typedef unsigned int U32;
 
+#define TOTAL_GPS_SAT 32
+#define TOTAL_BDS_SAT 63
+#define TOTAL_GAL_SAT 50
+
 class CGnssTop
 {
 public:
@@ -50,11 +54,16 @@ public:
 	KINEMATIC_INFO CurPos;
 	LOCAL_SPEED StartVel;
 	OUTPUT_PARAM OutputParam;
+	CPowerControl PowerControl;
 	LNavBit GpsBits;
 
-	PGPS_EPHEMERIS GpsEph[32], GpsEphVisible[32];
-	SATELLITE_PARAM GpsSatParam[32];	// GPS satellite parameter array at CurTime
-	int GpsSatNumber;	// number of visible GPS satellite
+	PGPS_EPHEMERIS GpsEph[TOTAL_GPS_SAT], GpsEphVisible[TOTAL_GPS_SAT];
+	PGPS_EPHEMERIS BdsEph[TOTAL_BDS_SAT], BdsEphVisible[TOTAL_BDS_SAT];
+	PGPS_EPHEMERIS GalEph[TOTAL_GAL_SAT], GalEphVisible[TOTAL_GAL_SAT];
+	SATELLITE_PARAM GpsSatParam[TOTAL_GPS_SAT], BdsSatParam[TOTAL_BDS_SAT], GalSatParam[TOTAL_GAL_SAT];	// satellite parameter array at CurTime
+	PSATELLITE_PARAM SatParamList[TOTAL_GPS_SAT+TOTAL_BDS_SAT+TOTAL_GAL_SAT];
+	int GpsSatNumber, BdsSatNumber, GalSatNumber;	// number of visible GPS satellite
+	int TotalSatNumber;	// total number of visible GPS satellite
 
 	CTrackingEngine TrackingEngine;
 	CAcqEngine AcqEngine;

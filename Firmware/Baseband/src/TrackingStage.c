@@ -6,7 +6,9 @@
 //
 //----------------------------------------------------------------------
 
+#include <stdio.h>
 #include <string.h>
+#include "HWCtrl.h"
 #include "ChannelManager.h"
 
 #define C1 (1<<16)
@@ -41,6 +43,7 @@ void SwitchTrackingStage(PCHANNEL_STATE ChannelState, unsigned int TrackingStage
 {
 	PTRACKING_CONFIG CurTrackingConfig = TrackingConfig[STAGE_CONFIG_INDEX(TrackingStage)][ChannelState->FreqID];
 
+//	printf("SV%02d switch to %d\n", ChannelState->Svid, TrackingStage);
 	ChannelState->TrackingTime = 0;		// reset tracking time
 	ChannelState->State &= ~STAGE_MASK;
 	ChannelState->State |= TrackingStage;
@@ -72,6 +75,7 @@ void SwitchTrackingStage(PCHANNEL_STATE ChannelState, unsigned int TrackingStage
 		STATE_BUF_SET_CARRIER_FREQ(&(ChannelState->StateBufferCache), ChannelState->CarrierFreqSave);
 		STATE_BUF_SET_CODE_FREQ(&(ChannelState->StateBufferCache), ChannelState->CodeFreqSave);
 		ChannelState->State |= STATE_CACHE_FREQ_DIRTY;
+		ChannelState->CodeSearchCount = 0;
 	}
 	else if (TrackingStage == STAGE_PULL_IN)
 	{
@@ -103,7 +107,8 @@ void SwitchTrackingStage(PCHANNEL_STATE ChannelState, unsigned int TrackingStage
 int StageDetermination(PCHANNEL_STATE ChannelState)
 {
 	int TrackingStage = ChannelState->State & STAGE_MASK;
-	int Time;
+	int Time, Jump;
+	unsigned int DumpCount;
 
 	// determine stage switch cases before timeout
 	if (TrackingStage == STAGE_BIT_SYNC && ChannelState->BitSyncResult)	// bit sync finished
@@ -130,15 +135,33 @@ int StageDetermination(PCHANNEL_STATE ChannelState)
 	}
 
 	// switch out from hold
-	if (TrackingStage == STAGE_HOLD3 && (ChannelState->FastCN0 > 2800))
+	if (TrackingStage == STAGE_HOLD3 && ChannelState->FftCount == 0 && ChannelState->NonCohCount == 0)
 	{
-		SwitchTrackingStage(ChannelState, STAGE_PULL_IN);
-		ChannelState->LoseLockCounter = 0;
-		return 1;
+		if (ChannelState->FastCN0 > 2800)
+		{
+			SwitchTrackingStage(ChannelState, STAGE_PULL_IN);
+			ChannelState->LoseLockCounter = 0;
+			return 1;
+		}
+		else	// scan code phases within code search range
+		{
+			if (++ChannelState->CodeSearchCount == 5)
+				Jump = ChannelState->CodeSearchCount / 2;
+			else
+				Jump = ChannelState->CodeSearchCount;
+			if ((ChannelState->CodeSearchCount & 1) == 0)
+				Jump = -Jump;
+			if (ChannelState->CodeSearchCount == 5)
+				ChannelState->CodeSearchCount = 0;
+			Jump *= 7;
+			DumpCount = GetRegValue((U32)(&(ChannelState->StateBufferHW->DumpCount)));
+			DumpCount |= (Jump & 0xff) << 8;
+			SetRegValue((U32)(&(ChannelState->StateBufferHW->DumpCount)),  DumpCount);
+		}
 	}
 
 	// lose lock, switch to hold
-	if (TrackingStage >= STAGE_PULL_IN && ChannelState->LoseLockCounter > 10 && ChannelState->NonCohCount == 0)
+	if (TrackingStage >= STAGE_PULL_IN && ChannelState->LoseLockCounter > 100 && ChannelState->NonCohCount == 0)
 	{
 		SwitchTrackingStage(ChannelState, STAGE_HOLD3);
 		return 1;
