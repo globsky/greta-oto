@@ -63,6 +63,12 @@ do \
 #define FREQ_E1   1
 #define FREQ_B1C  2
 #define FREQ_L1C  3
+// frequency ID compare
+#define FREQ_ID_IS_L1CA(FreqID) ((FreqID) == FREQ_L1CA)
+#define FREQ_ID_IS_E1(FreqID) ((FreqID) == FREQ_E1)
+#define FREQ_ID_IS_B1C(FreqID) ((FreqID) == FREQ_B1C)
+#define FREQ_ID_IS_L1C(FreqID) ((FreqID) == FREQ_L1C)
+#define FREQ_ID_IS_B1C_L1C(FreqID) ((FreqID) & 2)
 // 2MSB mark as data/pilot
 #define FREQ_DATA_CHANNEL 0x80
 #define FREQ_PILOT_CHANNEL 0x40
@@ -73,6 +79,10 @@ do \
 #define FREQ_E1C  (FREQ_E1  | FREQ_PILOT_CHANNEL)
 #define FREQ_B1CP (FREQ_B1C | FREQ_PILOT_CHANNEL)
 #define FREQ_L1CP (FREQ_L1C | FREQ_PILOT_CHANNEL)
+// combined frequency ID and SVID
+#define FREQ_SVID(freq_id, svid) (((freq_id) << 6) | (svid))
+#define GET_FREQ_ID(freq_svid) (((freq_svid) >> 6) & 3)
+#define GET_SVID(freq_svid) ((freq_svid) & 0x3f)
 
 //==========================
 // state definitions
@@ -101,6 +111,12 @@ do \
 #define DATA_STREAM_4BIT 0x200	// each symbol occupies 4bit
 #define DATA_STREAM_8BIT 0x300	// each symbol occupies 8bit
 #define DATA_STREAM_MASK 0x300
+
+// bit 10 for data channel selection
+#define DATA_STREAM_PRN2 0x400	// decode data using second PRN
+
+// bit 11 for NH update required
+#define NH_SEGMENT_UPDATE 0x800	// NH code longer than 25bit
 
 // bit16~18 for tracking loop update
 #define TRACKING_UPDATE_PLL 0x10000
@@ -163,8 +179,9 @@ typedef struct
 	U32 CodeFreq;		// code frequency
 	U32 CodeNCO;		// code NCO
 	S32 CodeCount;		// code count in current bit, unit is 1/2 chip
-	U16 DataNumber;		// data number in stream buffer
 	U16 CN0;			// C/N0 in unit of 0.01dB
+	U16 DataNumber;		// data number in stream buffer
+	S32 FrameIndex;		// position of first data in frame
 	U32 LockIndicator;	// carrier lock indicator
 	U32 *DataStreamAddr;	// address of data in data stream buffer
 } BB_MEASUREMENT, *PBB_MEASUREMENT;

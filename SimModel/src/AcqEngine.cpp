@@ -162,18 +162,21 @@ void CAcqEngine::DoNonCoherentSum(AeBufferSatParam *pSatParam)
 	int CohCount, NoncohCount, CorCount, FreqCount;
 	complex_number PrevValue = GenerateNoise(NOISE_AMP_SQRT2), Value;
 	double FreqDiff, FreqFade;
-	int PhaseStart = ((ReadAddress + CodeRoundCount) * MF_DEPTH) % 2046;
-	int PhaseEnd = PhaseStart + MF_DEPTH;
+	int PhaseStart, PhaseEnd;
 	int StartIndex, EndIndex, OffsetIndex;
 	double CodeOffset;
 	double PeakAmplitude[6], Amplitude;
 	double DftTwiddleFactor, DftPhase;
 	double DopplerPhase;
 	int CurBit = 0;
+	const double *PeakValues;
 
+	PhaseStart = ((ReadAddress + CodeRoundCount) * MF_DEPTH) % PhaseCount;
+	PhaseEnd = PhaseStart + MF_DEPTH;
 	// calculate whether current search range cover code match position
 	if (pSatParam && pSatParam->Time2CodeEnd >= (PhaseStart - 2) && pSatParam->Time2CodeEnd <= (PhaseEnd + 2))
 	{
+		PeakValues = (pSatParam->PrnSelect == 0) ? Bpsk2PeakValues : Boc2PeakValues;
 		// amplitude fading due to frequency
 		FreqDiff = fabs(PI * (CarrierFreq - pSatParam->Doppler) / 1000);
 		FreqFade = (FreqDiff > 1e-3) ? (sin(FreqDiff) / FreqDiff) : 1.0;
@@ -348,7 +351,7 @@ void CAcqEngine::DoAcquisition()
 		StrideNumber = EXTRACT_UINT(ChannelConfig[i][0], 0, 6);
 		CoherentNumber = EXTRACT_UINT(ChannelConfig[i][0], 8, 6);
 		NonCoherentNumber = EXTRACT_UINT(ChannelConfig[i][0], 16, 7);
-		PeakRatioTh = EXTRACT_UINT(ChannelConfig[i][0], 24, 6);
+		PeakRatioTh = EXTRACT_UINT(ChannelConfig[i][0], 24, 3);
 		EarlyTerminate = EXTRACT_UINT(ChannelConfig[i][0], 27, 1);
 		Freq = EXTRACT_INT(ChannelConfig[i][1], 0, 20);
 		CenterFreq = Freq * 2.046e6 / 1048576.;
@@ -360,12 +363,20 @@ void CAcqEngine::DoAcquisition()
 		DftTwiddlePhase = Freq * PI / 8192;
 		Freq = EXTRACT_UINT(ChannelConfig[i][3], 0, 22);
 		StrideInterval = Freq * 2.046e6 / 4294967296.;
+		PhaseCount = 2046;	// default value for total phase count
 
 		// find whether SV to be acquired exisst
 		pSatParam = (AeBufferSatParam *)NULL;
 		for (j = 0; j < SatNumber; j ++)
-			if (Svid == SatParam[j].svid)
+			if (Svid == SatParam[j].svid && PrnSelect == SatParam[j].PrnSelect)
 			{
+				switch (PrnSelect)
+				{
+				case FREQ_L1CA:	PhaseCount = 2046; break;
+				case FREQ_E1:	PhaseCount = 2046 * 4; break;
+				case FREQ_B1C:
+				case FREQ_L1C:	PhaseCount = 2046 * 10; break;
+				}
 				pSatParam = &SatParam[j];
 				break;
 			}
@@ -391,49 +402,98 @@ void CAcqEngine::DoAcquisition()
 	}
 }
 
-void CAcqEngine::SetBufferParam(PSATELLITE_PARAM SatelliteParam[], int SatVisible, GNSS_TIME Time, NavBit *NavData)
+void CAcqEngine::SetBufferParam(PSATELLITE_PARAM SatelliteParam[], int SatVisible, GNSS_TIME Time, NavBit *NavData[])
 {
-	int i, j;
+	int i;
+
+	SatNumber = 0;
+	for (i = 0; i < SatVisible; i ++)
+	{
+		if (SatelliteParam[i]->system == GpsSystem)
+		{
+			AssignChannelParam(SatelliteParam[i], Time, NavData[0], 0, &SatParam[SatNumber++]);	// add L1C/A
+//			AssignChannelParam(SatelliteParam[i], Time, NavData[3], 3, &SatParam[SatNumber++]);	// add L1C
+		}
+		else if (SatelliteParam[i]->system == BdsSystem)
+			AssignChannelParam(SatelliteParam[i], Time, NavData[2], 2, &SatParam[SatNumber++]);	// add B1C
+		else if (SatelliteParam[i]->system == GalileoSystem)
+			AssignChannelParam(SatelliteParam[i], Time, NavData[1], 1, &SatParam[SatNumber++]);	// add E1C
+	}
+}
+
+void CAcqEngine::AssignChannelParam(PSATELLITE_PARAM pSatelliteParam, GNSS_TIME Time, NavBit *NavData, int PrnSelect, AeBufferSatParam *pSatAcqParam)
+{
+	int i;
+	int FrameLength, BitLength, FrameBits;
 	int FrameNumber, BitNumber, MilliSeconds;
 	int TotalBits, BitCount, Start, End;
 	int Bits[1800];
 	GNSS_TIME TransmitTime;
+	double Time2CodeEnd;
 
-	SatNumber = SatVisible;
-	for (i = 0; i < SatNumber; i ++)
+	switch (PrnSelect)
 	{
-		// calculate TransmitTimeMs, TransmitTime as Time - TravelTime
-		TransmitTime = GetTransmitTime(Time, SatelliteParam[i]->TravelTime + SatelliteParam[i]->IonoDelay / LIGHT_SPEED);
-		// calculate frame count and bit count
+	case 0:	// GPS L1C/A
+		FrameLength = 6000;
+		BitLength = 20;
+		FrameBits = 300;
+		TotalBits = 8;	// maximum 8 bits within 128ms for GPS
+		break;
+	case 1:	// Galileo E1C
+		FrameLength = 100;
+		BitLength = 4;
+		FrameBits = 25;
+		TotalBits = 32;
+		break;
+	case 2:	// BDS B1C
+		FrameLength = 18000;
+		BitLength = 10;
+		FrameBits = 1800;
+		TotalBits = 14;
+		break;
+	case 3:	// GPS L1C
+		FrameLength = 18000;
+		BitLength = 10;
+		FrameBits = 1800;
+		TotalBits = 14;
+		break;
+	}
+	// calculate TransmitTimeMs, TransmitTime as Time - TravelTime
+	TransmitTime = GetTransmitTime(Time, pSatelliteParam->TravelTime + pSatelliteParam->IonoDelay / LIGHT_SPEED);
+	// calculate frame count and bit count
+//	if (PrnSelect == 0)
 		TransmitTime.MilliSeconds ++;	// time of NEXT code round
-		FrameNumber = TransmitTime.MilliSeconds / 6000;	// frame number
-		MilliSeconds = TransmitTime.MilliSeconds - FrameNumber * 6000;	// remaining time in current frame in millisecond
-		BitNumber = MilliSeconds / 20;	// bit number
-		MilliSeconds -= BitNumber * 20;	// remaining time in current bit
-		// assign parameters
-		SatParam[i].svid = SatelliteParam[i]->svid;
-		SatParam[i].BitLength = 20;
-		SatParam[i].MsCount = MilliSeconds;
-//		SatParam[i].Time2CodeEnd = (1 - TransmitTime.SubMilliSeconds) * 2046.;	// convert to unit of 1/2 code chip (can add compensation of filter delay here)
-		SatParam[i].Time2CodeEnd = (1 - TransmitTime.SubMilliSeconds + 2.5 / SAMPLE_COUNT) * 2046.;	// convert to unit of 1/2 code chip with compensation of filter delay (2.5 samples)
-		SatParam[i].Doppler = (-SatelliteParam[i]->RelativeSpeed) / GPS_L1_WAVELENGTH;
-		SatParam[i].Amplitude = 2 * pow(10, (SatelliteParam[i]->CN0 - 3000) / 2000.) * NOISE_AMP_SQRT2;
-		// generate bits
-		BitCount = 0;
-		TotalBits = 7;	// maximum 7 bits within 128ms for GPS
-		while (BitCount < TotalBits)
-		{
-			Start = BitNumber;	// start from current bit
-			End = 300;	// to end of generated bit stream
-			if ((End - Start) > (TotalBits - BitCount))	// if generated bit stream is longer, truncate the end
-				End = Start + (TotalBits - BitCount);
-			// get navigation bits and copy to BitArray
-			NavData->GetFrameData(TransmitTime, SatelliteParam[i]->svid, Bits);
-			for (j = Start; j < End; j ++)
-				SatParam[i].BitArray[BitCount++] = Bits[j];
-			// move to next subframe
-			BitNumber = 0;
-			TransmitTime.MilliSeconds += 6000;
-		}
+//	else
+//		TransmitTime.MilliSeconds += BitLength;	// time of NEXT code round
+	FrameNumber = TransmitTime.MilliSeconds / FrameLength;	// frame number
+	MilliSeconds = TransmitTime.MilliSeconds - FrameNumber * FrameLength;	// remaining time in current frame in millisecond
+	BitNumber = MilliSeconds / BitLength;	// bit number
+	MilliSeconds -= BitNumber * BitLength;	// remaining time in current bit
+	// assign parameters
+	pSatAcqParam->PrnSelect = PrnSelect;
+	pSatAcqParam->svid = pSatelliteParam->svid;
+	pSatAcqParam->BitLength = BitLength;
+	pSatAcqParam->MsCount = MilliSeconds;
+	Time2CodeEnd = 1 - TransmitTime.SubMilliSeconds;
+	if (PrnSelect != 0 && MilliSeconds != 0)
+		Time2CodeEnd += (BitLength - MilliSeconds);
+	pSatAcqParam->Time2CodeEnd = (Time2CodeEnd + 2.5 / SAMPLE_COUNT) * 2046;	// convert to unit of 1/2 code chip with compensation of filter delay (2.5 samples)
+	pSatAcqParam->Doppler = (-pSatelliteParam->RelativeSpeed) / GPS_L1_WAVELENGTH;
+	pSatAcqParam->Amplitude = 2 * pow(10, (pSatelliteParam->CN0 - 3000) / 2000.) * NOISE_AMP_SQRT2;
+	// generate bits
+	BitCount = 0;
+	while (BitCount < TotalBits)
+	{
+		Start = BitNumber;	// start from current bit
+		End = FrameBits;	// to end of generated bit stream
+		if ((End - Start) > (TotalBits - BitCount))	// if generated bit stream is longer, truncate the end
+			End = Start + (TotalBits - BitCount);
+		// get navigation bits and copy to BitArray
+		NavData->GetFrameData(TransmitTime, pSatelliteParam->svid, 0, Bits);
+		for (i = Start; i < End; i ++)
+			pSatAcqParam->BitArray[BitCount++] = Bits[i];
+		// move to next subframe
+		BitNumber = 0;
+		TransmitTime.MilliSeconds += FrameLength;
 	}
 }

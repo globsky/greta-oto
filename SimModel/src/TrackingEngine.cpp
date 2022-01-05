@@ -56,6 +56,25 @@ const double CTrackingEngine::Boc4PeakValues[160] = {
   0.000000,  0.000000,  0.000000, -0.000000,  0.000000,  0.000000, -0.000000, -0.000000,  0.000000,  0.000000,
 };
 
+const double CTrackingEngine::Boc2PeakValues[160] = {
+  0.588997,  0.588857,  0.588438,  0.587739,  0.586761,  0.585506,  0.583974,  0.582168,  0.580088,  0.577737,
+  0.575118,  0.572233,  0.569085,  0.565677,  0.562013,  0.558096,  0.553932,  0.549524,  0.544877,  0.539997,
+  0.534888,  0.529558,  0.524011,  0.518256,  0.512298,  0.506145,  0.499806,  0.493288,  0.486601,  0.479753,
+  0.472756,  0.465618,  0.458351,  0.450968,  0.443480,  0.435900,  0.428242,  0.420522,  0.412754,  0.404955,
+  0.397143,  0.389336,  0.381555,  0.373819,  0.366151,  0.358574,  0.351114,  0.343796,  0.336647,  0.329914,
+  0.323820,  0.318358,  0.313518,  0.309282,  0.305625,  0.302520,  0.299932,  0.297823,  0.296150,  0.294869,
+  0.293931,  0.293288,  0.292890,  0.292687,  0.292632,  0.292676,  0.292772,  0.292878,  0.292951,  0.292952,
+  0.292844,  0.292592,  0.292164,  0.291533,  0.290670,  0.289553,  0.288160,  0.286472,  0.284473,  0.282149,
+  0.279490,  0.276574,  0.273493,  0.270247,  0.266839,  0.263271,  0.259546,  0.255664,  0.251630,  0.247445,
+  0.243112,  0.238633,  0.234012,  0.229250,  0.224352,  0.219320,  0.214157,  0.208867,  0.203452,  0.197916,
+  0.192263,  0.186496,  0.180619,  0.174635,  0.168549,  0.162364,  0.156085,  0.149715,  0.143260,  0.136723,
+  0.130108,  0.123422,  0.116669,  0.109960,  0.103407,  0.097015,  0.090789,  0.084734,  0.078856,  0.073158,
+  0.067646,  0.062323,  0.057195,  0.052264,  0.047536,  0.043014,  0.038702,  0.034602,  0.030719,  0.027056,
+  0.023614,  0.020398,  0.017410,  0.014652,  0.012126,  0.009835,  0.007779,  0.005962,  0.004384,  0.003047,
+  0.001951,  0.001098,  0.000488,  0.000122,  0.000000,  0.000000,  0.000000,  0.000000,  0.000000,  0.000000,
+  0.000000,  0.000000,  0.000000,  0.000000,  0.000000,  0.000000,  0.000000,  0.000000,  0.000000,  0.000000,
+};
+
 CTrackingEngine::CTrackingEngine()
 {
 	Reset();
@@ -295,6 +314,7 @@ int CTrackingEngine::ProcessData(GNSS_TIME CurTime, PSATELLITE_PARAM SatParam[],
 	SATELLITE_PARAM *pSatParam;
 	int DumpDataI[16], DumpDataQ[16];
 	int CorIndex[16], CorPos[16];
+	int NHCode[16], NHCode2[16];
 	int DataLength;
 	unsigned int CohData;
 	S16 CohDataI, CohDataQ;
@@ -312,10 +332,10 @@ int CTrackingEngine::ProcessData(GNSS_TIME CurTime, PSATELLITE_PARAM SatParam[],
 		pSatParam = FindSatParam(i, SatParam, SatNumber);
 
 		// recalculate corresponding counter of channel
-		if (CalculateCounter(i, CorIndex, CorPos, DataLength))
+		if (CalculateCounter(i, CorIndex, CorPos, NHCode, NHCode2, DataLength))
 			CohDataReady |= EnableMask;
 		// calculate 1ms correlation result
-		GetCorrelationResult(i, CurTime, pSatParam, DumpDataI, DumpDataQ, CorIndex, CorPos, DataLength);
+		GetCorrelationResult(i, CurTime, pSatParam, DumpDataI, DumpDataQ, CorIndex, CorPos, NHCode, NHCode2, DataLength);
 		// do coherent sum
 		for (j = 0; j < DataLength; j ++)
 		{
@@ -370,8 +390,8 @@ SATELLITE_PARAM* CTrackingEngine::FindSatParam(int ChannelId, PSATELLITE_PARAM S
 	switch (SystemSel)
 	{
 	case 0: system = GpsSystem; break;
-	case 1: system = BdsSystem; break;
-	case 2: system = GalileoSystem; break;
+	case 1: system = GalileoSystem; break;
+	case 2: system = BdsSystem; break;
 	case 3: system = GpsSystem; break;
 	default:
 		return (SATELLITE_PARAM *)0;
@@ -385,13 +405,14 @@ SATELLITE_PARAM* CTrackingEngine::FindSatParam(int ChannelId, PSATELLITE_PARAM S
 	return (SATELLITE_PARAM *)0;
 }
 
-void CTrackingEngine::GetCorrelationResult(int ChannelId, GNSS_TIME CurTime, SATELLITE_PARAM *pSatParam, int DumpDataI[], int DumpDataQ[], int CorIndex[], int CorPos[], int DataLength)
+void CTrackingEngine::GetCorrelationResult(int ChannelId, GNSS_TIME CurTime, SATELLITE_PARAM *pSatParam, int DumpDataI[], int DumpDataQ[], int CorIndex[], int CorPos[], int NHCode[], int NHCode2[], int DataLength)
 {
 	int i;
 	double Alpha;
 	double *CovarMatrix;
 	int MaxIndex;
 	complex_number CorResult[16];
+	complex_number Signal, Rotate;
 	double CodeDiff[16];
 	int CorCount = 0, StartIndex = 0;
 	double Doppler1, Doppler2;
@@ -399,12 +420,15 @@ void CTrackingEngine::GetCorrelationResult(int ChannelId, GNSS_TIME CurTime, SAT
 	double CarrierPhase;
 	double Amplitude, PeakPosition, NcoPhase, CorPosition, AmpRatio;
 	GNSS_TIME TransmitTime;
-	int CodeDiffIndex, CodeLength;
-	int FrameNumber, BitNumber, Milliseconds, DataBit;
+	int CodeDiffIndex, CodeLength, FrameLength, BitLength;
+	int FrameNumber, BitNumber, Milliseconds, DataBit, PilotBit;
+	const double *PeakValues;
 
 	// calculate half of 128x code length
 	CodeLength = (ChannelParam[ChannelId].SystemSel == 0) ? 1023 : ((ChannelParam[ChannelId].SystemSel == 1) ? 4092 : 10230);
 	CodeLength *= 64;
+	FrameLength = (ChannelParam[ChannelId].SystemSel == 0) ? 6000 : ((ChannelParam[ChannelId].SystemSel == 1) ? 2000 : 18000);
+	BitLength = (ChannelParam[ChannelId].SystemSel == 0) ? 20 : ((ChannelParam[ChannelId].SystemSel == 1) ? 4 : 10);
 
 	// first generate relative noise
 	if (ChannelParam[ChannelId].NarrowFactor == 1)
@@ -431,6 +455,7 @@ void CTrackingEngine::GetCorrelationResult(int ChannelId, GNSS_TIME CurTime, SAT
 //	memset(CorResult, 0, sizeof(CorResult));
 	if (pSatParam)
 	{
+		PeakValues = (ChannelParam[ChannelId].SystemSel == 0) ? Bpsk4PeakValues : (ChannelParam[ChannelId].EnableBOC ? Boc4PeakValues : Boc2PeakValues);
 		// calculate carrier phase of source signal
 		CarrierPhase = pSatParam->TravelTime * 1575.42e6 - pSatParam->IonoDelay / GPS_L1_WAVELENGTH;
 //		printf("Phase=%.5f", CarrierPhase);
@@ -443,7 +468,7 @@ void CTrackingEngine::GetCorrelationResult(int ChannelId, GNSS_TIME CurTime, SAT
 		CarrierParam[ChannelId].DopplerPrev = CarrierParam[ChannelId].DopplerCur;
 		CarrierParam[ChannelId].DopplerCur = -pSatParam->RelativeSpeed / GPS_L1_WAVELENGTH;
 		CarrierParam[ChannelId].LocalFreqPrev2 = CarrierParam[ChannelId].LocalFreqPrev;
-		CarrierParam[ChannelId].LocalFreqPrev = ChannelParam[ChannelId].CarrierFreq - IF_FREQ;
+		CarrierParam[ChannelId].LocalFreqPrev = ChannelParam[ChannelId].CarrierFreq - (((ChannelParam[ChannelId].SystemSel == 0) || ChannelParam[ChannelId].EnableBOC) ? IF_FREQ : (IF_FREQ + 1023000));
 		CarrierParam[ChannelId].DeltaPhiPrev2 = CarrierParam[ChannelId].DeltaPhiPrev;
 		CarrierParam[ChannelId].DeltaPhiPrev = CarrierParam[ChannelId].DeltaPhiCur;
 		CarrierParam[ChannelId].DeltaPhiCur = (CarrierPhase - ChannelParam[ChannelId].CarrierPhase / 4294967296.);
@@ -451,24 +476,29 @@ void CTrackingEngine::GetCorrelationResult(int ChannelId, GNSS_TIME CurTime, SAT
 		Alpha = ((double)CorPos[0] / ChannelParam[ChannelId].DumpLength / 2);
 		Doppler1 = ((1 - Alpha) * CarrierParam[ChannelId].DopplerPrev2 + (1 + Alpha) * CarrierParam[ChannelId].DopplerPrev) / 2;
 		Doppler2 = ((2 - Alpha) * CarrierParam[ChannelId].DopplerPrev + Alpha * CarrierParam[ChannelId].DopplerCur) / 2;
-		FreqDiff = ((1 - Alpha) * (Doppler1 - CarrierParam[ChannelId].LocalFreqPrev2) + Alpha * (Doppler2 - CarrierParam[ChannelId].LocalFreqPrev)) / 1000.;
+		FreqDiff = ((1 - Alpha) * (Doppler1 - CarrierParam[ChannelId].LocalFreqPrev2) + Alpha * (Doppler2 - CarrierParam[ChannelId].LocalFreqPrev)) / 1000. * PI;
 		Doppler1 = PhaseAverage(CarrierParam[ChannelId].DeltaPhiPrev2, 1 - Alpha, CarrierParam[ChannelId].DeltaPhiPrev, 1 + Alpha) / 2;
 		Doppler2 = PhaseAverage(CarrierParam[ChannelId].DeltaPhiPrev, 2 - Alpha, CarrierParam[ChannelId].DeltaPhiCur, Alpha) / 2;
 		PhaseDiff = PhaseAverage(Doppler1, 1 - Alpha, Doppler2, Alpha);
+		Rotate = complex_number(cos(PhaseDiff * PI2), sin(PhaseDiff * PI2));
 //		printf(" %.5f\n", PhaseDiff);
 		// calculate signal amplitude
 		Amplitude = 1.4142135 * pow(10, (pSatParam->CN0 - 3000) / 2000.) * NOISE_AMP;
-		Amplitude *= (FreqDiff > 1e-3) ? (sin(FreqDiff) / FreqDiff) : 1.0;
+		Amplitude *= (fabs(FreqDiff) > 1e-3) ? (sin(FreqDiff) / FreqDiff) : 1.0;
 		TransmitTime = GetTransmitTime(CurTime, pSatParam->TravelTime + pSatParam->IonoDelay / LIGHT_SPEED + 0.001);	// add one extra millisecond to get previous finished millisecond
-		FrameNumber = TransmitTime.MilliSeconds / 6000;
-		BitNumber = (TransmitTime.MilliSeconds % 6000) / 20;
-		Milliseconds = TransmitTime.MilliSeconds % 20;
+		FrameNumber = TransmitTime.MilliSeconds / FrameLength;
+		BitNumber = (TransmitTime.MilliSeconds % FrameLength) / BitLength;
+		Milliseconds = TransmitTime.MilliSeconds % BitLength;
 		if (FrameNumber != ChannelParam[ChannelId].CurrentFrame)
 		{
-			NavData->GetFrameData(TransmitTime, ChannelParam[ChannelId].Svid, ChannelParam[ChannelId].Bits);
+			NavData[ChannelParam[ChannelId].SystemSel]->GetFrameData(TransmitTime, ChannelParam[ChannelId].Svid, 0, ChannelParam[ChannelId].PilotBits);
+			if (ChannelParam[ChannelId].SystemSel == 0)
+				memcpy(ChannelParam[ChannelId].DataBits, ChannelParam[ChannelId].PilotBits, sizeof(int) * 300);	// GPS L1 uses same bit stream for data and pilot
+			else
+				NavData[ChannelParam[ChannelId].SystemSel]->GetFrameData(TransmitTime, ChannelParam[ChannelId].Svid, 1, ChannelParam[ChannelId].DataBits);
 			ChannelParam[ChannelId].CurrentFrame = FrameNumber;
 		}
-		PeakPosition = TransmitTime.SubMilliSeconds * 2046;
+		PeakPosition = (((ChannelParam[ChannelId].SystemSel == 0) ? 0 : Milliseconds) + TransmitTime.SubMilliSeconds) * 2046;
 		NcoPhase = (double)ChannelParam[ChannelId].CodePhase / 4294967296.;
 		// calculate code difference for each correlator and add narrow correlator compensation
 		for (i = 0; i < DataLength; i ++)
@@ -479,13 +509,15 @@ void CTrackingEngine::GetCorrelationResult(int ChannelId, GNSS_TIME CurTime, SAT
 			CodeDiff[i] = fabs(CorPosition - PeakPosition) * 64;
 		}
 		// calculate 1ms correlation value
-		DataBit = ChannelParam[ChannelId].CurrentBit;	// if current correlator dump not finished, use CurrentBit
+		DataBit = ChannelParam[ChannelId].CurrentDataBit;	// if current correlator dump not finished, use CurrentDataBit
+		PilotBit = ChannelParam[ChannelId].CurrentPilotBit;	// if current correlator dump not finished, use CurrentPilotBit
 		for (i = 0; i < DataLength; i ++)
 		{
 			if ((CorIndex[i] >> 2) == 0)	// new correlator dump uses new bit
 			{
-				ChannelParam[ChannelId].CurrentBit = DataBit = ChannelParam[ChannelId].Bits[BitNumber];
-				BitNumber += (Milliseconds + 1) / 20;	// if there will be next Cor0, check whether next milliseconds move to next bit
+				ChannelParam[ChannelId].CurrentDataBit  = DataBit  = ChannelParam[ChannelId].DataBits[BitNumber];
+				ChannelParam[ChannelId].CurrentPilotBit = PilotBit = ChannelParam[ChannelId].PilotBits[BitNumber];
+				BitNumber += (Milliseconds + 1) / BitLength;	// if there will be next Cor0, check whether next milliseconds move to next bit
 			}
 			if (CodeDiff[i] > CodeLength)	// CodeDiff may be one whole code round difference
 				CodeDiff[i] = fabs(CodeDiff[i] - (CodeLength * 2));
@@ -495,8 +527,28 @@ void CTrackingEngine::GetCorrelationResult(int ChannelId, GNSS_TIME CurTime, SAT
 			{
 				AmpRatio = Bpsk4PeakValues[CodeDiffIndex];
 				AmpRatio += (Bpsk4PeakValues[CodeDiffIndex+1] - Bpsk4PeakValues[CodeDiffIndex]) * CodeDiff[i];
-				AmpRatio = DataBit ? -AmpRatio : AmpRatio;
-				CorResult[i] += (complex_number(Amplitude * AmpRatio, 0) * complex_number(cos(PhaseDiff * PI2), sin(PhaseDiff * PI2)));
+				if (((CorIndex[i] >> 2) == 0) && ChannelParam[ChannelId].EnableSecondPrn)
+				{
+					AmpRatio = (DataBit ^ NHCode2[i]) ? -AmpRatio : AmpRatio;
+					if (ChannelParam[ChannelId].SystemSel == 1)	// E1B, -sqrt(1/2) in amplitude
+						AmpRatio *= -0.7071067811865475244;
+					else if (ChannelParam[ChannelId].SystemSel >= 2)	// B1C/L1C, 1/2 in amplitude
+						AmpRatio *= 0.5;
+					if (ChannelParam[ChannelId].SystemSel == 2)	// B1C lag PI/2 phase to pilot
+						Signal = complex_number(0, -Amplitude * AmpRatio);
+					else
+						Signal = complex_number(Amplitude * AmpRatio, 0);
+				}
+				else
+				{
+					AmpRatio = (PilotBit ^ NHCode[i]) ? -AmpRatio : AmpRatio;
+					if (ChannelParam[ChannelId].SystemSel == 1)	// E1C BOC(1,1), sqrt(5/11) in amplitude
+						AmpRatio *= 0.6741998624632421;
+					else if (ChannelParam[ChannelId].SystemSel >= 2)	// B1C/L1C, sqrt(29/44) in amplitude
+						AmpRatio *= 0.811844140885988713377;
+					Signal = complex_number(Amplitude * AmpRatio, 0);
+				}
+				CorResult[i] += Signal * Rotate;
 //				if ((CorIndex[i] >> 2) == 4)
 //					printf("Cor=%f %f %f\n", Amplitude * AmpRatio, CorResult[i].real, CorResult[i].imag);
 			}
@@ -509,7 +561,7 @@ void CTrackingEngine::GetCorrelationResult(int ChannelId, GNSS_TIME CurTime, SAT
 	}
 }
 
-int CTrackingEngine::CalculateCounter(int ChannelId, int CorIndex[], int CorPos[], int &DataLength)
+int CTrackingEngine::CalculateCounter(int ChannelId, int CorIndex[], int CorPos[], int NHCode[], int NHCode2[], int &DataLength)
 {
 	int i;
 	U64 Count;
@@ -517,8 +569,8 @@ int CTrackingEngine::CalculateCounter(int ChannelId, int CorIndex[], int CorPos[
 	int PrnCount2x;	// 2 times of PrnCount
 	int DumpLength2x = ChannelParam[ChannelId].DumpLength * 2;	// 2 times of DumpLength
 	int CodeLength = (ChannelParam[ChannelId].SystemSel == 0) ? 1023 : ((ChannelParam[ChannelId].SystemSel == 0) ? 4092 : 10230);
-	int DumpIncrease, CodeRound, DumpRemnant;
-	int NewCoh = 0;
+	int DumpIncrease, CodeRound, DumpRemnant, CorPosition, CorPositionPrev;
+	int NewCoh, DumpRound;
 	unsigned int *ChannelBuffer = TEBuffer + ChannelId * 32;
 	int OverwriteProtect = 0;
 	int FirstCor = -1;
@@ -542,13 +594,20 @@ int CTrackingEngine::CalculateCounter(int ChannelId, int CorIndex[], int CorPos[
 	// determine remnant correlator to dump before increase DumpCount
 	DataLength = 0;
 	DumpRemnant = ChannelParam[ChannelId].DumpCount * 2 + ChannelParam[ChannelId].CodeSubPhase;	// previous remnant 1/2 chip after dumping
+	CorPosition = ChannelParam[ChannelId].PrnCount * 2 + ChannelParam[ChannelId].CodeSubPhase;	// code position with unit of 1/2 chip
 	if (DumpRemnant < 7)	// need to complete remaining correlation result
 	{
+		CorPositionPrev = CorPosition - DumpLength2x;	// start code position of previous finished dump block
+		if (CorPositionPrev < 0)
+			CorPositionPrev += CodeLength * 2;
 		FirstCor = DumpRemnant + 1;
 		for (i = DumpRemnant + 1; i < 8; i ++)
 		{
-			CorPos[DataLength] = DumpRemnant - i;
-			CorIndex[DataLength++] = (i << 2) + (ChannelParam[ChannelId].CoherentCount == 0 ? 1 : 0);
+			CorPos[DataLength] = CorPosition - i;
+			CorIndex[DataLength] = (i << 2) + (ChannelParam[ChannelId].CoherentCount == 0 ? 1 : 0);
+			NHCode[DataLength] = ChannelParam[ChannelId].CurrentNHCode;
+			NHCode2[DataLength] = ChannelParam[ChannelId].CurrentNHCode2;
+			DataLength ++;
 		}
 		ChannelParam[ChannelId].CoherentDone |= (ChannelParam[ChannelId].CoherentCount == ChannelParam[ChannelId].CoherentNumber - 1) ? 1 : 0;
 		ChannelParam[ChannelId].CoherentCount ++;
@@ -563,38 +622,39 @@ int CTrackingEngine::CalculateCounter(int ChannelId, int CorIndex[], int CorPos[
 	DumpIncrease = PrnCount2x / 2 - ChannelParam[ChannelId].PrnCount;
 	ChannelParam[ChannelId].CodeSubPhase = PrnCount2x & 1;
 	ChannelParam[ChannelId].PrnCount = PrnCount2x / 2;
-	CodeRound = ChannelParam[ChannelId].PrnCount / CodeLength;
+	CodeRound = (ChannelParam[ChannelId].PrnCount < CodeLength) ? 0 : (ChannelParam[ChannelId].PrnCount - CodeLength) / ChannelParam[ChannelId].DumpLength + 1; // 0: no next code round finish, 1: code finish on first dump, 2: code finish on second dump
 	ChannelParam[ChannelId].PrnCount %= CodeLength;
 
 	// DumpCount and NHCount align with first correlator
 	ChannelParam[ChannelId].DumpCount += DumpIncrease;
 	NewCoh = ChannelParam[ChannelId].DumpCount / ChannelParam[ChannelId].DumpLength;
 	ChannelParam[ChannelId].DumpCount %= ChannelParam[ChannelId].DumpLength;
-	if (ChannelParam[ChannelId].NHLength)
-	{
-		ChannelParam[ChannelId].NHCount += CodeRound;
-		ChannelParam[ChannelId].NHCount %= ChannelParam[ChannelId].NHLength;
-	}
 
 	// determine remnant correlator to dump after increase DumpCount
 	DumpRemnant = ChannelParam[ChannelId].DumpCount * 2 + ChannelParam[ChannelId].CodeSubPhase;	// previous remnant 1/2 chip after dumping
-	if (NewCoh == 2)
-		NewCoh = NewCoh;
-	while (NewCoh)
+	for (DumpRound = 1; DumpRound <= NewCoh; DumpRound ++)
 	{
 		for (i = 0; i < 8; i ++)
 		{
-			if (i > DumpRemnant && NewCoh == 1)
+			if (i > DumpRemnant && DumpRound == NewCoh)
 				break;
 			if (FirstCor == i && ChannelParam[ChannelId].CoherentCount == 0)
 				OverwriteProtect = 2;
-			CorPos[DataLength] = DumpRemnant - i;
-			CorIndex[DataLength++] = (i << 2) + (ChannelParam[ChannelId].CoherentCount == 0 ? 1 : 0) + OverwriteProtect;
+			CorPos[DataLength] = ((i == 0) && ChannelParam[ChannelId].EnableSecondPrn) ? CorPosition - 4 : CorPosition - i;		// if Cor0 uses secondary PRN, has extra 4 1/2 chip delay
+			CorIndex[DataLength] = (i << 2) + (ChannelParam[ChannelId].CoherentCount == 0 ? 1 : 0) + OverwriteProtect;
+			// first correlator uses NH code at NHCount position, others uses the same as previous correlator
+			NHCode[DataLength] = (i == 0) ? (ChannelParam[ChannelId].NHLength ? ((ChannelParam[ChannelId].NHCode & (1 << ChannelParam[ChannelId].NHCount)) ? 1 : 0) : 0) : NHCode[DataLength-1];
+			NHCode2[DataLength] = (i == 0) ? (ChannelParam[ChannelId].NHLength ? ((ChannelParam[ChannelId].NHCode2 & (1 << ChannelParam[ChannelId].NHCount)) ? 1 : 0) : 0) : NHCode2[DataLength-1];
+			DataLength ++;
 			ChannelParam[ChannelId].CoherentDone |= (ChannelParam[ChannelId].CoherentCount == ChannelParam[ChannelId].CoherentNumber - 1) ? 1 : 0;
+			if (ChannelParam[ChannelId].NHLength && (i == 0) && DumpRound == CodeRound)	// NHCount increase with firse correlator
+			{
+				ChannelParam[ChannelId].NHCount ++;
+				ChannelParam[ChannelId].NHCount %= ChannelParam[ChannelId].NHLength;
+			}
 		}
 		if (FirstCor < 0)
 			FirstCor = 0;
-		NewCoh --;
 		if (i == 8)	// last correlator dumped
 		{
 			ChannelParam[ChannelId].CoherentCount ++;
@@ -602,8 +662,12 @@ int CTrackingEngine::CalculateCounter(int ChannelId, int CorIndex[], int CorPos[
 				ChannelParam[ChannelId].CoherentCount %= ChannelParam[ChannelId].CoherentNumber;
 		}
 	}
-	if (DataLength > 8)
-		DataLength = DataLength;
+	// save lastest used NH code
+	ChannelParam[ChannelId].CurrentNHCode = NHCode[DataLength-1];
+	ChannelParam[ChannelId].CurrentNHCode2 = NHCode2[DataLength-1];
+
+//	if (DataLength > 8)
+//		DataLength = DataLength;
 
 	return ChannelParam[ChannelId].CoherentDone;
 }
@@ -612,19 +676,24 @@ void CTrackingEngine::InitChannel(int ChannelId, GNSS_TIME CurTime, PSATELLITE_P
 {
 	SATELLITE_PARAM *pSatParam;
 	GNSS_TIME TransmitTime;
+	int FrameLength = (ChannelParam[ChannelId].SystemSel == 0) ? 6000 : ((ChannelParam[ChannelId].SystemSel == 1) ? 2000 : 18000);
 
 	pSatParam = FindSatParam(ChannelId, SatParam, SatNumber);
 	if (!pSatParam)
 		return;
 	// initial structure to calculate FreqDiff and PhaseDiff
 	CarrierParam[ChannelId].DopplerPrev2 = CarrierParam[ChannelId].DopplerPrev = CarrierParam[ChannelId].DopplerCur = -pSatParam->RelativeSpeed / GPS_L1_WAVELENGTH;
-	CarrierParam[ChannelId].LocalFreqPrev2 = CarrierParam[ChannelId].LocalFreqPrev = ChannelParam[ChannelId].CarrierFreq - IF_FREQ;
+	CarrierParam[ChannelId].LocalFreqPrev2 = CarrierParam[ChannelId].LocalFreqPrev = ChannelParam[ChannelId].CarrierFreq - (((ChannelParam[ChannelId].SystemSel == 0) || ChannelParam[ChannelId].EnableBOC) ? IF_FREQ : (IF_FREQ + 1023000));
 	// initial modulation bit and counter
 	TransmitTime = GetTransmitTime(CurTime, pSatParam->TravelTime + pSatParam->IonoDelay / LIGHT_SPEED);
 	TransmitTime.MilliSeconds ++;	// correlation result will be calculated from next millisecond
-	ChannelParam[ChannelId].CurrentFrame = TransmitTime.MilliSeconds / 6000;	// frame number
-	ChannelParam[ChannelId].CurrentBit = 0;
-	NavData->GetFrameData(TransmitTime, ChannelParam[ChannelId].Svid, ChannelParam[ChannelId].Bits);
+	ChannelParam[ChannelId].CurrentFrame = TransmitTime.MilliSeconds / FrameLength;	// frame number
+	ChannelParam[ChannelId].CurrentDataBit = ChannelParam[ChannelId].CurrentPilotBit = 0;
+	NavData[ChannelParam[ChannelId].SystemSel]->GetFrameData(TransmitTime, ChannelParam[ChannelId].Svid, 0, ChannelParam[ChannelId].PilotBits);
+	if (ChannelParam[ChannelId].SystemSel == 0)
+		memcpy(ChannelParam[ChannelId].DataBits, ChannelParam[ChannelId].PilotBits, sizeof(int) * 300);	// GPS L1 uses same bit stream for data and pilot
+	else
+		NavData[ChannelParam[ChannelId].SystemSel]->GetFrameData(TransmitTime, ChannelParam[ChannelId].Svid, 1, ChannelParam[ChannelId].DataBits);
 }
 
 double CTrackingEngine::NarrowCompensation(int CorIndex, int NarrowFactor)

@@ -42,8 +42,8 @@ void DebugOutput(void *DebugParam, int DebugValue)
 
 	if (!DebugFile)
 		return;
-	if ((DebugValue % 100) != 0 && !(DebugValue >= 29000 && DebugValue <= 30100))
-		return;
+//	if ((DebugValue % 100) != 0 && !(DebugValue >= 29000 && DebugValue <= 30100))
+//		return;
 	fprintf(DebugFile, "Time %6d\n", DebugValue);
 	for (i = 0, EnableMask = 1; i < 32; i ++, EnableMask <<= 1)
 	{
@@ -58,8 +58,12 @@ void DebugOutput(void *DebugParam, int DebugValue)
 			CarrierPhase -= (int)CarrierPhase;
 			CarrierPhase = 1 - CarrierPhase;
 			Doppler = -pSatParam->RelativeSpeed / GPS_L1_WAVELENGTH;
-			TransmitTime = GetTransmitTime(GnssTop->CurTime, pSatParam->TravelTime + pSatParam->IonoDelay / LIGHT_SPEED + 0.001);	// add one extra millisecond to get previous finished millisecond
+			TransmitTime = GetTransmitTime(GnssTop->CurTime, pSatParam->TravelTime + pSatParam->IonoDelay / LIGHT_SPEED);	// add one extra millisecond to get previous finished millisecond
 			PeakPosition = TransmitTime.SubMilliSeconds * 2046;
+			if (ChannelParam->SystemSel == 1)	// Galileo E1
+				PeakPosition += (TransmitTime.MilliSeconds % 4) * 2046;
+			else if (ChannelParam->SystemSel >= 2)	// B1C or L1C
+				PeakPosition += (TransmitTime.MilliSeconds % 10) * 2046;
 			LocalPhase = ChannelParam->CarrierPhase / 4294967296.;
 			LocalDoppler = ChannelParam->CarrierFreq - IF_FREQ;
 			PrnCount2x = ChannelParam->PrnCount * 2 + ChannelParam->CodeSubPhase - 4;
@@ -71,7 +75,7 @@ void DebugOutput(void *DebugParam, int DebugValue)
 				PhaseDiff -= 1.0;
 			DopplerDiff = LocalDoppler - Doppler;
 			CodeDiff = CodePhase - PeakPosition;
-			fprintf(DebugFile, "%c%02d %8.6f %9.3f %8.3f %8.6f %9.3f %8.3f %9.6f %8.3f %8.3f\n", (pSatParam->system == GpsSystem) ? 'G' : (pSatParam->system == BdsSystem) ? 'B' : 'E',
+			fprintf(DebugFile, "%c%02d %8.6f %9.3f %8.3f %8.6f %9.3f %8.3f %9.6f %8.3f %8.3f\n", (pSatParam->system == GpsSystem) ? 'G' : (pSatParam->system == BdsSystem) ? 'C' : 'E',
 				pSatParam->svid, CarrierPhase, Doppler, PeakPosition, LocalPhase, LocalDoppler, CodePhase, PhaseDiff, DopplerDiff, CodeDiff);
 		}
 	}

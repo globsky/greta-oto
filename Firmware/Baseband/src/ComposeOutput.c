@@ -26,13 +26,20 @@ int MeasPrintTask(void *Param)
 	{
 		if ((MeasParam->MeasMask & ChannelMask) == 0)
 			continue;
-		WordNumber = (Msr[i].DataNumber + 31) / 32;
+		if ((Msr[i].State & DATA_STREAM_MASK) == DATA_STREAM_1BIT)
+			WordNumber = (Msr[i].DataNumber + 31) / 32;
+		else if ((Msr[i].State & DATA_STREAM_MASK) == DATA_STREAM_4BIT)
+			WordNumber = (Msr[i].DataNumber + 7) / 8;
+		else if ((Msr[i].State & DATA_STREAM_MASK) == DATA_STREAM_8BIT)
+			WordNumber = (Msr[i].DataNumber + 3) / 4;
+		else
+			WordNumber = 0;
 		printf("$PBMSR,%2d,%2d,%2d,%10u,%10u,%10u,%5d,%10u,%10u,%5d,%8x,%3d,%4d,%8u\n",
 			Msr[i].LogicChannel, Msr[i].Svid, Msr[i].FreqID, Msr[i].CarrierFreq, Msr[i].CarrierNCO, Msr[i].CarrierCount,
 			Msr[i].CodeFreq, Msr[i].CodeCount, Msr[i].CodeNCO, 2046, Msr[i].State, Msr[i].LockIndicator, Msr[i].CN0, Msr[i].TrackingTime);
 		if (WordNumber > 0)
 		{
-			printf("$PDATA,%d", Msr[i].DataNumber);
+			printf("$PDATA,%d,%d", Msr[i].DataNumber, Msr[i].FrameIndex);
 			for (j = 0; j < WordNumber; j ++)
 				printf(",%08x", Msr[i].DataStreamAddr[j]);
 			printf("\n");

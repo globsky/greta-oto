@@ -8,6 +8,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include "ConstTable.h"
 #include "HWCtrl.h"
 #include "ChannelManager.h"
 
@@ -15,6 +16,7 @@
 #define C2 (2<<16)
 #define C3 (3<<16)
 
+// in order to have stage switch at correct data edge, positive Timeout value should be multiple of 20
 static TRACKING_CONFIG TrackingConfigTable[] = {
 // Coh FFT NonCoh Narrow Post  BnPLL   BnFLL   BnDLL  Timeout
  {  1,  5,   2,      0,    1,      0,  80|C2,  80|C2,   200,},	// 0 for pull-in
@@ -22,16 +24,20 @@ static TRACKING_CONFIG TrackingConfigTable[] = {
  {  5,  1,   4,      0,    2, 320|C2,   0|C2,  80|C2,  5000,},	// 2 for GPS L1 track 0
  { 20,  1,   4,      0,    3, 240|C2,   0|C2,  40|C2,    -1,},	// 3 for GPS L1 track 1
  {  4,  5,  16,      0,    3,   0|C2,  80|C2,  40|C2,    -1,},	// 4 for GPS L1 track 2
+ {  5,  1,   4,      0,    2, 320|C2,   0|C2,  80|C2,    -1,},	// 5 for BDS B1C track 0
+ { 10,  1,   4,      0,    3, 240|C2,   0|C2,  40|C2,    -1,},	// 6 for BDS B1C track 1
 };
 
 PTRACKING_CONFIG TrackingConfig[][4] = {	// pointer to TrackingConfigTable for different stage and different signal
-	&TrackingConfigTable[0], &TrackingConfigTable[0], &TrackingConfigTable[0], &TrackingConfigTable[0],
-	&TrackingConfigTable[1], &TrackingConfigTable[1], &TrackingConfigTable[1], &TrackingConfigTable[1],
-	&TrackingConfigTable[2], &TrackingConfigTable[2], &TrackingConfigTable[2], &TrackingConfigTable[2],
-	&TrackingConfigTable[3], &TrackingConfigTable[3], &TrackingConfigTable[3], &TrackingConfigTable[3],
+	&TrackingConfigTable[0], &TrackingConfigTable[0], &TrackingConfigTable[0], &TrackingConfigTable[0],	// pull-in
+	&TrackingConfigTable[1], &TrackingConfigTable[1], &TrackingConfigTable[1], &TrackingConfigTable[1],	// tracking hold
+	&TrackingConfigTable[2], &TrackingConfigTable[2], &TrackingConfigTable[5], &TrackingConfigTable[2],	// track 0
+	&TrackingConfigTable[3], &TrackingConfigTable[3], &TrackingConfigTable[6], &TrackingConfigTable[3],	// track 1
+	&TrackingConfigTable[4], &TrackingConfigTable[4], &TrackingConfigTable[4], &TrackingConfigTable[4],	// track 2
 };
 
 void CalculateLoopCoefficients(PCHANNEL_STATE ChannelState, PTRACKING_CONFIG CurTrackingConfig);
+void SetNHConfig(PCHANNEL_STATE ChannelState, int NHPos, const unsigned int *NHCode);
 
 //*************** Switch tracking stage of a tracking channel ****************
 // Parameters:
@@ -52,12 +58,6 @@ void SwitchTrackingStage(PCHANNEL_STATE ChannelState, unsigned int TrackingStage
 	if (TrackingStage == STAGE_BIT_SYNC)
 	{
 		ChannelState->TrackingTimeout = 1500;	// timeout for bit sync not success
-		// reset data for bit sync
-		ChannelState->BitSyncData.CorDataCount = 0;
-		ChannelState->BitSyncData.ChannelState = ChannelState;
-		ChannelState->BitSyncData.PrevCorData = 0;	// clear previous correlation result for first round
-		memset(ChannelState->ToggleCount, 0, sizeof(ChannelState->ToggleCount));
-		ChannelState->BitSyncResult = 0;
 		return;
 	}
 
@@ -108,7 +108,7 @@ int StageDetermination(PCHANNEL_STATE ChannelState)
 {
 	int TrackingStage = ChannelState->State & STAGE_MASK;
 	int Time, Jump;
-	unsigned int DumpCount;
+	unsigned int StateValue;
 
 	// determine stage switch cases before timeout
 	if (TrackingStage == STAGE_BIT_SYNC && ChannelState->BitSyncResult)	// bit sync finished
@@ -134,6 +134,31 @@ int StageDetermination(PCHANNEL_STATE ChannelState)
 		}
 	}
 
+	if (FREQ_ID_IS_B1C_L1C(ChannelState->FreqID) && ChannelState->BitSyncResult >= 2000 && (ChannelState->TrackingTime % 20) == 0)	// data sync finished and at 20ms boundary
+	{
+		// switch to decode data channel
+		STATE_BUF_ENABLE_PRN2(&(ChannelState->StateBufferCache));
+		ChannelState->State |= (DATA_STREAM_PRN2 | NH_SEGMENT_UPDATE);
+		Time = ChannelState->BitSyncResult - 2000;
+		// if negative stream, rotate phase by PI
+		if (ChannelState->BitSyncResult >= 4000)
+		{
+			StateValue = GetRegValue((U32)(&(ChannelState->StateBufferHW->CarrierPhase)));
+			StateValue ^= 0x80000000;
+			SetRegValue((U32)(&(ChannelState->StateBufferHW->CarrierPhase)), StateValue);
+			Time -= 2000;
+		}
+		// enable NH
+		Time += ChannelState->TrackingTime / 10;
+		Time %= 1800;	// determine bit position at current time
+		ChannelState->FrameCounter = Time;
+		SetNHConfig(ChannelState, Time, B1CSecondCode[ChannelState->Svid-1]);
+		// switch to track 1 and set STATE_CACHE_CONFIG_DIRTY
+		SwitchTrackingStage(ChannelState,  STAGE_TRACK + 1);
+		ChannelState->BitSyncResult = 0;
+		ChannelState->DataStream.DataCount = ChannelState->DataStream.CurrentAccTime = 0;	// reset data count for data stream decode
+	}
+
 	// switch out from hold
 	if (TrackingStage == STAGE_HOLD3 && ChannelState->FftCount == 0 && ChannelState->NonCohCount == 0)
 	{
@@ -154,9 +179,9 @@ int StageDetermination(PCHANNEL_STATE ChannelState)
 			if (ChannelState->CodeSearchCount == 5)
 				ChannelState->CodeSearchCount = 0;
 			Jump *= 7;
-			DumpCount = GetRegValue((U32)(&(ChannelState->StateBufferHW->DumpCount)));
-			DumpCount |= (Jump & 0xff) << 8;
-			SetRegValue((U32)(&(ChannelState->StateBufferHW->DumpCount)),  DumpCount);
+			StateValue = GetRegValue((U32)(&(ChannelState->StateBufferHW->DumpCount)));
+			StateValue |= (Jump & 0xff) << 8;
+			SetRegValue((U32)(&(ChannelState->StateBufferHW->DumpCount)),  StateValue);
 		}
 	}
 
@@ -183,7 +208,16 @@ int StageDetermination(PCHANNEL_STATE ChannelState)
 		return 0;
 	if (TrackingStage == STAGE_PULL_IN)
 	{
-		SwitchTrackingStage(ChannelState, STAGE_BIT_SYNC);
+		// reset data for bit/frame sync
+		ChannelState->BitSyncData.CorDataCount = 0;
+		ChannelState->BitSyncData.ChannelState = ChannelState;
+		ChannelState->BitSyncData.PrevCorData = 0;	// clear previous correlation result for first round
+		memset(ChannelState->ToggleCount, 0, sizeof(ChannelState->ToggleCount));
+		ChannelState->BitSyncResult = 0;
+		if (FREQ_ID_IS_L1CA(ChannelState->FreqID))	// L1C/A need to do bit sync
+			SwitchTrackingStage(ChannelState, STAGE_BIT_SYNC);
+		else	// other signal switch to track 0
+			SwitchTrackingStage(ChannelState, STAGE_TRACK);
 	}
 	else if (TrackingStage == STAGE_HOLD3)
 	{
@@ -191,7 +225,20 @@ int StageDetermination(PCHANNEL_STATE ChannelState)
 	}
 	else if (TrackingStage >= STAGE_TRACK)
 	{
-		SwitchTrackingStage(ChannelState, (ChannelState->CN0 > 2500) ? STAGE_TRACK + 1 : STAGE_TRACK + 2);
+		if (ChannelState->CN0 > 2500)	// strong signal switch to track 1
+		{
+			SwitchTrackingStage(ChannelState,  STAGE_TRACK + 1);
+			// if previous decoded acc data sign and symbol not consistent, rotate phase by PI
+			// in track 1 stage, will use acc data to determine symbol
+			if (((ChannelState->DataStream.PrevReal >> 31) & 1) ^ ChannelState->DataStream.PrevSymbol)
+			{
+				StateValue = GetRegValue((U32)(&(ChannelState->StateBufferHW->CarrierPhase)));
+				StateValue ^= 0x80000000;
+				SetRegValue((U32)(&(ChannelState->StateBufferHW->CarrierPhase)),  StateValue);
+			}
+		}
+		else	// weak signal switch to track 2
+			SwitchTrackingStage(ChannelState,  STAGE_TRACK + 2);
 	}
 	return 1;
 }

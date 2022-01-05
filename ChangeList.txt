@@ -60,3 +60,13 @@
 		Add example of main function for simulation on C model and SimModel
 	Bug fix
 		Change LoseLockCounter update method to avoid reacquisition error
+1/5/2022
+	Function and feature added
+		Add support for signals other than L1C/A in acquisition engine simulation model
+		Add B1C signal support in simulation model
+		Add NH code strip in TE simulation model
+		Add B1C signal acquisition, pull-in, tracking stages in firmware
+		Add B1C pilot secondary code synchronization and data stream decode
+		L1C/A stream decode using sign of accumulation result instread of determine toggle in track 1
+	Bug fix
+		Fix bug in calculation of amplitude fade using frequency difference

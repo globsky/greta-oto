@@ -59,8 +59,12 @@ struct ChannelConfig
 	// variable to get modulation bit
 	int CurrentFrame;	// frame number of data stream filling in Bits
 	int CurrentBitIndex;	// bit index used for current ms correlation result
-	int CurrentBit;		// modulation bit for current outputing correlation result (if not all correlator finished)
-	int Bits[1800];
+	int CurrentDataBit;		// modulation bit for current outputing correlation result (if not all correlator finished)
+	int CurrentPilotBit;	// modulation bit for current outputing correlation result (if not all correlator finished)
+	int CurrentNHCode;		// latest NH bit for pilot channel
+	int CurrentNHCode2;		// latest NH bit for data channel
+	int DataBits[1800];
+	int PilotBits[1800];
 };
 
 struct CarrierParameter
@@ -78,7 +82,7 @@ public:
 	void Reset();
 	void SetRegValue(int Address, U32 Value);
 	U32 GetRegValue(int Address);
-	void SetNavBit(NavBit *pNavBit) { NavData = pNavBit; }
+	void SetNavBit(NavBit *pNavBit[]) { NavData = pNavBit; }
 
 	U32 ChannelEnable;				// 32bit
 	U32 CohDataReady;				// 32bit
@@ -93,17 +97,18 @@ public:
 
 	static const double Bpsk4PeakValues[160];
 	static const double Boc4PeakValues[160];
+	static const double Boc2PeakValues[160];
 
 	int FindSvid(unsigned int ConfigArray[], int ArraySize, U32 PrnConfig);
 	SATELLITE_PARAM* FindSatParam(int ChannelId, PSATELLITE_PARAM SatParam[], int SatNumber);
-	void GetCorrelationResult(int ChannelId, GNSS_TIME CurTime, SATELLITE_PARAM *pSatParam, int DumpDataI[], int DumpDataQ[], int CorIndex[], int CorPos[], int DataLength);
-	int CalculateCounter(int ChannelId, int CorIndex[], int CorPos[], int &DataLength);
+	void GetCorrelationResult(int ChannelId, GNSS_TIME CurTime, SATELLITE_PARAM *pSatParam, int DumpDataI[], int DumpDataQ[], int CorIndex[], int CorPos[], int NHCode[], int NHCode2[], int DataLength);
+	int CalculateCounter(int ChannelId, int CorIndex[], int CorPos[], int NHCode[], int NHCode2[], int &DataLength);
 	void InitChannel(int ChannelId, GNSS_TIME CurTime, PSATELLITE_PARAM SatParam[], int SatNumber);
 	double NarrowCompensation(int CorIndex, int NarrowFactor);
 	double PhaseAverage(double Phase1, double Ratio1, double Phase2, double Ratio2);
 
 	unsigned int TEBuffer[TE_BUFFER_SIZE/4];
-	NavBit *NavData;
+	NavBit **NavData;
 	ChannelConfig ChannelParam[LOGICAL_CHANNEL_NUMBER];
 	CarrierParameter CarrierParam[LOGICAL_CHANNEL_NUMBER];
 	double CovarMatrix2[SUM_N(COR_NUMBER)], CovarMatrix4[SUM_N(COR_NUMBER)], CovarMatrix8[SUM_N(COR_NUMBER)];

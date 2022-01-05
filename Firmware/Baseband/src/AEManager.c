@@ -26,7 +26,7 @@ int AcquisitionTask(void *Param)
 	int DftFreq = (AcqConfig->StrideInterval << 10) / 1000;
 	unsigned int ConfigData[4];
 
-	ConfigData[0] = 0x04000000 | (AcqConfig->NoncohNumber << 16) | (AcqConfig->CohNumber << 8) | AcqConfig->StrideNumber;	// threshold: 100
+	ConfigData[0] = 0x04000000 | (AcqConfig->NoncohNumber << 16) | (AcqConfig->CohNumber << 8) | AcqConfig->StrideNumber;	// threshold: 3'b100
 	ConfigData[3]= AE_STRIDE_INTERVAL(AcqConfig->StrideInterval);
 	for (i = 0; i < AcqConfig->AcqChNumber; i ++)
 	{
@@ -103,8 +103,8 @@ int ProcessAcqResult(void *Param)
 		Doppler = AcqConfig->SatConfig[i].CenterFreq + (Doppler * 2 - 7) * AcqConfig->StrideInterval / 16;
 		if ((NewChannel = GetAvailableChannel()) != NULL)
 		{
-			NewChannel->FreqID = (AcqConfig->SatConfig[i].FreqSvid >> 6);
-			NewChannel->Svid = AcqConfig->SatConfig[i].FreqSvid & 0x3f;
+			NewChannel->FreqID = GET_FREQ_ID(AcqConfig->SatConfig[i].FreqSvid);
+			NewChannel->Svid = GET_SVID(AcqConfig->SatConfig[i].FreqSvid);
 			InitChannel(NewChannel);
 			ConfigChannel(NewChannel, Doppler, CodePhase);
 		}

@@ -19,6 +19,10 @@
 CGnssTop::CGnssTop()
 {
 	InterruptService = (InterruptFunction)0;
+	NavBitArray[0] = &GpsBits;	// for GPS L1C/A
+	NavBitArray[1] = &GpsBits;	// for Galileo E1
+	NavBitArray[2] = &BdsBits;	// for BDS B1C
+	NavBitArray[3] = &GpsBits;	// for GPS L1C
 }
 
 CGnssTop::~CGnssTop()
@@ -78,7 +82,7 @@ void CGnssTop::SetRegValue(int Address, U32 Value)
 		AcqEngine.SetRegValue(AddressOffset, Value);
 		if (AddressOffset == ADDR_OFFSET_AE_BUFFER_CONTROL && (Value & 0x100))	// latch write address when starting fill AE buffer
 		{
-			AcqEngine.SetBufferParam(SatParamList, TotalSatNumber, CurTime, &GpsBits);	// set AE buffer parameters
+			AcqEngine.SetBufferParam(SatParamList, TotalSatNumber, CurTime, NavBitArray);	// set AE buffer parameters
 			TeFifo.LatchWriteAddress(3);	// set AE latch time
 		}
 		if (AddressOffset == ADDR_OFFSET_AE_CONTROL && (Value & 0x100))	// if do acquisition, set AE finished interrupt
@@ -224,7 +228,7 @@ void CGnssTop::SetInputFile(char *FileName)
 		GetSatelliteCN0(ListCount, PowerList, PowerControl.InitCN0, PowerControl.Adjust, &GalSatParam[index]);
 		SatParamList[TotalSatNumber ++] = &GalSatParam[index];
 	}
-	TrackingEngine.SetNavBit(&GpsBits);
+	TrackingEngine.SetNavBit(NavBitArray);
 }
 
 int CGnssTop::Process(int ReadBlockSize)

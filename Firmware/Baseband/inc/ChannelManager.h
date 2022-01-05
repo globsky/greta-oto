@@ -28,8 +28,8 @@ typedef struct
 	int CorDataCount;	// number of data in CorDat
 	int TimeTag;		// time tag (assigned by TrackingTime) when sending CorData to bit sync task
 	struct tag_CHANNEL_STATE *ChannelState;	// channel to send correlation result
-	U32 PrevCorData;	// correlation result preceding to next 20 results
-	U32 CorData[20];	// 20 correlation result of peak correlator
+	U32 PrevCorData;	// correlation result preceding to next 20 results (or flag for pilot data sync)
+	U32 CorData[20];	// 20 correlation result of peak correlator (or pilot data symbols for pilot data sync)
 } BIT_SYNC_DATA, *PBIT_SYNC_DATA;
 
 typedef struct
@@ -87,6 +87,7 @@ typedef struct tag_CHANNEL_STATE
 	int BitSyncResult;		// set by BitSyncTask, -1 for bit sync fail, 0 for bit sync in process, 1~20 as bit sync position, 21 as switch to tracking from bit sync
 	// data for data stream decode
 	DATA_STREAM DataStream;
+	int FrameCounter;		// current data/secondary code position in frame
 	// tracking loop coefficients
 	int pll_k1, pll_k2, pll_k3;	// maximum 3rd order
 	int fll_k1, fll_k2;			// maximum 2nd order

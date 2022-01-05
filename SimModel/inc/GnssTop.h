@@ -14,6 +14,7 @@
 #include "GnssTime.h"
 #include "NavData.h"
 #include "LNavBit.h"
+#include "BCNavBit.h"
 #include "XmlInterpreter.h"
 #include "SatelliteParam.h"
 #include "TeFifoSim.h"
@@ -56,6 +57,8 @@ public:
 	OUTPUT_PARAM OutputParam;
 	CPowerControl PowerControl;
 	LNavBit GpsBits;
+	BCNavBit BdsBits;
+	NavBit *NavBitArray[4];
 
 	PGPS_EPHEMERIS GpsEph[TOTAL_GPS_SAT], GpsEphVisible[TOTAL_GPS_SAT];
 	PGPS_EPHEMERIS BdsEph[TOTAL_BDS_SAT], BdsEphVisible[TOTAL_BDS_SAT];

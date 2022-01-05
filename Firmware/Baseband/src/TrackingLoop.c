@@ -430,7 +430,7 @@ void DoTrackingLoop(PCHANNEL_STATE ChannelState)
 		CarrierFreq = ChannelState->CarrierFreqBase;
 		if (ChannelState->FLD == 100 && ChannelState->LoseLockCounter == 0)
 			ChannelState->CarrierFreqSave = ChannelState->CarrierFreqBase;
-//		printf("SV%02d Doppler = %5d %5d\n", ChannelState->Svid, (int)(((S64)ChannelState->CarrierFreqBase * SAMPLE_FREQ) >> 32) - IF_FREQ, (int)(((S64)CarrierFreq * SAMPLE_FREQ) >> 32) - IF_FREQ);
+//		printf("SV%02d FLL Doppler = %5d %5d\n", ChannelState->Svid, (int)(((S64)ChannelState->CarrierFreqBase * SAMPLE_FREQ) >> 32) - IF_FREQ, (int)(((S64)CarrierFreq * SAMPLE_FREQ) >> 32) - IF_FREQ);
 	}
 	// DLL update
 	if (ChannelState->State & TRACKING_UPDATE_DLL)
@@ -453,7 +453,7 @@ void DoTrackingLoop(PCHANNEL_STATE ChannelState)
 		{
 			ChannelState->CarrierFreqSave = CarrierFreq;//ChannelState->CarrierFreqBase;
 		}
-//		printf("SV%02d Doppler = %5d %5d ", ChannelState->Svid, (int)(((S64)ChannelState->CarrierFreqBase * SAMPLE_FREQ) >> 32) - IF_FREQ, (int)(((S64)CarrierFreq * SAMPLE_FREQ) >> 32) - IF_FREQ);
+//		printf("SV%02d PLL Doppler = %5d %5d\n", ChannelState->Svid, (int)(((S64)ChannelState->CarrierFreqBase * SAMPLE_FREQ) >> 32) - IF_FREQ, (int)(((S64)CarrierFreq * SAMPLE_FREQ) >> 32) - IF_FREQ);
 //		if (ChannelState->Svid == 4)
 //			printf("SV%02d FREQ=%10d\n", ChannelState->Svid, CarrierFreq);
 	}

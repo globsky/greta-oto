@@ -69,7 +69,16 @@ void InterruptService()
 //   none
 void FirmwareInitialize()
 {
-	int i, sv_list[32] = { 4, 7, 8, 9, 14, 16, 27, 30, 0};	// for debug use only
+	int i, sv_list[32] = {
+//		FREQ_SVID(FREQ_B1C, 8), 0,
+		FREQ_SVID(FREQ_L1CA, 4),
+		FREQ_SVID(FREQ_L1CA, 7), //0,
+		FREQ_SVID(FREQ_L1CA, 8),
+		FREQ_SVID(FREQ_L1CA, 9),
+		FREQ_SVID(FREQ_L1CA, 14),
+		FREQ_SVID(FREQ_L1CA, 16),
+		FREQ_SVID(FREQ_L1CA, 27),
+		FREQ_SVID(FREQ_L1CA, 30), 0};	// for debug use only
 
 	MeasurementInterval = 1000;
 
@@ -110,7 +119,13 @@ void FirmwareInitialize()
 		if (sv_list[i] == 0)
 			break;
 		AcqConfig.SatConfig[i].FreqSvid = (U8)sv_list[i];
-		AcqConfig.SatConfig[i].CodeSpan = 3;
+		switch (GET_FREQ_ID(sv_list[i]))
+		{
+		case FREQ_L1CA:	AcqConfig.SatConfig[i].CodeSpan = 3; break;
+		case FREQ_E1:	AcqConfig.SatConfig[i].CodeSpan = 12; break;
+		case FREQ_B1C:
+		case FREQ_L1C:	AcqConfig.SatConfig[i].CodeSpan = 30; break;
+		}
 		AcqConfig.SatConfig[i].CenterFreq = 0;
 	}
 	AcqConfig.AcqChNumber = i;

@@ -115,7 +115,7 @@ void MsrProc(PBB_MEASUREMENT Measurements, unsigned int ActiveMask, int CurMsInt
 		g_ChannelStatus[ch_num].ChannelFlag |= CHANNEL_ACTIVE;
 
 		// if data count less than expected in time interval, there is signal loss, init frame
-		if (Measurements[ch_num].DataNumber < CurMsInterval / (((FreqID == FREQ_L1CA) ? 20 : ((FreqID == FREQ_E1) ? 4 : 10))) - 1)
+		if (Measurements[ch_num].DataNumber < CurMsInterval / ((FREQ_ID_IS_L1CA(FreqID) ? 20 : (FREQ_ID_IS_E1(FreqID) ? 4 : 10))) - 1)
 			InitFrame(ch_num);
 
 		// if bit sync get, do frame process

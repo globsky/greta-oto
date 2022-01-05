@@ -25,9 +25,10 @@
 
 struct AeBufferSatParam
 {
+	int PrnSelect;
 	int svid;	// svid
 	int BitLength;	// number of ms within a bit
-	int MsCount;	// ms count of next code round within a bit
+	int MsCount;	// ms count of buffer start within a bit
 	double Time2CodeEnd;	// number of 1/2 chip to end of code round
 	double Doppler;
 	double Amplitude;
@@ -71,7 +72,8 @@ public:
 	void SetRegValue(int Address, U32 Value);
 	U32 GetRegValue(int Address);
 	void DoAcquisition();
-	void SetBufferParam(PSATELLITE_PARAM SatelliteParam[], int SatVisible, GNSS_TIME Time, NavBit *NavData);
+	void SetBufferParam(PSATELLITE_PARAM SatelliteParam[], int SatVisible, GNSS_TIME Time, NavBit *NavData[]);
+	void AssignChannelParam(PSATELLITE_PARAM SatelliteParam, GNSS_TIME Time, NavBit *NavData, int PrnSelect, AeBufferSatParam *SatParam);
 
 	static const double Bpsk2PeakValues[160];
 	static const double Boc2PeakValues[160];
@@ -84,6 +86,7 @@ public:
 	int StrideOffset;			// 6bit signed
 	unsigned int NoiseFloor;	// 18bit
 	int CurMsCount, CurBitIndex;
+	int PhaseCount;
 	AeBufferSatParam SatParam[32];
 	int SatNumber;	// number of valid satellites in SatParam
 	complex_number CohResult[MF_DEPTH];
