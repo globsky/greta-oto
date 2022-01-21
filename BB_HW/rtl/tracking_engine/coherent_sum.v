@@ -18,6 +18,11 @@ input [43:0] fifo_data0,
 input [43:0] fifo_data1,
 input [43:0] fifo_data2,
 input [43:0] fifo_data3,
+// correlator 0 sum result
+output reg [31:0] coh_acc_data0,
+output reg [31:0] coh_acc_data1,
+output reg [31:0] coh_acc_data2,
+output reg [31:0] coh_acc_data3,
 // coherent RAM access interface
 output reg coherent_rd,	// coherent buffer read signal
 output reg coherent_wr,	// coherent buffer write signal
@@ -186,5 +191,38 @@ always @(posedge clk or negedge rst_b)
 
 assign coherent_d4wt = coherent_sum_data;
 assign coherent_sum_done = ((cur_state == IDLE) && (&coh_fifo_empty));
+
+//----------------------------------------------------------
+// latch correlator 0 sum result
+//----------------------------------------------------------
+wire is_cor0;
+assign is_cor0 = (coh_sum_addr[4:2] == 3'b000);
+
+// indicator of latch correlator 0
+reg [3:0] latch_cor0;
+
+always @(posedge clk or negedge rst_b)
+	if (!rst_b)
+		latch_cor0 <= 4'h0;
+	else if (cur_state == DO_COH_SUM)
+		latch_cor0 <= cur_fifo_sel & {4{is_cor0}};
+	else 
+		latch_cor0 <= 4'h0;
+
+always @(posedge clk or negedge rst_b)
+	if (~rst_b) begin
+		coh_acc_data0 <= 'd0;
+		coh_acc_data1 <= 'd0;
+		coh_acc_data2 <= 'd0;
+		coh_acc_data3 <= 'd0;
+	end
+	else begin
+		case (1'b1)
+			latch_cor0[0]: coh_acc_data0 <= coherent_sum_data;
+			latch_cor0[1]: coh_acc_data1 <= coherent_sum_data;
+			latch_cor0[2]: coh_acc_data2 <= coherent_sum_data;
+			latch_cor0[3]: coh_acc_data3 <= coherent_sum_data;
+		endcase
+	end
 
 endmodule

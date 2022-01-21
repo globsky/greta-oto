@@ -70,3 +70,11 @@
 		L1C/A stream decode using sign of accumulation result instread of determine toggle in track 1
 	Bug fix
 		Fix bug in calculation of amplitude fade using frequency difference
+1/21/2022
+	Function and feature added
+		Change data decode function to bit decode, store multiple decoded bits
+	Function and feature change
+		Remove NH code2
+		Adjust position of some control parameters in state buffer
+		Extern coherent length from 5bit to 6bit
+		

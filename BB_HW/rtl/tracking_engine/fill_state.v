@@ -22,17 +22,17 @@ input [31:0] state_d4rd,
 output reg [31:0] carrier_freq,	// carrier frequence
 output reg [31:0] code_freq,		// code frequence
 output reg [1:0]  pre_shift_bits,		// pre shift bits
+output reg [1:0]  post_shift_bits,  // post shift bits
 output reg enable_boc,			// enable BOC
 output reg data_in_q,			// data in Q branch
 output reg enable_2nd_prn,	// enable second prn
+output reg [1:0]  decode_bit,	// indicator of decoded data bit number
 output reg [1:0]  narrow_factor,	// narrow correlator factor
-output reg [15:0] dump_length,  	// dump data length
+output reg [4:0]  bit_length,		// bit length in ms
+output reg [5:0]	coherent_number,  // coherent number
 output reg [24:0] nh_code,  // NH code
 output reg [4:0] 	nh_length,  // NH data lenth
-output reg [19:0] nh_code2, // NH code2
-output reg [4:0]  ms_data_number,		// ms data number
-output reg [4:0]	coherent_number,  // coherent number
-output reg [1:0]  post_shift_bits,  // post shift bits
+output reg [15:0] dump_length,  	// dump data length
 output reg [31:0] prn_config,			// PRN config
 output reg [31:0] prn2_config,		// PRN2 config
 
@@ -44,7 +44,7 @@ output reg carrier_count_en, // carrier count load enable
 output reg code_phase_en,  // code phase load enable
 output reg prn_code_load_en,  // load enable
 output reg corr_state_load_en, // load enable
-output reg ms_data_sum_en,		// load enable
+output reg decode_data_en,		// load enable
 output reg prn2_state_en,  // PRN2 state load enable
 output reg acc_en // acc result load enable
 );
@@ -56,7 +56,7 @@ reg carrier_freq_en;
 reg code_freq_en;
 reg cor_config_en;
 reg nh_config_en;
-reg coh_config_en;
+reg dump_length_en;
 reg prn_config_en;
 reg prn_config2_en;
 
@@ -67,7 +67,7 @@ always @(posedge clk or negedge rst_b)
 		code_freq_en       <= 1'b0;
 		cor_config_en      <= 1'b0;
 		nh_config_en       <= 1'b0;
-		coh_config_en      <= 1'b0;
+		dump_length_en     <= 1'b0;
 		prn_config_en      <= 1'b0;
 		prn_state_en       <= 1'b0;
 		prn_count_en       <= 1'b0;
@@ -76,7 +76,7 @@ always @(posedge clk or negedge rst_b)
 		code_phase_en      <= 1'b0;
 		prn_code_load_en   <= 1'b0;
 		corr_state_load_en <= 1'b0;
-		ms_data_sum_en     <= 1'b0;
+		decode_data_en     <= 1'b0;
 		prn_config2_en     <= 1'b0;
 		prn2_state_en      <= 1'b0;
 	end
@@ -85,7 +85,7 @@ always @(posedge clk or negedge rst_b)
 		code_freq_en       <= (state_addr ==  'd1) ? 1'b1 : 1'b0;
 		cor_config_en      <= (state_addr ==  'd2) ? 1'b1 : 1'b0;
 		nh_config_en       <= (state_addr ==  'd3) ? 1'b1 : 1'b0;
-		coh_config_en      <= (state_addr ==  'd4) ? 1'b1 : 1'b0;
+		dump_length_en     <= (state_addr ==  'd4) ? 1'b1 : 1'b0;
 		prn_config_en      <= (state_addr ==  'd5) ? 1'b1 : 1'b0;
 		prn_state_en       <= (state_addr ==  'd6) ? 1'b1 : 1'b0;
 		prn_count_en       <= (state_addr ==  'd7) ? 1'b1 : 1'b0;
@@ -94,7 +94,7 @@ always @(posedge clk or negedge rst_b)
 		code_phase_en      <= (state_addr == 'd10) ? 1'b1 : 1'b0;
 		prn_code_load_en   <= (state_addr == 'd11) ? 1'b1 : 1'b0;
 		corr_state_load_en <= (state_addr == 'd12) ? 1'b1 : 1'b0;
-		ms_data_sum_en     <= (state_addr == 'd13) ? 1'b1 : 1'b0;
+		decode_data_en     <= (state_addr == 'd13) ? 1'b1 : 1'b0;
 		prn_config2_en     <= (state_addr == 'd14) ? 1'b1 : 1'b0;
 		prn2_state_en      <= (state_addr == 'd15) ? 1'b1 : 1'b0;
 	end
@@ -117,17 +117,17 @@ always @(posedge clk or negedge rst_b)
 		carrier_freq    <= 'd0;
 		code_freq       <= 'd0;
 		pre_shift_bits  <= 'd0;
-		enable_boc      <= 'd0;
+		post_shift_bits <= 'd0;
 		data_in_q       <= 'd0;
 		enable_2nd_prn  <= 'd0;
+		enable_boc      <= 'd0;
+		decode_bit      <= 'd0;
 		narrow_factor   <= 'd0;
-		dump_length     <= 'd0;
+		bit_length      <= 'd0;
+		coherent_number <= 'd0;
 		nh_code         <= 'd0;
 		nh_length       <= 'd0;
-		nh_code2        <= 'd0;
-		ms_data_number  <= 'd0;
-		coherent_number <= 'd0;
-		post_shift_bits <= 'd0;
+		dump_length     <= 'd0;
 		prn_config      <= 'd0;
 		prn2_config     <= 'd0;
 	end
@@ -137,22 +137,20 @@ always @(posedge clk or negedge rst_b)
 			code_freq_en:    code_freq <= state_d4rd;
 			cor_config_en: begin
 				pre_shift_bits  <= state_d4rd[1:0];
-				enable_boc      <= state_d4rd[2];
-				data_in_q       <= state_d4rd[3];
-				enable_2nd_prn  <= state_d4rd[4];
-	      narrow_factor   <= state_d4rd[9:8];
-	      dump_length     <= state_d4rd[31:16];
+				post_shift_bits <= state_d4rd[3:2];
+				data_in_q       <= state_d4rd[5];
+				enable_2nd_prn  <= state_d4rd[6];
+				enable_boc      <= state_d4rd[7];
+				decode_bit      <= state_d4rd[9:8];
+	      narrow_factor   <= state_d4rd[11:10];
+				bit_length      <= state_d4rd[20:16];
+				coherent_number <= state_d4rd[26:21];
 			end
 			nh_config_en: begin
 				nh_code         <= state_d4rd[24:0];
 				nh_length       <= state_d4rd[31:27];
 			end
-			coh_config_en: begin
-				nh_code2        <= state_d4rd[19:0];
-				ms_data_number  <= state_d4rd[24:20];
-				coherent_number <= state_d4rd[29:25];
-				post_shift_bits <= state_d4rd[31:30];
-			end
+			dump_length_en:	dump_length <= state_d4rd[15:0];
 			prn_config_en:  prn_config  <= state_d4rd;
 			prn_config2_en: prn2_config <= state_d4rd;
 		endcase

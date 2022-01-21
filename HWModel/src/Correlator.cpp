@@ -80,17 +80,17 @@ void CCorrelator::FillState(unsigned int *StateBuffer)
 	CarrierFreq = StateBuffer[0];
 	CodeFreq = StateBuffer[1];
 	PreShiftBits = EXTRACT_UINT(StateBuffer[2], 0, 2);
-	EnableBOC = EXTRACT_UINT(StateBuffer[2], 2, 1);
-	DataInQBranch = EXTRACT_UINT(StateBuffer[2], 3, 1);
-	EnableSecondPrn = EXTRACT_UINT(StateBuffer[2], 4, 1);
-	NarrowFactor = EXTRACT_UINT(StateBuffer[2], 8, 2);
-	DumpLength = EXTRACT_UINT(StateBuffer[2], 16, 16);
+	PostShiftBits = EXTRACT_UINT(StateBuffer[2], 2, 2);
+	DataInQBranch = EXTRACT_UINT(StateBuffer[2], 5, 1);
+	EnableSecondPrn = EXTRACT_UINT(StateBuffer[2], 6, 1);
+	EnableBOC = EXTRACT_UINT(StateBuffer[2], 7, 1);
+	DecodeBit = EXTRACT_UINT(StateBuffer[2], 8, 2);
+	NarrowFactor = EXTRACT_UINT(StateBuffer[2], 10, 2);
+	BitLength = EXTRACT_UINT(StateBuffer[2], 16, 5);
+	CoherentNumber = EXTRACT_UINT(StateBuffer[2], 21, 6);
 	NHCode = EXTRACT_UINT(StateBuffer[3], 0, 25);
 	NHLength = EXTRACT_UINT(StateBuffer[3], 27, 5);
-	NHCode2 = EXTRACT_UINT(StateBuffer[4], 0, 20);
-	MsDataNumber = EXTRACT_UINT(StateBuffer[4], 20, 5);
-	CoherentNumber = EXTRACT_UINT(StateBuffer[4], 25, 5);
-	PostShiftBits = EXTRACT_UINT(StateBuffer[4], 30, 2);
+	DumpLength = EXTRACT_UINT(StateBuffer[4], 0, 16);
 
 	CarrierPhase = StateBuffer[8];
 	CarrierCount = StateBuffer[9];
@@ -98,15 +98,15 @@ void CCorrelator::FillState(unsigned int *StateBuffer)
 	PrnCode = EXTRACT_UINT(StateBuffer[11], 0, 8);
 	JumpCount = EXTRACT_INT(StateBuffer[11], 8, 8);
 	DumpCount = EXTRACT_UINT(StateBuffer[11], 16, 16);
-	// CoherentDone and MsDataDone will be reset on every correlation process
+	// CoherentDone will be reset on every correlation process
 	CurrentCor = EXTRACT_UINT(StateBuffer[12], 4, 3);
 	Dumping = EXTRACT_UINT(StateBuffer[12], 7, 1);
 	CodeSubPhase = EXTRACT_UINT(StateBuffer[12], 8, 1);
 	PrnCode2 = EXTRACT_UINT(StateBuffer[12], 12, 4);
-	MsDataCount = EXTRACT_UINT(StateBuffer[12], 16, 5);
+	BitCount = EXTRACT_UINT(StateBuffer[12], 16, 5);
 	CoherentCount = EXTRACT_UINT(StateBuffer[12], 21, 5);
 	NHCount = EXTRACT_UINT(StateBuffer[12], 27, 5);
-	MsDataSum = EXTRACT_INT(StateBuffer[13], 0, 16);
+	DecodeData = StateBuffer[13];
 
 	for (i = 0; i < 8; i ++)
 	{
@@ -126,7 +126,7 @@ void CCorrelator::FillState(unsigned int *StateBuffer)
 		SecondPrnState[2] = StateBuffer[7];
 		PrnIndex2 = SecondPrnState[0] >> 30;
 		PrnGen2[PrnIndex2]->FillState(SecondPrnState);
-		PrnCode2 |= PrnGen2[PrnIndex2]->GetCode() ^ (EnableBOC & CodeSubPhase) ^ ((NHLength && (NHCode2 & (1 << NHCount))) ? 1 : 0);
+		PrnCode2 |= PrnGen2[PrnIndex2]->GetCode() ^ (EnableBOC & CodeSubPhase);
 	}
 }
 
@@ -139,8 +139,8 @@ void CCorrelator::DumpState(unsigned int *StateBuffer)
 	StateBuffer[9] = CarrierCount;
 	StateBuffer[10] = CodePhase;
 	StateBuffer[11] = (PrnCode & 0xff) | ((JumpCount & 0xff) << 8) | (DumpCount << 16);
-	StateBuffer[12] = CoherentDone | (MsDataDone << 1) | (OverwriteProtect << 2) | (CurrentCor << 4) | (Dumping << 7) | (CodeSubPhase << 8) | ((PrnCode2 & 0x1e) << 11) | (MsDataCount << 16) | (CoherentCount << 21) | (NHCount << 27);
-	StateBuffer[13] = MsDataSum & 0xffff;
+	StateBuffer[12] = CoherentDone | (OverwriteProtect << 1) | (CurrentCor << 4) | (Dumping << 7) | (CodeSubPhase << 8) | ((PrnCode2 & 0x1e) << 11) | (BitCount << 16) | (CoherentCount << 21) | (NHCount << 27);
+	StateBuffer[13] = DecodeData;
 
 	for (i = 0; i < 8; i ++)
 		StateBuffer[i+16] = ((unsigned int)AccDataI[i] << 16) | ((unsigned int)AccDataQ[i] & 0xffff);
@@ -216,24 +216,25 @@ complex_int CCorrelator::DownConvert(complex_int InputData)
 // bit1 of CorIndex is 1 means overwrite protection, store to TE_OVERWRITE_PROTECT_VALUE instead store to coherent buffer
 // DumpDataLength is the actual length of DumpDataI/DumpDataQ/CohAddr
 // return 1 means any correlator reaches last coherent sum
-int CCorrelator::Correlation(unsigned int *StateBuffer, int SampleNumber, complex_int SampleData[], S16 DumpDataI[], S16 DumpDataQ[], int CorIndex[], int &DumpDataLength)
+int CCorrelator::Correlation(int SampleNumber, complex_int SampleData[], S16 DumpDataI[], S16 DumpDataQ[], int CorIndex[], int &DumpDataLength)
 {
 	int i = 0;
 	unsigned int CodePhaseNew;
 	complex_int SampleDown;
 	
-	FillState(StateBuffer);
-
 	// clear overwrite protect registers at the beginning of every round
 	FirstCorIndexValid = 0;
 	FirstCorIndex = 0;
 	OverwriteProtect = 0;
 
+	// clear data decode valid flag at the beginning of every round
+	DataDecodeValid = 0;
+
 	// clear coherent data FIFO at the beginning of every round
 	DumpDataLength = 0;
 
 	// clear CoherentDone and MsDataDone at the beginning of every round
-	CoherentDone = MsDataDone = 0;
+	CoherentDone = 0;
 
 	// first check whether there is positive jump, force overflow
 	while (JumpCount > 0)
@@ -266,8 +267,6 @@ int CCorrelator::Correlation(unsigned int *StateBuffer, int SampleNumber, comple
 
 	if (DumpDataOutput)
 		DumpDataOutput(DumpDataI, DumpDataQ, CorIndex, DumpDataLength);
-
-	DumpState(StateBuffer);
 
 	return CoherentDone;
 }
@@ -371,7 +370,7 @@ int CCorrelator::ProcessOverflow(S16 DumpDataI[], S16 DumpDataQ[], int CorIndex[
 	if (EnableSecondPrn)
 	{
 		PrnCode2 <<= 1;
-		PrnCode2 |= PrnGen2[PrnIndex2]->GetCode() ^ (EnableBOC & CodeSubPhase) ^ ((NHLength && (NHCode2 & (1 << NHCount))) ? 1 : 0);
+		PrnCode2 |= PrnGen2[PrnIndex2]->GetCode() ^ (EnableBOC & CodeSubPhase);
 	}
 
 	// Check whether there is data to dump when overflow is high
@@ -397,18 +396,6 @@ int CCorrelator::DumpData(S16 DumpDataI[], S16 DumpDataQ[], int CorIndex[], int 
 	AccDataI[CurrentCor] = 0;
 	AccDataQ[CurrentCor] = 0;
 	
-	if (MsDataNumber != 0 && CurrentCor == (EnableSecondPrn ? 0 : PEAK_COR_INDEX))
-	{
-		if (MsDataCount == 0)
-			MsDataSum = 0;
-		MsDataSum += DataInQBranch ? DumpDataQ[CurrentLength] : DumpDataI[CurrentLength];
-		if (++MsDataCount == MsDataNumber)
-		{
-			MsDataCount = 0;
-			MsDataDone = 1;
-		}
-	}
-
 	// assign overwrite protect registers
 	if (OverwriteProtect == 0)
 	{
@@ -427,11 +414,24 @@ int CCorrelator::DumpData(S16 DumpDataI[], S16 DumpDataQ[], int CorIndex[], int 
 	CorIndex[CurrentLength] = CurrentCor << 2;
 	if (OverwriteProtect == 1)
 		CorIndex[CurrentLength] |= 2;
-	if (CoherentCount == 0)
-		CorIndex[CurrentLength] |= 1;
+	if (BitLength != 0 && EnableSecondPrn && CurrentCor == 0)	// for data channel decode, first correlator acc flag follows bit length
+		CorIndex[CurrentLength] |= (BitCount == 0) ? 1 : 0;
+	else	// otherwise, correlator acc flag follows coherent length
+		CorIndex[CurrentLength] |= (CoherentCount == 0)? 1 : 0;
 	if (NextCoherentCount == CoherentNumber)
 		DataReady = 1;
 	CurrentLength ++;
+
+	// increase bit count
+	if (BitLength != 0 && EnableSecondPrn && CurrentCor == 0)
+	{
+		if (++BitCount == BitLength)
+		{
+			BitCount = 0;
+			DataDecodeValid = 1;
+		}
+	}
+
 	CurrentCor = (CurrentCor + 1) & 0x7;
 	// if this is last correlator
 	if (CurrentCor == 0)
@@ -444,4 +444,56 @@ int CCorrelator::DumpData(S16 DumpDataI[], S16 DumpDataQ[], int CorIndex[], int 
 	}
 
 	return DataReady;
+}
+
+void CCorrelator::DecodeDataAcc(unsigned int DataAcc)
+{
+	int LengthIndex, BitSelect;
+	int DataValue;
+
+	// no data decode
+	if (!DataDecodeValid)
+		return;
+
+	// bit select adjust according to shift bits and accumulation length
+	LengthIndex = (BitLength >= 16) ? 2 : ((BitLength >= 8) ? 1 : 0);
+	BitSelect = PreShiftBits + PostShiftBits - LengthIndex;
+	if (BitSelect < 0)
+		BitSelect = 0;
+
+	// select 16bit data in I or Q
+	DataValue = DataInQBranch ? (int)((S16)(DataAcc & 0xffff)) : (int)((S16)(DataAcc >> 16));
+
+	switch (DecodeBit)
+	{
+	case 0:	// 1bit
+		DecodeData = (DecodeData << 1) | ((DataValue & 0x80000000) ? 1 : 0);
+		break;
+	case 1:	// 2bit
+		DataValue >>= (13 - BitSelect);
+		DataValue = (DataValue >> 1) + (DataValue & 1);	// round
+		if (DataValue > 1)
+			DataValue  = 1;
+		else if (DataValue < -2)
+			DataValue = -2;
+		DecodeData = (DecodeData << 2) | (DataValue & 0x3);
+		break;
+	case 2:	// 4bit
+		DataValue >>= (11 - BitSelect);
+		DataValue = (DataValue >> 1) + (DataValue & 1);	// round
+		if (DataValue > 7)
+			DataValue  = 7;
+		else if (DataValue < -8)
+			DataValue = -8;
+		DecodeData = (DecodeData << 4) | (DataValue & 0xf);
+		break;
+	case 3:	// 8bit
+		DataValue >>= (8 - BitSelect);
+		if (DataValue > 127)
+			DataValue  = 127;
+		else if (DataValue < -128)
+			DataValue = -128;
+		DecodeData = (DecodeData << 8) | (DataValue & 0xff);
+		break;
+	}
 }

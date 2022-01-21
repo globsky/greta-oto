@@ -38,8 +38,6 @@ static int SyncPilotData(unsigned int DataWord, const unsigned int SecondCode[57
 
 void SetNHConfig(PCHANNEL_STATE ChannelState, int NHPos, const unsigned int *NHCode);
 
-#define PRE_SHIFT_BITS 0
-
 //*************** Initialize channel state structure ****************
 // Parameters:
 //   pChannel: pointer to channel state
@@ -52,9 +50,9 @@ void InitChannel(PCHANNEL_STATE pChannel)
 
 	memset(pStateBuffer, 0, sizeof(STATE_BUFFER));
 
-	STATE_BUF_SET_CORR_CONFIG(pStateBuffer, 1023, CurTrackingConfig->NarrowFactor, 0, 0, 0, PRE_SHIFT_BITS);
+	STATE_BUF_SET_CORR_CONFIG(pStateBuffer, CurTrackingConfig->CoherentNumber, 0, CurTrackingConfig->NarrowFactor, 0, 0, 0, 0, CurTrackingConfig->PostShift, PRE_SHIFT_BITS);
 	STATE_BUF_SET_NH_CONFIG(pStateBuffer, 0, 0);
-	STATE_BUF_SET_COH_CONFIG(pStateBuffer, CurTrackingConfig->PostShift, CurTrackingConfig->CoherentNumber, 0, 0);
+	STATE_BUF_SET_DUMP_LENGTH(pStateBuffer, 1023);
 	// PRN config
 	if (FREQ_ID_IS_L1CA(pChannel->FreqID))
 	{
@@ -160,11 +158,11 @@ void SyncCacheWrite(PCHANNEL_STATE ChannelState)
 			SetRegValue((U32)(&(ChannelState->StateBufferHW->CarrierFreq)), ChannelState->StateBufferCache.CarrierFreq);
 			SetRegValue((U32)(&(ChannelState->StateBufferHW->CodeFreq)), ChannelState->StateBufferCache.CodeFreq);
 		}
-		if (ChannelState->State & STATE_CACHE_CONFIG_DIRTY)	// update CorrConfig, NHConfig and CohConfig
+		if (ChannelState->State & STATE_CACHE_CONFIG_DIRTY)	// update CorrConfig, NHConfig and DumpLength
 		{
 			SetRegValue((U32)(&(ChannelState->StateBufferHW->CorrConfig)), ChannelState->StateBufferCache.CorrConfig);
 			SetRegValue((U32)(&(ChannelState->StateBufferHW->NHConfig)), ChannelState->StateBufferCache.NHConfig);
-			SetRegValue((U32)(&(ChannelState->StateBufferHW->CohConfig)), ChannelState->StateBufferCache.CohConfig);
+			SetRegValue((U32)(&(ChannelState->StateBufferHW->DumpLength)), ChannelState->StateBufferCache.DumpLength);
 		}
 		if (ChannelState->State & STATE_CACHE_CODE_DIRTY)	// update PrnCount, CodePhase, DumpCount and CorrState
 		{
@@ -240,8 +238,7 @@ void ProcessCohSum(int ChannelID, unsigned int OverwriteProtect)
 
 //*************** Process coherent data of a channel ****************
 // Parameters:
-//   ChannelID: physical channel ID (start from 0)
-//   OverwriteProtect: whether this channel has overwrite protection
+//   ChannelState: Pointer to channel state structure
 // Return value:
 //   none
 void ProcessCohData(PCHANNEL_STATE ChannelState)
@@ -255,7 +252,7 @@ void ProcessCohData(PCHANNEL_STATE ChannelState)
 	}
 	
 	ChannelState->FftCount ++;
-//	printf("SV%2d I/Q=%6d %6d\n", ChannelState->Svid, (S16)(ChannelState->StateBufferCache.CoherentSum[4] >> 16), (S16)(ChannelState->StateBufferCache.CoherentSum[4] & 0xffff));
+	printf("SV%2d I/Q=%6d %6d\n", ChannelState->Svid, (S16)(ChannelState->StateBufferCache.CoherentSum[4] >> 16), (S16)(ChannelState->StateBufferCache.CoherentSum[4] & 0xffff));
 
 	// perform PLL
 	if (((ChannelState->State & STAGE_MASK) >= STAGE_TRACK) && (ChannelState->pll_k1 > 0))	// tracking stage uses PLL (change to more flexible condition in the future)
@@ -412,6 +409,7 @@ void DecodeDataStream(PCHANNEL_STATE ChannelState)
 	PBIT_SYNC_DATA BitSyncData = &(ChannelState->BitSyncData);
 	int DataSymbol;
 	int CurIndex;
+	int PostShift = STATE_BUF_GET_POST_SHIFT(&(ChannelState->StateBufferCache));
 
 	// accumulate time and coherent data
 	DataStream->CurrentAccTime += ChannelState->CoherentNumber;
@@ -466,9 +464,9 @@ void DecodeDataStream(PCHANNEL_STATE ChannelState)
 		else if ((ChannelState->State & DATA_STREAM_MASK) == DATA_STREAM_8BIT)
 		{
 			if (FREQ_ID_IS_B1C(ChannelState->FreqID) && (ChannelState->State & DATA_STREAM_PRN2))	// negative of Q value
-				DataSymbol = (-DataStream->CurImag) >> 8;
+				DataSymbol = (-DataStream->CurImag) >> (8 - PostShift - PRE_SHIFT_BITS + 1);
 			else	// L1C
-				DataSymbol = DataStream->CurReal >> 8;
+				DataSymbol = DataStream->CurReal >> (8 - PostShift - PRE_SHIFT_BITS + 1);
 			// clip to 8bit
 			if (DataSymbol > 127)
 				DataSymbol = 127;

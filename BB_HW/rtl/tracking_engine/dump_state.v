@@ -27,16 +27,15 @@ input [15:0] dump_count_0, // dump count output
 input [7:0]  jump_count_0,	// jump count output
 input [7:0]  prn_code_0, 	// prn code output
 input [4:0] nh_count_0, // NH code count output
-input [4:0] coherent_count_0,	// coherent count output
-input [4:0] ms_data_count_0,		// ms data count output
+input [5:0] coherent_count_0,	// coherent count output
+input [4:0] bit_count_0,		// decode data count output
 input [3:0] prn_code2_0,				// prn code2 output
 input [2:0] current_cor_0,			// current correlator output
 input code_sub_phase_0,  // code sub phase output
 input dumping_0,  // dumping flag output
 input overwrite_protect_0, // overwrite protect flag
-input msdata_done_0,	// ms data is ready
 input coherent_done_0,    //coherent data is ready
-input [15:0] ms_data_sum_0,	// ms data sum output
+input [31:0] decode_data_0,	// decode data output
 input [31:0] prn2_state_0, // PRN2 state output
 input [15:0] i_acc_0,  // acc I channel data output
 input [15:0] q_acc_0,  // acc Q channel data output
@@ -51,16 +50,15 @@ input [15:0] dump_count_1, // dump count output
 input [7:0]  jump_count_1,	// jump count output
 input [7:0]  prn_code_1, 	// prn code output
 input [4:0] nh_count_1, // NH code count output
-input [4:0] coherent_count_1,	// coherent count output
-input [4:0] ms_data_count_1,		// ms data count output
+input [5:0] coherent_count_1,	// coherent count output
+input [4:0] bit_count_1,		// decode data count output
 input [3:0] prn_code2_1,				// prn code2 output
 input [2:0] current_cor_1,			// current correlator output
 input code_sub_phase_1,  // code sub phase output
 input dumping_1,  // dumping flag output
 input overwrite_protect_1, // overwrite protect flag
-input msdata_done_1,	// ms data is ready
 input coherent_done_1,    //coherent data is ready
-input [15:0] ms_data_sum_1,	// ms data sum output
+input [31:0] decode_data_1,	// decode data output
 input [31:0] prn2_state_1, // PRN2 state output
 input [15:0] i_acc_1,  // acc I channel data output
 input [15:0] q_acc_1,  // acc Q channel data output
@@ -75,16 +73,15 @@ input [15:0] dump_count_2, // dump count output
 input [7:0]  jump_count_2,	// jump count output
 input [7:0]  prn_code_2, 	// prn code output
 input [4:0] nh_count_2, // NH code count output
-input [4:0] coherent_count_2,	// coherent count output
-input [4:0] ms_data_count_2,		// ms data count output
+input [5:0] coherent_count_2,	// coherent count output
+input [4:0] bit_count_2,		// decode data count output
 input [3:0] prn_code2_2,				// prn code2 output
 input [2:0] current_cor_2,			// current correlator output
 input code_sub_phase_2,  // code sub phase output
 input dumping_2,  // dumping flag output
 input overwrite_protect_2, // overwrite protect flag
-input msdata_done_2,	// ms data is ready
 input coherent_done_2,    //coherent data is ready
-input [15:0] ms_data_sum_2,	// ms data sum output
+input [31:0] decode_data_2,	// decode data output
 input [31:0] prn2_state_2, // PRN2 state output
 input [15:0] i_acc_2,  // acc I channel data output
 input [15:0] q_acc_2,  // acc Q channel data output
@@ -99,16 +96,15 @@ input [15:0] dump_count_3, // dump count output
 input [7:0]  jump_count_3,	// jump count output
 input [7:0]  prn_code_3, 	// prn code output
 input [4:0] nh_count_3, // NH code count output
-input [4:0] coherent_count_3,	// coherent count output
-input [4:0] ms_data_count_3,		// ms data count output
+input [5:0] coherent_count_3,	// coherent count output
+input [4:0] bit_count_3,		// decode data count output
 input [3:0] prn_code2_3,				// prn code2 output
 input [2:0] current_cor_3,			// current correlator output
 input code_sub_phase_3,  // code sub phase output
 input dumping_3,  // dumping flag output
 input overwrite_protect_3, // overwrite protect flag
-input msdata_done_3,	// ms data is ready
 input coherent_done_3,    //coherent data is ready
-input [15:0] ms_data_sum_3,	// ms data sum output
+input [31:0] decode_data_3,	// decode data output
 input [31:0] prn2_state_3, // PRN2 state output
 input [15:0] i_acc_3,  // acc I channel data output
 input [15:0] q_acc_3   // acc Q channel data output
@@ -186,23 +182,23 @@ multiplex_4_1 #(32) multiplex_prn_code
 wire [31:0] cor_state;
 multiplex_4_1 #(32) multiplex_cor_state
 (
-	.data_in_0  ({nh_count_0, 1'b0, coherent_count_0, ms_data_count_0, prn_code2_0, 3'b000, code_sub_phase_0, dumping_0, current_cor_0, 1'b0, overwrite_protect_0, msdata_done_0, coherent_done_0}),
-	.data_in_1  ({nh_count_1, 1'b0, coherent_count_1, ms_data_count_1, prn_code2_1, 3'b000, code_sub_phase_1, dumping_1, current_cor_1, 1'b0, overwrite_protect_1, msdata_done_1, coherent_done_1}),
-	.data_in_2  ({nh_count_2, 1'b0, coherent_count_2, ms_data_count_2, prn_code2_2, 3'b000, code_sub_phase_2, dumping_2, current_cor_2, 1'b0, overwrite_protect_2, msdata_done_2, coherent_done_2}),
-	.data_in_3  ({nh_count_3, 1'b0, coherent_count_3, ms_data_count_3, prn_code2_3, 3'b000, code_sub_phase_3, dumping_3, current_cor_3, 1'b0, overwrite_protect_3, msdata_done_3, coherent_done_3}),
+	.data_in_0  ({nh_count_0, coherent_count_0, bit_count_0, prn_code2_0, 3'b000, code_sub_phase_0, dumping_0, current_cor_0, 2'b00, overwrite_protect_0, coherent_done_0}),
+	.data_in_1  ({nh_count_1, coherent_count_1, bit_count_1, prn_code2_1, 3'b000, code_sub_phase_1, dumping_1, current_cor_1, 2'b00, overwrite_protect_1, coherent_done_1}),
+	.data_in_2  ({nh_count_2, coherent_count_2, bit_count_2, prn_code2_2, 3'b000, code_sub_phase_2, dumping_2, current_cor_2, 2'b00, overwrite_protect_2, coherent_done_2}),
+	.data_in_3  ({nh_count_3, coherent_count_3, bit_count_3, prn_code2_3, 3'b000, code_sub_phase_3, dumping_3, current_cor_3, 2'b00, overwrite_protect_3, coherent_done_3}),
 	.data_sel   (physical_channel_index),
 	.data_out   (cor_state)
 );
 
-wire [31:0] ms_data_sum;
-multiplex_4_1 #(32) multiplex_ms_data_sum
+wire [31:0] decode_data;
+multiplex_4_1 #(32) multiplex_decode_data
 (
-	.data_in_0  ({16'h0, ms_data_sum_0}),
-	.data_in_1  ({16'h0, ms_data_sum_1}),
-	.data_in_2  ({16'h0, ms_data_sum_2}),
-	.data_in_3  ({16'h0, ms_data_sum_3}),
+	.data_in_0  (decode_data_0),
+	.data_in_1  (decode_data_1),
+	.data_in_2  (decode_data_2),
+	.data_in_3  (decode_data_3),
 	.data_sel   (physical_channel_index),
-	.data_out   (ms_data_sum)
+	.data_out   (decode_data)
 );
 
 wire [31:0] prn2_state;
@@ -244,7 +240,7 @@ always @(posedge clk or negedge rst_b)
 			4'd10:   state_d4wt <= code_phase;
 			4'd11:   state_d4wt <= prn_code;
 			4'd12:   state_d4wt <= cor_state;
-			4'd13:   state_d4wt <= ms_data_sum;		
+			4'd13:   state_d4wt <= decode_data;		
 			4'd15:   state_d4wt <= prn2_state;
 			default: state_d4wt <= 32'h0;
 		endcase

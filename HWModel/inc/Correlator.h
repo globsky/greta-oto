@@ -33,17 +33,17 @@ public:
 	reg_uint CarrierFreq;			// 32bit RO
 	reg_uint CodeFreq;				// 32bit RO
 	reg_uint PreShiftBits;			// 2bit RO
-	reg_uint EnableBOC;				// 1bit RO
+	reg_uint PostShiftBits;			// 2bit RO
 	reg_uint DataInQBranch;			// 1bit RO
 	reg_uint EnableSecondPrn;		// 1bit RO
+	reg_uint EnableBOC;				// 1bit RO
+	reg_uint DecodeBit;				// 2bit RO
 	reg_uint NarrowFactor;			// 2bit RO
-	reg_uint DumpLength;			// 16bit RO
+	reg_uint BitLength;				// 5bit RO
+	reg_uint CoherentNumber;		// 6bit RO
 	reg_uint NHCode;				// 25bit RO
 	reg_uint NHLength;				// 5bit RO
-	reg_uint NHCode2;				// 25bit RO, 5MSB filled with 0
-	reg_uint MsDataNumber;			// 5bit RO
-	reg_uint CoherentNumber;		// 5bit RO
-	reg_uint PostShiftBits;			// 2bit RO
+	reg_uint DumpLength;			// 16bit RO
 
 	reg_uint CarrierPhase;			// 32bit RW
 	reg_uint CarrierCount;			// 32bit RW
@@ -52,16 +52,15 @@ public:
 	reg_int JumpCount;				// 8bit RW
 	reg_uint DumpCount;				// 16bit RW
 	reg_uint CoherentDone;			// 1bit RW
-	reg_uint MsDataDone;			// 1bit RW
 	reg_uint OverwriteProtect;		// 1bit RW
 	reg_uint CurrentCor;			// 3bit RW
 	reg_uint Dumping;				// 1bit RW
 	reg_uint CodeSubPhase;			// 1bit RW
 	reg_uint PrnCode2;				// 4bit RW
-	reg_uint MsDataCount;			// 5bit RW
-	reg_uint CoherentCount;			// 5bit RW
+	reg_uint BitCount;				// 5bit RW
+	reg_uint CoherentCount;			// 6bit RW
 	reg_uint NHCount;				// 5bit RW
-	reg_uint MsDataSum;				// 16bit RW
+	reg_uint DecodeData;			// 32bit RW
 
 	S16 AccDataI[8];				// 16bit RW
 	S16 AccDataQ[8];				// 16bit RW
@@ -70,11 +69,14 @@ public:
 	// overwrite protect registers, internal use, will be cleared at the beginning of every round
 	int FirstCorIndexValid;			// 1bit
 	int FirstCorIndex;				// 4bit
+	// data decode valid, internal use, will be cleared at the beginning of every round
+	int DataDecodeValid;
 
 	void Reset();
-	int Correlation(unsigned int *StateBuffer, int SampleNumber, complex_int SampleData[], S16 DumpDataI[], S16 DumpDataQ[], int CorIndex[], int &DumpDataLength);
+	int Correlation(int SampleNumber, complex_int SampleData[], S16 DumpDataI[], S16 DumpDataQ[], int CorIndex[], int &DumpDataLength);
 	void FillState(unsigned int *StateBuffer);
 	void DumpState(unsigned int *StateBuffer);
+	void DecodeDataAcc(unsigned int DataAcc);
 	complex_int DownConvert(complex_int InputData);
 	void AccumulateSample(complex_int Sample, int CorCount);
 	int ProcessOverflow(S16 DumpDataI[], S16 DumpDataQ[], int CorIndex[], int &CurrentLength);

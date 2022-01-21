@@ -138,7 +138,7 @@ int CTrackingEngine::ProcessData()
 	int CorIndex[16];
 	int DumpCount;
 	int ReadNumber;
-	unsigned int CohData;
+	unsigned int CohData, DataAcc;
 	S16 CohDataI, CohDataQ;
 	int FirstRound = 1;
 
@@ -176,8 +176,9 @@ int CTrackingEngine::ProcessData()
 		// process all physical channels
 		for (i = 0; i < TrackingChannelCount; i ++)
 		{
+			Correlator[i]->FillState(&TEBuffer[TrackingChannelIndex[i] << 5]);
 			// if any correlator reaches coherent value, set data ready flag
-			if (Correlator[i]->Correlation(&TEBuffer[TrackingChannelIndex[i] << 5], ReadNumber, FifoData, DumpDataI, DumpDataQ, CorIndex, DumpCount))
+			if (Correlator[i]->Correlation(ReadNumber, FifoData, DumpDataI, DumpDataQ, CorIndex, DumpCount))
 				CohDataReady |= 1 << TrackingChannelIndex[i];
 			for (j = 0; j < DumpCount; j ++)
 			{
@@ -201,7 +202,13 @@ int CTrackingEngine::ProcessData()
 				CohDataQ += DumpDataQ[j];
 				CohData = ((unsigned int)CohDataI << 16) | ((unsigned int)CohDataQ & 0xffff);
 				TEBuffer[COH_OFFSET(TrackingChannelIndex[i], CorIndex[j])] = CohData;
+				if ((CorIndex[j] >> 2) == 0)	// save acc data for Cor0
+					DataAcc = CohData;
 			}
+
+			Correlator[i]->DecodeDataAcc(DataAcc);
+
+			Correlator[i]->DumpState(&TEBuffer[TrackingChannelIndex[i] << 5]);
 		}
 		// rewind FIFO read pointer
 		pTeFifo->RewindPointer();

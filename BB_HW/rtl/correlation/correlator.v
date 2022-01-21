@@ -20,17 +20,17 @@ input [7:0] fifo_data,	// input fifo data 4bit S/M format, 4MSB for I and 4LSB f
 input [31:0]  carrier_freq,	// carrier frequence
 input [31:0]  code_freq,		// code frequence
 input [1:0]   pre_shift_bits,		// pre shift bits
-input enable_boc,			// enable BOC
+input [1:0]   post_shift_bits,  // post shift bits
 input data_in_q,			// data in Q branch
 input enable_2nd_prn,	// enable second prn
+input enable_boc,			// enable BOC
+input [1:0]   decode_bit,			// bit number of decoded data
 input [1:0]   narrow_factor,	// narrow correlator factor
-input [15:0]  dump_length,  	// dump data length
+input [4:0]   bit_length,		// length (ms) of one bit for data decode
+input [5:0]		coherent_number,  // coherent number
 input [24:0]  nh_code,  // NH code
 input [4:0] 	nh_length,  // NH data lenth
-input [19:0]  nh_code2, // NH code2
-input [4:0]   ms_data_number,		// ms data number
-input [4:0]		coherent_number,  // coherent number
-input [1:0]   post_shift_bits,  // post shift bits
+input [15:0]  dump_length,  	// dump data length
 
 // variables of carrier and code
 input carrier_phase_en, // carrier phase load enable
@@ -55,24 +55,24 @@ output [7:0]  prn_code_o, 	// prn code output
 // variables of CORR_STATE
 input corr_state_load_en, // load enable
 input [4:0] nh_count_i, 	// NH code count load value
-input [4:0] coherent_count_i, // coherent count load value
-input [4:0] ms_data_count_i,	// ms data count load value
+input [5:0] coherent_count_i, // coherent count load value
+input [4:0] bit_count_i,	// number of ms within data bit load value
 input [3:0]  prn_code2_i, 		// prn code2 load value
 input [2:0] current_cor_i,	  // current correlator load value
 input code_sub_phase_i,  // code sub-phase load value
 input dumping_i,		// dumping load value
 output [4:0] nh_count_o, // NH code count output
-output [4:0] coherent_count_o,	// coherent count output
-output [4:0] ms_data_count_o,		// ms data count output
+output [5:0] coherent_count_o,	// coherent count output
+output [4:0] bit_count_o,		// number of ms within data bit output
 output [3:0] prn_code2_o,				// prn code2 output
 output [2:0] current_cor_o,			// current correlator output
 output code_sub_phase_o,  // code sub phase output
 output dumping_o,  // dumping flag output
 
 // variables of MS_DATA
-input ms_data_sum_en,		// load enable
-input [15:0] ms_data_sum_i, 	// ms data sum load value
-output [15:0] ms_data_sum_o,	// ms data sum output
+input decode_data_en,		// load enable
+input [31:0] decode_data_i, 	// decode data sum load value
+output reg [31:0] decode_data_o,	// decode data sum output
 
 // variables of partial accumulate data
 input acc_en, // acc partial result load enable, valid data will be in i_acc_i and i_acc_q in next 8 clock cycles, one cor per cycle
@@ -126,8 +126,9 @@ output shift_code,
 
 // control and state signals
 input	fill_finished,			// set this signal when all physical channel fill finish
+input cor_finished,				// set this signal when correlation of all samples finish
+input [31:0] coh_acc_data,		// coherent acc data from coherent sum module
 output     cor_ready,			// correlator ready to accept input sample
-output reg msdata_done_o,
 output     coherent_done_o,    //coherent data is ready
 output     overwrite_protect
 );
@@ -240,7 +241,7 @@ nh_code_gen u_nh_code_gen
     .clk            (clk                 ),
     .rst_b          (rst_b               ),
     .nh_code1       (nh_code             ),
-    .nh_code2       (nh_code2            ),
+    .nh_code2       (20'h0               ),
     .nh_increase    (prn_reset&shift_code),
     .nh_length      (nh_length           ),
     .nh_count_en    (corr_state_load_en  ),
@@ -284,6 +285,7 @@ prn_code_cor u_prn_code_cor
 wire [4:0] cor_index;
 wire do_ms_data_sum;
 wire dumping_valid;
+wire data_decode_valid;
 wire [15:0] i_acc_shift;
 wire [15:0] q_acc_shift;
 
@@ -293,6 +295,7 @@ dumping_logic u_dumping_logic
     .rst_b               (rst_b             ),
     .overflow            (overflow          ),
     .shift_code          (shift_code        ),
+    .bit_length          (bit_length        ),
     .coherent_number     (coherent_number   ),
 		.enable_2nd_prn      (enable_2nd_prn    ),
     .dump_length         (dump_length       ),
@@ -308,16 +311,20 @@ dumping_logic u_dumping_logic
     .coherent_count_en   (corr_state_load_en),
     .coherent_count_i    (coherent_count_i  ),
     .coherent_count_o    (coherent_count_o  ),
+    .bit_count_en        (corr_state_load_en),
+    .bit_count_i         (bit_count_i       ),
+    .bit_count_o         (bit_count_o       ),
     .i_acc_shift         (i_acc_shift       ),
     .q_acc_shift         (q_acc_shift       ),
     .coherent_sum_valid  (coherent_sum_valid),
     .cor_index           (cor_dump_index    ),
     .i_coherent_sum      (i_coherent_sum    ),
     .q_coherent_sum      (q_coherent_sum    ),
-    .do_ms_data_sum      (do_ms_data_sum    ),
+//    .do_ms_data_sum      (do_ms_data_sum    ),
     .dumping_valid       (dumping_valid     ),
     .coherent_done_o     (coherent_done_o   ),
-    .overwrite_protect   (overwrite_protect )
+    .overwrite_protect   (overwrite_protect ),
+    .data_decode_valid   (data_decode_valid )
 );
 
 //--------------------------------------------------------------
@@ -411,42 +418,90 @@ assign i_acc_shift = ($signed(i_acc_result_sel) >>> post_shift_bits);
 assign q_acc_shift = ($signed(q_acc_result_sel) >>> post_shift_bits);
 
 //--------------------------------------------------------------
-// ms data sum
+// data decode
 //--------------------------------------------------------------
-reg [15:0] ms_data_sum;
-reg [4:0] ms_data_count;
-wire [4:0] ms_data_count_next;
-wire [15:0] ms_data_select;
-assign ms_data_count_next = ms_data_count + 1'b1;
-assign ms_data_select = data_in_q ? q_coherent_sum : i_coherent_sum;
+wire [2:0] length_index;
+wire [2:0] shift_bits, bit_select;
+assign length_index = bit_length[4] ? 3'd2 : (bit_length[3] ? 3'd1 : 3'd0);
+assign shift_bits = {1'b0, pre_shift_bits} + {1'b0, post_shift_bits};
+assign bit_select = (shift_bits >= length_index) ? (shift_bits - length_index) : 3'd0;
+
+wire [15:0] data_select;
+assign data_select = data_in_q ? coh_acc_data[15:0] : coh_acc_data[31:16];
+
+// 1bit data
+wire data_dec1;
+assign data_dec1 = data_select[15];
+
+// 2bit data
+reg [7:0] data_dec2_sel;
+always @ (*)
+	case (bit_select)
+	    3'd0:  data_dec2_sel = {{6{data_select[15]}}, data_select[15:14]} + data_select[13];
+	    3'd1:  data_dec2_sel = {{5{data_select[15]}}, data_select[15:13]} + data_select[12];
+	    3'd2:  data_dec2_sel = {{4{data_select[15]}}, data_select[15:12]} + data_select[11];
+	    3'd3:  data_dec2_sel = {{3{data_select[15]}}, data_select[15:11]} + data_select[10];
+	    3'd4:  data_dec2_sel = {{2{data_select[15]}}, data_select[15:10]} + data_select[9];
+	    3'd5:  data_dec2_sel = {data_select[15], data_select[15:9]} + data_select[8];
+	    3'd6:  data_dec2_sel = data_select[15:8] + data_select[7];
+	    default: data_dec2_sel = data_select[15:8] + data_select[7];
+	endcase
+
+wire [1:0] data_dec2;	// clip
+assign data_dec2 = ((data_dec2_sel[7:1] == 7'h0) || (data_dec2_sel[7:1] == 7'h7f)) ? data_dec2_sel[1:0] : (data_select[15] ? 2'b10 : 2'b01);
+
+// 4bit data
+reg [9:0] data_dec4_sel;
+always @ (*)
+	case (bit_select)
+	    3'd0:  data_dec4_sel = {{6{data_select[15]}}, data_select[15:12]} + data_select[11];
+	    3'd1:  data_dec4_sel = {{5{data_select[15]}}, data_select[15:11]} + data_select[10];
+	    3'd2:  data_dec4_sel = {{4{data_select[15]}}, data_select[15:10]} + data_select[9];
+	    3'd3:  data_dec4_sel = {{3{data_select[15]}}, data_select[15:9]} + data_select[8];
+	    3'd4:  data_dec4_sel = {{2{data_select[15]}}, data_select[15:8]} + data_select[7];
+	    3'd5:  data_dec4_sel = {data_select[15], data_select[15:7]} + data_select[6];
+	    3'd6:  data_dec4_sel = data_select[15:6] + data_select[5];
+	    default: data_dec4_sel = data_select[15:6] + data_select[5];
+	endcase
+
+wire [3:0] data_dec4;	// clip
+assign data_dec4 = ((data_dec4_sel[9:3] == 7'h0) || (data_dec4_sel[9:3] == 7'h7f)) ? data_dec4_sel[3:0] : (data_select[15] ? 4'b1000 : 4'b0111);
+
+// 8bit data
+reg [13:0] data_dec8_sel;
+always @ (*)
+	case (bit_select)
+	    3'd0:  data_dec8_sel = {{6{data_select[15]}}, data_select[15:8]};
+	    3'd1:  data_dec8_sel = {{5{data_select[15]}}, data_select[15:7]};
+	    3'd2:  data_dec8_sel = {{4{data_select[15]}}, data_select[15:6]};
+	    3'd3:  data_dec8_sel = {{3{data_select[15]}}, data_select[15:5]};
+	    3'd4:  data_dec8_sel = {{2{data_select[15]}}, data_select[15:4]};
+	    3'd5:  data_dec8_sel = {data_select[15], data_select[15:3]};
+	    3'd6:  data_dec8_sel = data_select[15:2];
+	    default: data_dec8_sel = data_select[15:2];
+	endcase
+
+wire [7:0] data_dec8;	// clip
+assign data_dec8 = ((data_dec8_sel[13:7] == 7'h0) || (data_dec8_sel[13:7] == 7'h7f)) ? data_dec8_sel[7:0] : (data_select[15] ? 8'h80 : 8'h7f);
+
+reg [31:0] decode_data;
+always @ (*)
+	case (decode_bit)
+	    2'd0:  decode_data = {decode_data_o[30:0], data_dec1};
+	    2'd1:  decode_data = {decode_data_o[29:0], data_dec2};
+	    2'd2:  decode_data = {decode_data_o[28:0], data_dec4};
+	    2'd3:  decode_data = {decode_data_o[24:0], data_dec8};
+	    default: decode_data = decode_data_o;
+	endcase
 
 always @(posedge clk or negedge rst_b)
 	if (!rst_b)
-		ms_data_count <= 5'd0;
-	else if (corr_state_load_en)
-		ms_data_count <= ms_data_count_i;
-	else if (coherent_sum_valid && do_ms_data_sum && (|ms_data_number))
-		ms_data_count <= (ms_data_count_next == ms_data_number) ? 5'd0 : ms_data_count_next;
-
-always @(posedge clk or negedge rst_b)
-	if (!rst_b)
-		ms_data_sum <= 16'd0;
-	else if (ms_data_sum_en)
-		ms_data_sum <= ms_data_sum_i;
-	else if (coherent_sum_valid && do_ms_data_sum && (|ms_data_number))
-		ms_data_sum <= (ms_data_count == 5'd0) ? ms_data_select : ms_data_sum + ms_data_select;
-
-always @(posedge clk or negedge rst_b)
-	if (!rst_b)
-		msdata_done_o <= 1'b0;
-	else if (corr_state_load_en)
-		msdata_done_o <= 1'b0;
-	else if (coherent_sum_valid && do_ms_data_sum && (|ms_data_number) && ms_data_count_next == ms_data_number)
-		msdata_done_o <= 1'b1;
-			
-assign ms_data_sum_o = ms_data_sum;
-assign ms_data_count_o = ms_data_count;
-
+		decode_data_o <= 32'd0;
+	else if (decode_data_en)
+		decode_data_o <= decode_data_i;
+	else if (cor_finished && data_decode_valid)
+		decode_data_o <= decode_data;
+		
 assign cor_ready = (jump_count_o[7])|(~(|jump_count_o[6:0]));
 
 endmodule

@@ -255,24 +255,24 @@ wire [3:0] carrier_count_en;
 wire [3:0] code_phase_en;
 wire [3:0] prn_code_load_en;
 wire [3:0] corr_state_load_en;
-wire [3:0] ms_data_sum_en;
+wire [3:0] decode_data_en;
 wire [3:0] prn2_state_en;
 wire [3:0] acc_en;
 
 wire [31:0]  carrier_freq [3:0];
 wire [31:0]  code_freq [3:0];
 wire [1:0]   pre_shift_bits [3:0];
-wire enable_boc [3:0];
+wire [1:0]  post_shift_bits [3:0];
 wire data_in_q [3:0];
 wire enable_2nd_prn [3:0];
+wire enable_boc [3:0];
+wire [1:0]  decode_bit [3:0];
 wire [1:0]  narrow_factor [3:0];
-wire [15:0] dump_length [3:0];
+wire [4:0]  bit_length [3:0];
+wire [5:0]	coherent_number [3:0];
 wire [24:0] nh_code [3:0];
 wire [4:0] 	nh_length [3:0];
-wire [19:0] nh_code2 [3:0];
-wire [4:0]  ms_data_number [3:0];
-wire [4:0]	coherent_number [3:0];
-wire [1:0]  post_shift_bits [3:0];
+wire [15:0] dump_length [3:0];
 wire [31:0] prn_config [3:0];
 wire [31:0] prn2_config [3:0];
 
@@ -303,17 +303,17 @@ generate
 			.carrier_freq       (carrier_freq[i_gen]        ),
 			.code_freq          (code_freq[i_gen]           ),
 			.pre_shift_bits     (pre_shift_bits[i_gen]      ),
-			.enable_boc         (enable_boc[i_gen]          ),
+			.post_shift_bits    (post_shift_bits[i_gen]     ),
 			.data_in_q          (data_in_q[i_gen]           ),
 			.enable_2nd_prn     (enable_2nd_prn[i_gen]      ),
+			.enable_boc         (enable_boc[i_gen]          ),
+			.decode_bit         (decode_bit[i_gen]          ),
 			.narrow_factor      (narrow_factor[i_gen]       ),
-			.dump_length        (dump_length[i_gen]         ),
+			.bit_length         (bit_length[i_gen]          ),
+			.coherent_number    (coherent_number[i_gen]     ),
 			.nh_code            (nh_code[i_gen]             ),
 			.nh_length          (nh_length[i_gen]           ),
-			.nh_code2           (nh_code2[i_gen]            ),
-			.ms_data_number     (ms_data_number[i_gen]      ),
-			.coherent_number    (coherent_number[i_gen]     ),
-			.post_shift_bits    (post_shift_bits[i_gen]     ),
+			.dump_length        (dump_length[i_gen]         ),
 			.prn_config         (prn_config[i_gen]          ),
 			.prn2_config        (prn2_config[i_gen]         ),
 
@@ -324,7 +324,7 @@ generate
 			.code_phase_en      (code_phase_en[i_gen]       ),
 			.prn_code_load_en   (prn_code_load_en[i_gen]    ),
 			.corr_state_load_en (corr_state_load_en[i_gen]  ),
-			.ms_data_sum_en     (ms_data_sum_en[i_gen]      ),
+			.decode_data_en     (decode_data_en[i_gen]      ),
 			.prn2_state_en      (prn2_state_en[i_gen]       ),
 			.acc_en             (acc_en[i_gen]              )
 		);
@@ -342,16 +342,15 @@ wire [15:0] dump_count [3:0];
 wire [7:0]  jump_count [3:0];
 wire [7:0]  prn_code [3:0];
 wire [4:0]  nh_count [3:0];
-wire [4:0]  coherent_count [3:0];
-wire [4:0]  ms_data_count [3:0];
+wire [5:0]  coherent_count [3:0];
+wire [4:0]  bit_count [3:0];
 wire [3:0]  prn_code2 [3:0];
 wire [2:0]  current_cor [3:0];
 wire [3:0]  code_sub_phase;
 wire [3:0]  dumping;
 wire [3:0]  overwrite_protect;
-wire [3:0]  msdata_done;
 wire [3:0]  coherent_done;
-wire [15:0] ms_data_sum [3:0];
+wire [31:0] decode_data [3:0];
 wire [31:0] prn2_state [3:0];
 wire [15:0] i_acc [3:0];
 wire [15:0] q_acc [3:0];
@@ -375,15 +374,14 @@ dump_state u_dump_state
 		.prn_code_0             (prn_code[0]               ),
 		.nh_count_0             (nh_count[0]               ),
 		.coherent_count_0       (coherent_count[0]         ),
-		.ms_data_count_0        (ms_data_count[0]          ),
+		.bit_count_0            (bit_count[0]              ),
 		.prn_code2_0            (prn_code2[0]              ),
 		.current_cor_0          (current_cor[0]            ),
 		.code_sub_phase_0       (code_sub_phase[0]         ),
 		.dumping_0              (dumping[0]                ),
 		.overwrite_protect_0    (overwrite_protect[0]      ), 
-		.msdata_done_0          (msdata_done[0]            ),
 		.coherent_done_0        (coherent_done[0]          ),
-		.ms_data_sum_0          (ms_data_sum[0]            ),
+		.decode_data_0          (decode_data[0]            ),
 		.prn2_state_0           (prn2_state[0]             ),
 		.i_acc_0                (i_acc[0]                  ),
 		.q_acc_0                (q_acc[0]                  ),
@@ -398,15 +396,14 @@ dump_state u_dump_state
 		.prn_code_1             (prn_code[1]               ),
 		.nh_count_1             (nh_count[1]               ),
 		.coherent_count_1       (coherent_count[1]         ),
-		.ms_data_count_1        (ms_data_count[1]          ),
+		.bit_count_1            (bit_count[1]              ),
 		.prn_code2_1            (prn_code2[1]              ),
 		.current_cor_1          (current_cor[1]            ),
 		.code_sub_phase_1       (code_sub_phase[1]         ),
 		.dumping_1              (dumping[1]                ),
 		.overwrite_protect_1    (overwrite_protect[1]      ), 
-		.msdata_done_1          (msdata_done[1]            ),
 		.coherent_done_1        (coherent_done[1]          ),
-		.ms_data_sum_1          (ms_data_sum[1]            ),
+		.decode_data_1          (decode_data[1]            ),
 		.prn2_state_1           (prn2_state[1]             ),
 		.i_acc_1                (i_acc[1]                  ),
 		.q_acc_1                (q_acc[1]                  ),
@@ -421,15 +418,14 @@ dump_state u_dump_state
 		.prn_code_2             (prn_code[2]               ),
 		.nh_count_2             (nh_count[2]               ),
 		.coherent_count_2       (coherent_count[2]         ),
-		.ms_data_count_2        (ms_data_count[2]          ),
+		.bit_count_2            (bit_count[2]              ),
 		.prn_code2_2            (prn_code2[2]              ),
 		.current_cor_2          (current_cor[2]            ),
 		.code_sub_phase_2       (code_sub_phase[2]         ),
 		.dumping_2              (dumping[2]                ),
 		.overwrite_protect_2    (overwrite_protect[2]      ), 
-		.msdata_done_2          (msdata_done[2]            ),
 		.coherent_done_2        (coherent_done[2]          ),
-		.ms_data_sum_2          (ms_data_sum[2]            ),
+		.decode_data_2          (decode_data[2]            ),
 		.prn2_state_2           (prn2_state[2]             ),
 		.i_acc_2                (i_acc[2]                  ),
 		.q_acc_2                (q_acc[2]                  ),
@@ -444,15 +440,14 @@ dump_state u_dump_state
 		.prn_code_3             (prn_code[3]               ),
 		.nh_count_3             (nh_count[3]               ),
 		.coherent_count_3       (coherent_count[3]         ),
-		.ms_data_count_3        (ms_data_count[3]          ),
+		.bit_count_3            (bit_count[3]              ),
 		.prn_code2_3            (prn_code2[3]              ),
 		.current_cor_3          (current_cor[3]            ),
 		.code_sub_phase_3       (code_sub_phase[3]         ),
 		.dumping_3              (dumping[3]                ),
 		.overwrite_protect_3    (overwrite_protect[3]      ), 
-		.msdata_done_3          (msdata_done[3]            ),
 		.coherent_done_3        (coherent_done[3]          ),
-		.ms_data_sum_3          (ms_data_sum[3]            ),
+		.decode_data_3          (decode_data[3]            ),
 		.prn2_state_3           (prn2_state[3]             ),
 		.i_acc_3                (i_acc[3]                  ),
 		.q_acc_3                (q_acc[3]                  )
@@ -484,6 +479,7 @@ wire [5:0] q_data_down [3:0];
 wire [3:0] shift_code;
 
 wire [3:0] coherent_sum_valid;
+wire [31:0] coh_acc_data [3:0];
 wire [3:0] cor_ready;
 
 generate
@@ -500,17 +496,17 @@ generate
 		.carrier_freq           (carrier_freq[i_gen]       ),
 		.code_freq              (code_freq[i_gen]          ),
 		.pre_shift_bits         (pre_shift_bits[i_gen]     ),
-		.enable_boc             (enable_boc[i_gen]         ),
+		.post_shift_bits        (post_shift_bits[i_gen]    ),
 		.data_in_q              (data_in_q[i_gen]          ),
 		.enable_2nd_prn         (enable_2nd_prn[i_gen]     ),
+		.enable_boc             (enable_boc[i_gen]         ),
+		.decode_bit             (decode_bit[i_gen]         ),
 		.narrow_factor          (narrow_factor[i_gen]      ),
-		.dump_length            (dump_length[i_gen]        ),
+		.bit_length             (bit_length[i_gen]         ),
+		.coherent_number        (coherent_number[i_gen]    ),
 		.nh_code                (nh_code[i_gen]            ),
 		.nh_length              (nh_length[i_gen]          ),
-		.nh_code2               (nh_code2[i_gen]           ),
-		.ms_data_number         (ms_data_number[i_gen]     ),
-		.coherent_number        (coherent_number[i_gen]    ),
-		.post_shift_bits        (post_shift_bits[i_gen]    ),
+		.dump_length            (dump_length[i_gen]        ),
 	
 		.carrier_phase_en       (carrier_phase_en[i_gen]   ),
 		.carrier_phase_i        (state_d4rd                ),
@@ -532,23 +528,23 @@ generate
 
 		.corr_state_load_en     (corr_state_load_en[i_gen] ),
 		.nh_count_i             (state_d4rd[31:27]         ),
-		.coherent_count_i       (state_d4rd[25:21]         ),
-		.ms_data_count_i        (state_d4rd[20:16]         ),
+		.coherent_count_i       (state_d4rd[26:21]         ),
+		.bit_count_i            (state_d4rd[20:16]         ),
 		.prn_code2_i            (state_d4rd[15:12]         ),
 		.current_cor_i          (state_d4rd[6:4]           ),
 		.code_sub_phase_i       (state_d4rd[8]             ),
 		.dumping_i              (state_d4rd[7]             ),
 		.nh_count_o             (nh_count[i_gen]           ),
 		.coherent_count_o       (coherent_count[i_gen]     ),
-		.ms_data_count_o        (ms_data_count[i_gen]      ),
+		.bit_count_o            (bit_count[i_gen]          ),
 		.prn_code2_o            (prn_code2[i_gen]          ),
 		.current_cor_o          (current_cor[i_gen]        ),
 		.code_sub_phase_o       (code_sub_phase[i_gen]     ),
 		.dumping_o              (dumping[i_gen]            ),
 
-		.ms_data_sum_en         (ms_data_sum_en[i_gen]     ),
-		.ms_data_sum_i          (state_d4rd[15:0]          ),
-		.ms_data_sum_o          (ms_data_sum[i_gen]        ),
+		.decode_data_en         (decode_data_en[i_gen]     ),
+		.decode_data_i          (state_d4rd                ),
+		.decode_data_o          (decode_data[i_gen]        ),
 
 		.acc_en                 (acc_en[i_gen]             ),
 		.acc_dump               (~state_addr[3] & state_addr[4]),
@@ -595,8 +591,9 @@ generate
 		.shift_code             (shift_code[i_gen]         ),
 
 		.fill_finished          (fill_state_done           ),
+		.cor_finished           (dump_start                ),
+		.coh_acc_data           (coh_acc_data[i_gen]       ),
 		.cor_ready              (cor_ready[i_gen]          ),
-		.msdata_done_o          (msdata_done[i_gen]        ),
 		.coherent_done_o        (coherent_done[i_gen]      ),
 		.overwrite_protect      (overwrite_protect[i_gen]  )
 	);
@@ -763,6 +760,10 @@ coherent_sum u_coherent_sum
 		.fifo_data1         (fifo_out[1]      ),
 		.fifo_data2         (fifo_out[2]      ),
 		.fifo_data3         (fifo_out[3]      ),
+		.coh_acc_data0      (coh_acc_data[0]  ),
+		.coh_acc_data1      (coh_acc_data[1]  ),
+		.coh_acc_data2      (coh_acc_data[2]  ),
+		.coh_acc_data3      (coh_acc_data[3]  ),
 		.coherent_rd        (coherent_rd      ),
 		.coherent_wr        (coherent_wr      ),
 		.coherent_addr      (coherent_addr    ),

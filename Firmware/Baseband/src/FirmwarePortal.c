@@ -70,9 +70,10 @@ void InterruptService()
 void FirmwareInitialize()
 {
 	int i, sv_list[32] = {
-//		FREQ_SVID(FREQ_B1C, 8), 0,
+		FREQ_SVID(FREQ_B1C, 8), 0,
+//		FREQ_SVID(FREQ_L1CA, 3),
 		FREQ_SVID(FREQ_L1CA, 4),
-		FREQ_SVID(FREQ_L1CA, 7), //0,
+		FREQ_SVID(FREQ_L1CA, 7),
 		FREQ_SVID(FREQ_L1CA, 8),
 		FREQ_SVID(FREQ_L1CA, 9),
 		FREQ_SVID(FREQ_L1CA, 14),
@@ -80,7 +81,7 @@ void FirmwareInitialize()
 		FREQ_SVID(FREQ_L1CA, 27),
 		FREQ_SVID(FREQ_L1CA, 30), 0};	// for debug use only
 
-	MeasurementInterval = 1000;
+	MeasurementInterval = 100;
 
 	AttachBasebandISR(InterruptService);
 
@@ -97,7 +98,7 @@ void FirmwareInitialize()
 	SetRegValue(ADDR_TE_POLYNOMIAL, 0x00e98204);	// set L1CA polynomial
 	SetRegValue(ADDR_TE_CODE_LENGTH, 0x00ffc000);	// set L1CA code length
 	SetRegValue(ADDR_TE_NOISE_CONFIG, 1);			// set noise smooth factor
-	SetRegValue(ADDR_TE_NOISE_FLOOR, 800);	// set initial noise floor
+	SetRegValue(ADDR_TE_NOISE_FLOOR, 784 >> PRE_SHIFT_BITS);	// set initial noise floor
 	SetRegValue(ADDR_AE_CARRIER_FREQ, CARRIER_FREQ(0));
 	SetRegValue(ADDR_AE_CODE_RATIO, (int)(2.046e6 / SAMPLE_FREQ * 16777216. + 0.5));
 	SetRegValue(ADDR_AE_THRESHOLD, 37);

@@ -857,7 +857,7 @@ void CAcqEngine::DoAcquisition()
 		StrideNumber = EXTRACT_UINT(ChannelConfig[i][0], 0, 6);
 		CoherentNumber = EXTRACT_UINT(ChannelConfig[i][0], 8, 6);
 		NonCoherentNumber = EXTRACT_UINT(ChannelConfig[i][0], 16, 7);
-		PeakRatioTh = EXTRACT_UINT(ChannelConfig[i][0], 24, 6);
+		PeakRatioTh = EXTRACT_UINT(ChannelConfig[i][0], 24, 3);
 		EarlyTerminate = EXTRACT_UINT(ChannelConfig[i][0], 27, 1);
 		CenterFreq = EXTRACT_INT(ChannelConfig[i][1], 0, 20) << 12;
 		Svid = EXTRACT_UINT(ChannelConfig[i][1], 24, 6);

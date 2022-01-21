@@ -11,7 +11,7 @@ extern "C" {
 
 void main()
 {
-	SetInputFile("..\\..\\..\\matlab\\signal_src\\sim_signal_L1CA.bin");
+	SetInputFile("..\\..\\..\\data\\sim_signal_L1CA.bin");
 
 	FirmwareInitialize();
 	EnableRF();

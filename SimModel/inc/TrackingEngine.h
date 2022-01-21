@@ -24,18 +24,20 @@ struct ChannelConfig
 	// config parameters
 	double CarrierFreq;
 	double CodeFreq;
+	unsigned int CarrierFreqInt;
+	unsigned int CodeFreqInt;
 	int PreShiftBits;
+	int PostShiftBits;
 	int EnableBOC;
 	int DataInQBranch;
 	int EnableSecondPrn;
+	int DecodeBit;
 	int NarrowFactor;
-	int DumpLength;
+	int BitLength;
+	int CoherentNumber;
 	unsigned int NHCode;
 	int NHLength;
-	unsigned int NHCode2;
-	int MsDataNumber;
-	int CoherentNumber;
-	int PostShiftBits;
+	int DumpLength;
 	// translate from PRN config
 	int SystemSel;	// 0: GPS L1C/A, 1: Galileo E1, 2: BDS B1C, 3: GPS L1C
 	int Svid;
@@ -47,13 +49,14 @@ struct ChannelConfig
 	int JumpCount;
 	int DumpCount;
 	int CoherentDone;
-	int MsDataDone;
+	int OverwriteProtect;
 	int CurrentCor;
 	int Dumping;
 	int CodeSubPhase;
-	int MsDataCount;
+	int BitCount;
 	int CoherentCount;
 	int NHCount;
+	unsigned int DecodeData;
 	// store Gauss noise
 	complex_number GaussNoise[8];
 	// variable to get modulation bit
@@ -62,7 +65,6 @@ struct ChannelConfig
 	int CurrentDataBit;		// modulation bit for current outputing correlation result (if not all correlator finished)
 	int CurrentPilotBit;	// modulation bit for current outputing correlation result (if not all correlator finished)
 	int CurrentNHCode;		// latest NH bit for pilot channel
-	int CurrentNHCode2;		// latest NH bit for data channel
 	int DataBits[1800];
 	int PilotBits[1800];
 };
@@ -101,8 +103,9 @@ public:
 
 	int FindSvid(unsigned int ConfigArray[], int ArraySize, U32 PrnConfig);
 	SATELLITE_PARAM* FindSatParam(int ChannelId, PSATELLITE_PARAM SatParam[], int SatNumber);
-	void GetCorrelationResult(int ChannelId, GNSS_TIME CurTime, SATELLITE_PARAM *pSatParam, int DumpDataI[], int DumpDataQ[], int CorIndex[], int CorPos[], int NHCode[], int NHCode2[], int DataLength);
-	int CalculateCounter(int ChannelId, int CorIndex[], int CorPos[], int NHCode[], int NHCode2[], int &DataLength);
+	void GetCorrelationResult(ChannelConfig *ChannelParam, CarrierParameter *CarrierParam, GNSS_TIME CurTime, SATELLITE_PARAM *pSatParam, int DumpDataI[], int DumpDataQ[], int CorIndex[], int CorPos[], int NHCode[], int DataLength);
+	int CalculateCounter(ChannelConfig *ChannelParam, int CorIndex[], int CorPos[], int NHCode[], int &DataLength);
+	void DecodeDataAcc(ChannelConfig *ChannelParam, int DataValue);
 	void InitChannel(int ChannelId, GNSS_TIME CurTime, PSATELLITE_PARAM SatParam[], int SatNumber);
 	double NarrowCompensation(int CorIndex, int NarrowFactor);
 	double PhaseAverage(double Phase1, double Ratio1, double Phase2, double Ratio2);
