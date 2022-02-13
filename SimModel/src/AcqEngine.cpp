@@ -450,6 +450,7 @@ void CAcqEngine::AssignChannelParam(PSATELLITE_PARAM pSatelliteParam, GNSS_TIME 
 		BitLength = 10;
 		FrameBits = 1800;
 		TotalBits = 14;
+		Time.MilliSeconds -= 14000;	// compensate BDS leap second difference
 		break;
 	case 3:	// GPS L1C
 		FrameLength = 18000;

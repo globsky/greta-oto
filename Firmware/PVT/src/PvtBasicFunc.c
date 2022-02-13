@@ -63,6 +63,48 @@ double ScaleDoubleU(unsigned int value, int scale)
 	return data.d_data;
 }
 
+//*************** Fast convert signed long long to double value with 2^x scale ****************
+//* directly subtract scale value from exponent
+//* refer to IEEE 754 floating point format
+// Parameters:
+//   value: long long value to be scaled
+//   scale: exponential scale factor
+// Return value:
+//   double format of value*2^(-scale)
+double ScaleDoubleLong(long long value, int scale)
+{
+	DOUBLE_INT_UNION data;
+
+	data.d_data = (double)value;
+	if (value != 0)
+	{
+		data.i_data[1] -= (scale << 20);
+	}
+
+	return data.d_data;
+}
+
+//*************** Fast convert unsigned long long to double value with 2^x scale ****************
+//* directly subtract scale value from exponent
+//* refer to IEEE 754 floating point format
+// Parameters:
+//   value: long long value to be scaled
+//   scale: exponential scale factor
+// Return value:
+//   double format of value*2^(-scale)
+double ScaleDoubleULong(unsigned long long value, int scale)
+{
+	DOUBLE_INT_UNION data;
+
+	data.d_data = (double)value;
+	if (value != 0)
+	{
+		data.i_data[1] -= (scale << 20);
+	}
+
+	return data.d_data;
+}
+
 static const unsigned char ParityTable[6][16] = {
 	{ 0x00, 0x13, 0x25, 0x36, 0x0B, 0x18, 0x2E, 0x3D, 0x16, 0x05, 0x33, 0x20, 0x1D, 0x0E, 0x38, 0x2B, }, 
 	{ 0x00, 0x2C, 0x19, 0x35, 0x32, 0x1E, 0x2B, 0x07, 0x26, 0x0A, 0x3F, 0x13, 0x14, 0x38, 0x0D, 0x21, },

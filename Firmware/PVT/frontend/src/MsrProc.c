@@ -12,6 +12,7 @@
 #include "GlobalVar.h"
 #include "SupportPackage.h"
 #include "GpsFrame.h"
+#include "BdsFrame.h"
 
 #include <string.h>
 #include <math.h>
@@ -121,16 +122,10 @@ void MsrProc(PBB_MEASUREMENT Measurements, unsigned int ActiveMask, int CurMsInt
 		// if bit sync get, do frame process
 		if ((Measurements[ch_num].State & STAGE_MASK) >= STAGE_TRACK && Measurements[ch_num].CN0 > 0)
 		{
-			switch (FreqID)
-			{
-			case FREQ_L1CA:
+			if (FreqID == FREQ_L1CA)
 				GpsFrameSync(&g_ChannelStatus[ch_num], Measurements[ch_num].DataNumber, Measurements[ch_num].DataStreamAddr[0], Measurements[ch_num].DataStreamAddr[1], -1);
-				break;
-			case FREQ_E1:
-				break;
-			default:
-				break;
-			}
+			else if (FreqID == FREQ_B1C)
+				BdsFrameProc(&g_ChannelStatus[ch_num]);
 		}
 		else
 		{
@@ -173,6 +168,7 @@ void ProcessReceiverTime(int CurMsInterval, int DefaultMsInterval)
 {
 	int i;
 	PGPS_FRAME_INFO pGpsFrameInfo;
+	PBDS_FRAME_INFO pBdsFrameInfo;
 	double ClkDrifting;
 	int WeekMsCount = -1;
 
@@ -212,6 +208,16 @@ void ProcessReceiverTime(int CurMsInterval, int DefaultMsInterval)
 				WeekMsCount = pGpsFrameInfo->tow * 6000 + (pGpsFrameInfo->NavBitNumber + 2) * 20;
 			}
 			break;
+		case FREQ_B1C:
+			pBdsFrameInfo = (PBDS_FRAME_INFO)(g_ChannelStatus[i].FrameInfo);
+			// for BDS, receiver time approximate to transmit time + 80ms (MEO) or 140ms (GEO/IGSO)
+			// transmit time approximate to start of current frame (tow*1000) + received bits * 10ms
+			if (pBdsFrameInfo->tow >= 0)
+			{
+				WeekMsCount = pBdsFrameInfo->tow * 1000 + pBdsFrameInfo->NavBitNumber * 10 + 14000;	// 14s leap second
+				WeekMsCount += ((pBdsFrameInfo->FrameFlag & 0xc) == 0xc) ? 80 : 140;
+			}
+			break;
 		default:	// TODO: other satellite system
 			break;
 		}
@@ -244,6 +250,7 @@ void CalculateRawMsr(PCHANNEL_STATUS pChannelStatus, PBB_MEASUREMENT pMsr, int C
 	int IFFreq = IF_FREQ, sv_index = pChannelStatus->svid - 1;
 	double WaveLength = GPS_L1_WAVELENGTH, PsrDiff;
 	PGPS_FRAME_INFO pGpsFrameInfo = (PGPS_FRAME_INFO)(pChannelStatus->FrameInfo);
+	PBDS_FRAME_INFO pBdsFrameInfo = (PBDS_FRAME_INFO)(pChannelStatus->FrameInfo);
 
 	// clear all valid flags related to raw measurement
 	pChannelStatus->ChannelFlag &= ~MEASUREMENT_FLAGS;
@@ -275,6 +282,15 @@ void CalculateRawMsr(PCHANNEL_STATUS pChannelStatus, PBB_MEASUREMENT pMsr, int C
 		else
 			return;
 		break;
+	case FREQ_B1C:
+		if (pBdsFrameInfo->tow >= 0)	// transmit time get
+		{
+			// transmit time is current tow*1000ms plus bit_count*10ms
+			pChannelStatus->TransmitTimeMs = pBdsFrameInfo->tow * 1000 + pBdsFrameInfo->NavBitNumber * 10;
+		}
+		else
+			return;
+		break;
 	default:	// TODO: other satellite system
 		return;
 	}
@@ -285,6 +301,8 @@ void CalculateRawMsr(PCHANNEL_STATUS pChannelStatus, PBB_MEASUREMENT pMsr, int C
 
 	// pseudorange = (Tr-Tt) * LIGHT_SPEED
 	Count = g_ReceiverInfo.GpsMsCount;
+	if (pChannelStatus->FreqID == FREQ_B1C)
+		Count -= 14000;
 	Count -= pChannelStatus->TransmitTimeMs;
 	if (Count < -1000)
 		Count += 604800000;

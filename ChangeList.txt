@@ -77,4 +77,11 @@
 		Remove NH code2
 		Adjust position of some control parameters in state buffer
 		Extern coherent length from 5bit to 6bit
-		
+2/12/2022
+	Bug fix
+		Fix bug in BDS baseband measurement code count calculation
+		Fix bug in SimModel that B-CNAV1 bit stream incorrect due to BDS leap second 
+	Function and feature added
+		Add BDS frame decode function
+	Function and feature change
+		Optimize correlator state dump logic in RTL

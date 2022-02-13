@@ -390,7 +390,7 @@ int GpsFrameDecode(PCHANNEL_STATUS pChannelStatus, unsigned int *data)
 	if (frame_id == 1 && (g_ReceiverInfo.PosFlag & GPS_WEEK_VALID) == 0)
 	{
 		g_ReceiverInfo.WeekNumber = 2048 + GET_UBITS(data[7], 20, 10);
-//		g_ReceiverInfo.PosFlag |= (GPS_WEEK_VALID | CALC_INVIEW_GPS);
+		g_ReceiverInfo.PosFlag |= (GPS_WEEK_VALID);// | CALC_INVIEW_GPS);
 	}
 	
 	// check if iodc, iode2 and iode3 are not identical, only leave recent subframe data
@@ -422,6 +422,12 @@ int GpsFrameDecode(PCHANNEL_STATUS pChannelStatus, unsigned int *data)
 	return frame_id;
 }
 
+//*************** Decode GPS frame data to get ephemeris ****************
+// Parameters:
+//   pEph: pointer to ephemeris structure
+//   SunframeData: array of 3x10 WORD of subframe1/2/3
+// Return value:
+//   1 if decode success, otherwise 0
 int DecodeGpsEphemeris(PGNSS_EPHEMERIS pEph, const unsigned int SubframeData[3][10])
 {
 	const int *data;

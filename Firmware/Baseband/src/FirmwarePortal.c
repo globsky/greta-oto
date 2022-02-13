@@ -24,7 +24,7 @@ TASK_QUEUE BasebandTask;
 TASK_ITEM BasebandItems[32];
 U32 BasebandBuffer[1024];
 TASK_QUEUE PostMeasTask;
-TASK_ITEM PostMeasItems[8];
+TASK_ITEM PostMeasItems[32];
 U32 PostMeasBuffer[1024];
 TASK_QUEUE InputOutputTask;
 TASK_ITEM InputOutputItems[8];
@@ -70,8 +70,12 @@ void InterruptService()
 void FirmwareInitialize()
 {
 	int i, sv_list[32] = {
-		FREQ_SVID(FREQ_B1C, 8), 0,
-//		FREQ_SVID(FREQ_L1CA, 3),
+		FREQ_SVID(FREQ_B1C, 8),
+		FREQ_SVID(FREQ_B1C, 19),
+		FREQ_SVID(FREQ_B1C, 21),
+		FREQ_SVID(FREQ_B1C, 22),
+		FREQ_SVID(FREQ_B1C, 26), 0,
+		FREQ_SVID(FREQ_L1CA, 3),
 		FREQ_SVID(FREQ_L1CA, 4),
 		FREQ_SVID(FREQ_L1CA, 7),
 		FREQ_SVID(FREQ_L1CA, 8),
@@ -106,12 +110,13 @@ void FirmwareInitialize()
 
 	// initialize TE manager
 	TEInitialize();
+	BdsDecodeInit();
 	MsrProcInit();
 	PvtProcInit((PRECEIVER_INFO)0);
 	// initial request task queue
 	InitTaskQueue(&RequestTask, RequestItems, 32, RequestBuffer, sizeof(RequestBuffer));
 	InitTaskQueue(&BasebandTask, BasebandItems, 32, BasebandBuffer, sizeof(BasebandBuffer));
-	InitTaskQueue(&PostMeasTask, PostMeasItems, 8, PostMeasBuffer, sizeof(PostMeasBuffer));
+	InitTaskQueue(&PostMeasTask, PostMeasItems, 32, PostMeasBuffer, sizeof(PostMeasBuffer));
 	InitTaskQueue(&InputOutputTask, InputOutputItems, 8, InputOutputBuffer, sizeof(InputOutputBuffer));
 
 	// start acquisition

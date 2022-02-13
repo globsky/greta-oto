@@ -134,19 +134,18 @@ int StageDetermination(PCHANNEL_STATE ChannelState)
 		}
 	}
 
-	if (FREQ_ID_IS_B1C_L1C(ChannelState->FreqID) && ChannelState->BitSyncResult >= 2000 && (ChannelState->TrackingTime % 20) == 0)	// data sync finished and at 20ms boundary
+	if (FREQ_ID_IS_B1C_L1C(ChannelState->FreqID) && ChannelState->BitSyncResult &0x1800 && (ChannelState->TrackingTime % 20) == 0)	// data sync finished and at 20ms boundary
 	{
 		// switch to decode data channel
 		STATE_BUF_ENABLE_PRN2(&(ChannelState->StateBufferCache));
 		ChannelState->State |= (DATA_STREAM_PRN2 | NH_SEGMENT_UPDATE);
-		Time = ChannelState->BitSyncResult - 2000;
+		Time = ChannelState->BitSyncResult & 0x7ff;
 		// if negative stream, rotate phase by PI
-		if (ChannelState->BitSyncResult >= 4000)
+		if (ChannelState->BitSyncResult & 0x1000)
 		{
 			StateValue = GetRegValue((U32)(&(ChannelState->StateBufferHW->CarrierPhase)));
 			StateValue ^= 0x80000000;
 			SetRegValue((U32)(&(ChannelState->StateBufferHW->CarrierPhase)), StateValue);
-			Time -= 2000;
 		}
 		// enable NH
 		Time += ChannelState->TrackingTime / 10;
@@ -157,6 +156,7 @@ int StageDetermination(PCHANNEL_STATE ChannelState)
 		SwitchTrackingStage(ChannelState,  STAGE_TRACK + 1);
 		ChannelState->BitSyncResult = 0;
 		ChannelState->DataStream.DataCount = ChannelState->DataStream.CurrentAccTime = 0;	// reset data count for data stream decode
+		ChannelState->DataStream.StartIndex = ChannelState->FrameCounter;
 	}
 
 	// switch out from hold

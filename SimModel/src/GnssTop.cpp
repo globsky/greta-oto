@@ -196,7 +196,10 @@ void CGnssTop::SetInputFile(char *FileName)
 		GpsBits.SetEphemeris(i, GpsEph[i-1]);
 	}
 	for (i = 1; i <= TOTAL_BDS_SAT; i ++)
+	{
 		BdsEph[i-1] = NavData.FindEphemeris(BdsSystem, CurTime, i);
+		BdsBits.SetEphemeris(i, BdsEph[i-1]);
+	}
 	for (i = 1; i <= TOTAL_GAL_SAT; i ++)
 		GalEph[i-1] = NavData.FindEphemeris(GalileoSystem, CurTime, i);
 	GpsBits.SetIonoUtc(NavData.GetGpsIono(), NavData.GetGpsUtcParam());

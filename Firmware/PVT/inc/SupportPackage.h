@@ -30,6 +30,8 @@ do \
 // basic functions
 double ScaleDouble(int value, int scale);
 double ScaleDoubleU(unsigned int value, int scale);
+double ScaleDoubleLong(long long value, int scale);
+double ScaleDoubleULong(unsigned long long value, int scale);
 BOOL GpsParityCheck(unsigned int word);
 
 // conversion functions

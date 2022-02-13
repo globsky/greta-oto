@@ -19,6 +19,8 @@
 #define COR_NUMBER 8
 #define NOISE_AMP 625.
 
+enum SignalSystem { SignalL1CA = 0, SignalE1 = 1, SignalB1C = 2, SignalL1C = 3 };
+
 struct ChannelConfig
 {
 	// config parameters
@@ -39,7 +41,7 @@ struct ChannelConfig
 	int NHLength;
 	int DumpLength;
 	// translate from PRN config
-	int SystemSel;	// 0: GPS L1C/A, 1: Galileo E1, 2: BDS B1C, 3: GPS L1C
+	SignalSystem SystemSel;	// 0: GPS L1C/A, 1: Galileo E1, 2: BDS B1C, 3: GPS L1C
 	int Svid;
 	int PrnCount;
 	// state parameters

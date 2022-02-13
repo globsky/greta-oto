@@ -333,6 +333,7 @@ endgenerate
 
 // dump state signals and dump state module instance
 wire [31:0] state_d4wt;
+wire [31:0] cor_state_d4wt [3:0];
 wire [31:0] prn_state [3:0];
 wire [31:0] prn_count [3:0];
 wire [31:0] carrier_phase [3:0];
@@ -355,102 +356,57 @@ wire [31:0] prn2_state [3:0];
 wire [15:0] i_acc [3:0];
 wire [15:0] q_acc [3:0];
 
-dump_state u_dump_state
+generate
+	for (i_gen = 0; i_gen < 4; i_gen = i_gen + 1)
+	begin: dump_state_gen
+		dump_state u_dump_state
+		(
+			.clk                    (clk                       ),
+			.rst_b                  (rst_b                     ),
+		
+			.state_addr             (state_addr[4:0]           ),
+			.state_d4wt             (cor_state_d4wt[i_gen]     ),
+		
+			.prn_state              (prn_state[i_gen]          ),
+			.prn_count              (prn_count[i_gen]          ),
+			.carrier_phase          (carrier_phase[i_gen]      ),
+			.carrier_count          (carrier_count[i_gen]      ),
+			.code_phase             (code_phase[i_gen]         ),
+			.dump_count             (dump_count[i_gen]         ),
+			.jump_count             (jump_count[i_gen]         ),
+			.prn_code               (prn_code[i_gen]           ),
+			.nh_count               (nh_count[i_gen]           ),
+			.coherent_count         (coherent_count[i_gen]     ),
+			.bit_count              (bit_count[i_gen]          ),
+			.prn_code2              (prn_code2[i_gen]          ),
+			.current_cor            (current_cor[i_gen]        ),
+			.code_sub_phase         (code_sub_phase[i_gen]     ),
+			.dumping                (dumping[i_gen]            ),
+			.overwrite_protect      (overwrite_protect[i_gen]  ), 
+			.coherent_done          (coherent_done[i_gen]      ),
+			.decode_data            (decode_data[i_gen]        ),
+			.prn2_state             (prn2_state[i_gen]         ),
+			.i_acc                  (i_acc[i_gen]              ),
+			.q_acc                  (q_acc[i_gen]              )
+		);
+	end
+endgenerate
+
+reg [1:0] dump_channel_index;
+always @(posedge clk or negedge rst_b)
+	if (!rst_b)
+		dump_channel_index <= 2'b00;
+	else
+		dump_channel_index <= physical_channel_index;
+
+multiplex_4_1 #(32) multiplex_state
 (
-		.clk                    (clk                       ),
-		.rst_b                  (rst_b                     ),
-	
-		.physical_channel_index (physical_channel_index    ),
-		.state_addr             (state_addr[4:0]           ),
-		.state_d4wt             (state_d4wt                ),
-	
-		.prn_state_0            (prn_state[0]              ),
-		.prn_count_0            (prn_count[0]              ),
-		.carrier_phase_0        (carrier_phase[0]          ),
-		.carrier_count_0        (carrier_count[0]          ),
-		.code_phase_0           (code_phase[0]             ),
-		.dump_count_0           (dump_count[0]             ),
-		.jump_count_0           (jump_count[0]             ),
-		.prn_code_0             (prn_code[0]               ),
-		.nh_count_0             (nh_count[0]               ),
-		.coherent_count_0       (coherent_count[0]         ),
-		.bit_count_0            (bit_count[0]              ),
-		.prn_code2_0            (prn_code2[0]              ),
-		.current_cor_0          (current_cor[0]            ),
-		.code_sub_phase_0       (code_sub_phase[0]         ),
-		.dumping_0              (dumping[0]                ),
-		.overwrite_protect_0    (overwrite_protect[0]      ), 
-		.coherent_done_0        (coherent_done[0]          ),
-		.decode_data_0          (decode_data[0]            ),
-		.prn2_state_0           (prn2_state[0]             ),
-		.i_acc_0                (i_acc[0]                  ),
-		.q_acc_0                (q_acc[0]                  ),
-
-		.prn_state_1            (prn_state[1]              ),
-		.prn_count_1            (prn_count[1]              ),
-		.carrier_phase_1        (carrier_phase[1]          ),
-		.carrier_count_1        (carrier_count[1]          ),
-		.code_phase_1           (code_phase[1]             ),
-		.dump_count_1           (dump_count[1]             ),
-		.jump_count_1           (jump_count[1]             ),
-		.prn_code_1             (prn_code[1]               ),
-		.nh_count_1             (nh_count[1]               ),
-		.coherent_count_1       (coherent_count[1]         ),
-		.bit_count_1            (bit_count[1]              ),
-		.prn_code2_1            (prn_code2[1]              ),
-		.current_cor_1          (current_cor[1]            ),
-		.code_sub_phase_1       (code_sub_phase[1]         ),
-		.dumping_1              (dumping[1]                ),
-		.overwrite_protect_1    (overwrite_protect[1]      ), 
-		.coherent_done_1        (coherent_done[1]          ),
-		.decode_data_1          (decode_data[1]            ),
-		.prn2_state_1           (prn2_state[1]             ),
-		.i_acc_1                (i_acc[1]                  ),
-		.q_acc_1                (q_acc[1]                  ),
-
-		.prn_state_2            (prn_state[2]              ),
-		.prn_count_2            (prn_count[2]              ),
-		.carrier_phase_2        (carrier_phase[2]          ),
-		.carrier_count_2        (carrier_count[2]          ),
-		.code_phase_2           (code_phase[2]             ),
-		.dump_count_2           (dump_count[2]             ),
-		.jump_count_2           (jump_count[2]             ),
-		.prn_code_2             (prn_code[2]               ),
-		.nh_count_2             (nh_count[2]               ),
-		.coherent_count_2       (coherent_count[2]         ),
-		.bit_count_2            (bit_count[2]              ),
-		.prn_code2_2            (prn_code2[2]              ),
-		.current_cor_2          (current_cor[2]            ),
-		.code_sub_phase_2       (code_sub_phase[2]         ),
-		.dumping_2              (dumping[2]                ),
-		.overwrite_protect_2    (overwrite_protect[2]      ), 
-		.coherent_done_2        (coherent_done[2]          ),
-		.decode_data_2          (decode_data[2]            ),
-		.prn2_state_2           (prn2_state[2]             ),
-		.i_acc_2                (i_acc[2]                  ),
-		.q_acc_2                (q_acc[2]                  ),
-
-		.prn_state_3            (prn_state[3]              ),
-		.prn_count_3            (prn_count[3]              ),
-		.carrier_phase_3        (carrier_phase[3]          ),
-		.carrier_count_3        (carrier_count[3]          ),
-		.code_phase_3           (code_phase[3]             ),
-		.dump_count_3           (dump_count[3]             ),
-		.jump_count_3           (jump_count[3]             ),
-		.prn_code_3             (prn_code[3]               ),
-		.nh_count_3             (nh_count[3]               ),
-		.coherent_count_3       (coherent_count[3]         ),
-		.bit_count_3            (bit_count[3]              ),
-		.prn_code2_3            (prn_code2[3]              ),
-		.current_cor_3          (current_cor[3]            ),
-		.code_sub_phase_3       (code_sub_phase[3]         ),
-		.dumping_3              (dumping[3]                ),
-		.overwrite_protect_3    (overwrite_protect[3]      ), 
-		.coherent_done_3        (coherent_done[3]          ),
-		.decode_data_3          (decode_data[3]            ),
-		.prn2_state_3           (prn2_state[3]             ),
-		.i_acc_3                (i_acc[3]                  ),
-		.q_acc_3                (q_acc[3]                  )
+	.data_in_0  (cor_state_d4wt[0]  ),
+	.data_in_1  (cor_state_d4wt[1]  ),
+	.data_in_2  (cor_state_d4wt[2]  ),
+	.data_in_3  (cor_state_d4wt[3]  ),
+	.data_sel   (dump_channel_index ),
+	.data_out   (state_d4wt         )
 );
 
 //----------------------------------------------------------

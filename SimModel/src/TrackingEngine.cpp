@@ -214,7 +214,7 @@ void CTrackingEngine::SetTEBuffer(unsigned int Address, U32 Value)
 	case STATE_OFFSET_PRN_CONFIG:
 		if ((Value & 0xf0000000) == 0)	// L1C/A
 		{
-			pChannelParam->SystemSel = 0;
+			pChannelParam->SystemSel = SignalL1CA;
 			if ((pChannelParam->Svid = FindSvid(CAPrnInit, 32, Value)) == 0)	// not found in L1C/A initial array
 			{
 				if ((pChannelParam->Svid = FindSvid(CAPrnInit, 32, Value)) != 0)	// this is SBAS, continue from 33
@@ -223,26 +223,26 @@ void CTrackingEngine::SetTEBuffer(unsigned int Address, U32 Value)
 		}
 		else if ((Value & 0xf0000000) == 0xc0000000)	// E1
 		{
-			pChannelParam->SystemSel = 1;
+			pChannelParam->SystemSel = SignalE1;
 			pChannelParam->Svid = ((Value >> 6) & 0x7f) - 49;
 			if (pChannelParam->Svid < 1 || pChannelParam->Svid > 50)
 				pChannelParam->Svid = 0;	// only valid for E1C code range
 		}
 		else if ((Value & 0xf0000000) == 0x80000000)	// B1C
 		{
-			pChannelParam->SystemSel = 2;
+			pChannelParam->SystemSel = SignalB1C;
 			pChannelParam->Svid = FindSvid(B1CPilotInit, 63, Value);	// assume primary PRN code uses pilot code
 		}
 		else if ((Value & 0xf0000000) == 0xa0000000)	// L1C
 		{
-			pChannelParam->SystemSel = 3;
+			pChannelParam->SystemSel = SignalL1C;
 			pChannelParam->Svid = FindSvid(L1CPilotInit, 63, Value);	// assume primary PRN code uses pilot code
 		}
 		break;
 	case STATE_OFFSET_PRN_COUNT:
-		if (pChannelParam->SystemSel == 0)	// L1C/A
+		if (pChannelParam->SystemSel == SignalL1CA)	// L1C/A
 			pChannelParam->PrnCount = (Value >> 14);
-		else if (pChannelParam->SystemSel == 1)	// E1
+		else if (pChannelParam->SystemSel == SignalE1)	// E1
 			pChannelParam->PrnCount = Value - (Value >> 10);
 		else	// B1C or L1C
 			pChannelParam->PrnCount = Value & 0x3fff;
@@ -282,9 +282,9 @@ U32 CTrackingEngine::GetTEBuffer(unsigned int Address)
 	switch (AddressOffset)
 	{
 	case STATE_OFFSET_PRN_COUNT:
-		if (pChannelParam->SystemSel == 0)	// L1C/A
+		if (pChannelParam->SystemSel == SignalL1CA)	// L1C/A
 			return pChannelParam->PrnCount << 14;
-		else if (pChannelParam->SystemSel == 1)	// E1
+		else if (pChannelParam->SystemSel == SignalE1)	// E1
 			return ((pChannelParam->PrnCount / 1023) << 10) | (pChannelParam->PrnCount % 1023);
 		else	// B1C or L1C
 			return pChannelParam->PrnCount;
@@ -403,15 +403,15 @@ int CTrackingEngine::FindSvid(unsigned int ConfigArray[], int ArraySize, U32 Prn
 SATELLITE_PARAM* CTrackingEngine::FindSatParam(int ChannelId, PSATELLITE_PARAM SatParam[], int SatNumber)
 {
 	int i;
-	int SystemSel = ChannelParam[ChannelId].SystemSel;
+	SignalSystem SystemSel = ChannelParam[ChannelId].SystemSel;
 	int Svid = ChannelParam[ChannelId].Svid, system;
 
 	switch (SystemSel)
 	{
-	case 0: system = GpsSystem; break;
-	case 1: system = GalileoSystem; break;
-	case 2: system = BdsSystem; break;
-	case 3: system = GpsSystem; break;
+	case SignalL1CA: system = GpsSystem; break;
+	case SignalE1  : system = GalileoSystem; break;
+	case SignalB1C : system = BdsSystem; break;
+	case SignalL1C : system = GpsSystem; break;
 	default:
 		return (SATELLITE_PARAM *)0;
 	}
@@ -444,10 +444,13 @@ void CTrackingEngine::GetCorrelationResult(ChannelConfig *ChannelParam, CarrierP
 	const double *PeakValues;
 
 	// calculate half of 128x code length
-	CodeLength = (ChannelParam->SystemSel == 0) ? 1023 : ((ChannelParam->SystemSel == 1) ? 4092 : 10230);
+	CodeLength = (ChannelParam->SystemSel == SignalL1CA) ? 1023 : ((ChannelParam->SystemSel == SignalE1) ? 4092 : 10230);
 	CodeLength *= 64;
-	FrameLength = (ChannelParam->SystemSel == 0) ? 6000 : ((ChannelParam->SystemSel == 1) ? 2000 : 18000);
-	BitLength = (ChannelParam->SystemSel == 0) ? 20 : ((ChannelParam->SystemSel == 1) ? 4 : 10);
+	FrameLength = (ChannelParam->SystemSel == SignalL1CA) ? 6000 : ((ChannelParam->SystemSel == SignalE1) ? 2000 : 18000);
+	BitLength = (ChannelParam->SystemSel == SignalL1CA) ? 20 : ((ChannelParam->SystemSel == SignalE1) ? 4 : 10);
+
+	if (ChannelParam->SystemSel == SignalB1C)
+		CurTime.MilliSeconds -= 14000;	// compensate BDS leap second difference
 
 	// first generate relative noise
 	if (ChannelParam->NarrowFactor == 1)
@@ -474,7 +477,7 @@ void CTrackingEngine::GetCorrelationResult(ChannelConfig *ChannelParam, CarrierP
 //	memset(CorResult, 0, sizeof(CorResult));
 	if (pSatParam)
 	{
-		PeakValues = (ChannelParam->SystemSel == 0) ? Bpsk4PeakValues : (ChannelParam->EnableBOC ? Boc4PeakValues : Boc2PeakValues);
+		PeakValues = (ChannelParam->SystemSel == SignalL1CA) ? Bpsk4PeakValues : (ChannelParam->EnableBOC ? Boc4PeakValues : Boc2PeakValues);
 		// calculate carrier phase of source signal
 		CarrierPhase = pSatParam->TravelTime * 1575.42e6 - pSatParam->IonoDelay / GPS_L1_WAVELENGTH;
 //		printf("Phase=%.5f", CarrierPhase);
@@ -487,7 +490,7 @@ void CTrackingEngine::GetCorrelationResult(ChannelConfig *ChannelParam, CarrierP
 		CarrierParam->DopplerPrev = CarrierParam->DopplerCur;
 		CarrierParam->DopplerCur = -pSatParam->RelativeSpeed / GPS_L1_WAVELENGTH;
 		CarrierParam->LocalFreqPrev2 = CarrierParam->LocalFreqPrev;
-		CarrierParam->LocalFreqPrev = ChannelParam->CarrierFreq - (((ChannelParam->SystemSel == 0) || ChannelParam->EnableBOC) ? IF_FREQ : (IF_FREQ + 1023000));
+		CarrierParam->LocalFreqPrev = ChannelParam->CarrierFreq - (((ChannelParam->SystemSel == SignalL1CA) || ChannelParam->EnableBOC) ? IF_FREQ : (IF_FREQ + 1023000));
 		CarrierParam->DeltaPhiPrev2 = CarrierParam->DeltaPhiPrev;
 		CarrierParam->DeltaPhiPrev = CarrierParam->DeltaPhiCur;
 		CarrierParam->DeltaPhiCur = (CarrierPhase - ChannelParam->CarrierPhase / 4294967296.);
@@ -511,13 +514,13 @@ void CTrackingEngine::GetCorrelationResult(ChannelConfig *ChannelParam, CarrierP
 		if (FrameNumber != ChannelParam->CurrentFrame)
 		{
 			NavData[ChannelParam->SystemSel]->GetFrameData(TransmitTime, ChannelParam->Svid, 0, ChannelParam->PilotBits);
-			if (ChannelParam->SystemSel == 0)
+			if (ChannelParam->SystemSel == SignalL1CA)
 				memcpy(ChannelParam->DataBits, ChannelParam->PilotBits, sizeof(int) * 300);	// GPS L1 uses same bit stream for data and pilot
 			else
 				NavData[ChannelParam->SystemSel]->GetFrameData(TransmitTime, ChannelParam->Svid, 1, ChannelParam->DataBits);
 			ChannelParam->CurrentFrame = FrameNumber;
 		}
-		PeakPosition = (((ChannelParam->SystemSel == 0) ? 0 : Milliseconds) + TransmitTime.SubMilliSeconds) * 2046;
+		PeakPosition = (((ChannelParam->SystemSel == SignalL1CA) ? 0 : Milliseconds) + TransmitTime.SubMilliSeconds) * 2046;
 		NcoPhase = (double)ChannelParam->CodePhase / 4294967296.;
 		// calculate code difference for each correlator and add narrow correlator compensation
 		for (i = 0; i < DataLength; i ++)
@@ -549,11 +552,11 @@ void CTrackingEngine::GetCorrelationResult(ChannelConfig *ChannelParam, CarrierP
 				if (((CorIndex[i] >> 2) == 0) && ChannelParam->EnableSecondPrn)
 				{
 					AmpRatio = DataBit ? -AmpRatio : AmpRatio;
-					if (ChannelParam->SystemSel == 1)	// E1B, -sqrt(1/2) in amplitude
+					if (ChannelParam->SystemSel == SignalE1)	// E1B, -sqrt(1/2) in amplitude
 						AmpRatio *= -0.7071067811865475244;
-					else if (ChannelParam->SystemSel >= 2)	// B1C/L1C, 1/2 in amplitude
+					else if (ChannelParam->SystemSel >= SignalB1C)	// B1C/L1C, 1/2 in amplitude
 						AmpRatio *= 0.5;
-					if (ChannelParam->SystemSel == 2)	// B1C lag PI/2 phase to pilot
+					if (ChannelParam->SystemSel == SignalB1C)	// B1C lag PI/2 phase to pilot
 						Signal = complex_number(0, -Amplitude * AmpRatio);
 					else
 						Signal = complex_number(Amplitude * AmpRatio, 0);
@@ -561,9 +564,9 @@ void CTrackingEngine::GetCorrelationResult(ChannelConfig *ChannelParam, CarrierP
 				else
 				{
 					AmpRatio = (PilotBit ^ NHCode[i]) ? -AmpRatio : AmpRatio;
-					if (ChannelParam->SystemSel == 1)	// E1C BOC(1,1), sqrt(5/11) in amplitude
+					if (ChannelParam->SystemSel == SignalE1)	// E1C BOC(1,1), sqrt(5/11) in amplitude
 						AmpRatio *= 0.6741998624632421;
-					else if (ChannelParam->SystemSel >= 2)	// B1C/L1C, sqrt(29/44) in amplitude
+					else if (ChannelParam->SystemSel >= SignalB1C)	// B1C/L1C, sqrt(29/44) in amplitude
 						AmpRatio *= 0.811844140885988713377;
 					Signal = complex_number(Amplitude * AmpRatio, 0);
 				}
@@ -587,7 +590,7 @@ int CTrackingEngine::CalculateCounter(ChannelConfig *ChannelParam, int CorIndex[
 	int OverflowCount;
 	int PrnCount2x;	// 2 times of PrnCount
 	int DumpLength2x = ChannelParam->DumpLength * 2;	// 2 times of DumpLength
-	int CodeLength = (ChannelParam->SystemSel == 0) ? 1023 : ((ChannelParam->SystemSel == 0) ? 4092 : 10230);
+	int CodeLength = (ChannelParam->SystemSel == SignalL1CA) ? 1023 : ((ChannelParam->SystemSel == SignalE1) ? 4092 : 10230);
 	int DumpIncrease, CodeRound, DumpRemnant, CorPosition, CorPositionPrev;
 	int NewCoh, DumpRound;
 	int OverwriteProtect = 0;
@@ -744,21 +747,24 @@ void CTrackingEngine::InitChannel(int ChannelId, GNSS_TIME CurTime, PSATELLITE_P
 {
 	SATELLITE_PARAM *pSatParam;
 	GNSS_TIME TransmitTime;
-	int FrameLength = (ChannelParam[ChannelId].SystemSel == 0) ? 6000 : ((ChannelParam[ChannelId].SystemSel == 1) ? 2000 : 18000);
+	int FrameLength = (ChannelParam[ChannelId].SystemSel == SignalL1CA) ? 6000 : ((ChannelParam[ChannelId].SystemSel == SignalE1) ? 2000 : 18000);
+
+	if (ChannelParam->SystemSel == SignalB1C)
+		CurTime.MilliSeconds -= 14000;	// compensate BDS leap second difference
 
 	pSatParam = FindSatParam(ChannelId, SatParam, SatNumber);
 	if (!pSatParam)
 		return;
 	// initial structure to calculate FreqDiff and PhaseDiff
 	CarrierParam[ChannelId].DopplerPrev2 = CarrierParam[ChannelId].DopplerPrev = CarrierParam[ChannelId].DopplerCur = -pSatParam->RelativeSpeed / GPS_L1_WAVELENGTH;
-	CarrierParam[ChannelId].LocalFreqPrev2 = CarrierParam[ChannelId].LocalFreqPrev = ChannelParam[ChannelId].CarrierFreq - (((ChannelParam[ChannelId].SystemSel == 0) || ChannelParam[ChannelId].EnableBOC) ? IF_FREQ : (IF_FREQ + 1023000));
+	CarrierParam[ChannelId].LocalFreqPrev2 = CarrierParam[ChannelId].LocalFreqPrev = ChannelParam[ChannelId].CarrierFreq - (((ChannelParam[ChannelId].SystemSel == SignalL1CA) || ChannelParam[ChannelId].EnableBOC) ? IF_FREQ : (IF_FREQ + 1023000));
 	// initial modulation bit and counter
 	TransmitTime = GetTransmitTime(CurTime, pSatParam->TravelTime + pSatParam->IonoDelay / LIGHT_SPEED);
 	TransmitTime.MilliSeconds ++;	// correlation result will be calculated from next millisecond
 	ChannelParam[ChannelId].CurrentFrame = TransmitTime.MilliSeconds / FrameLength;	// frame number
 	ChannelParam[ChannelId].CurrentDataBit = ChannelParam[ChannelId].CurrentPilotBit = 0;
 	NavData[ChannelParam[ChannelId].SystemSel]->GetFrameData(TransmitTime, ChannelParam[ChannelId].Svid, 0, ChannelParam[ChannelId].PilotBits);
-	if (ChannelParam[ChannelId].SystemSel == 0)
+	if (ChannelParam[ChannelId].SystemSel == SignalL1CA)
 		memcpy(ChannelParam[ChannelId].DataBits, ChannelParam[ChannelId].PilotBits, sizeof(int) * 300);	// GPS L1 uses same bit stream for data and pilot
 	else
 		NavData[ChannelParam[ChannelId].SystemSel]->GetFrameData(TransmitTime, ChannelParam[ChannelId].Svid, 1, ChannelParam[ChannelId].DataBits);

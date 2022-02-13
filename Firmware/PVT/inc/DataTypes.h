@@ -94,21 +94,21 @@ typedef struct
 									// bit 3: subframe3 0 - Invalid, 1 - Valid
 									// bit 4: stream polarity 0 - Positive, 1 - Negative
 									// bit 5: polarity valid 0 - Invalid, 1 - Valid
-	unsigned int WordFlag;			// bit 00~09 : subframe1 word 1~10
-									// bit 10~19 : subframe2 word 1~10
-									// bit 20~29 : subframe3 word 1~10
 	unsigned short NavBitNumber;	// number of navigation data bit in buffer
 	signed short FrameStatus;		// frame sync status -1: no word found
 									//					 0~29: word boundary found
 									//					 30: preamble found, unknown subframe
 									//					 31~35: frame sync, subframe 1~5
+	int tow;						// tow number in current subframe
+	unsigned int WordFlag;			// bit 00~09 : subframe1 word 1~10
+									// bit 10~19 : subframe2 word 1~10
+									// bit 20~29 : subframe3 word 1~10
 	unsigned short iodc;			// IODC in SubframeData
 	unsigned char iode2;			// IODE2 in SubframeData
 	unsigned char iode3;			// IODE3 in SubframeData
 	unsigned int NavDataStream[12];	// buffer to store current navigation bit stream
 	unsigned int SubframeData[3][10];	// buffer to hold received navigation bit stream
 	unsigned int NewSubFrame[10];	// buffer to hold latest subframe data
-	int tow;						// tow number in current subframe
 } GPS_FRAME_INFO, *PGPS_FRAME_INFO;
 // definition for above FrameFlag field
 #define SUBFRAME1_VALID		0x02
@@ -122,6 +122,16 @@ typedef struct
 #define SUBFRAME2_WORD_VALID	0x000ffc00
 #define SUBFRAME3_WORD_VALID	0x3ff00000  //indicate 30 words valid for subframe 1,2,3
 #define ALL_SUBFRAME_WORD_VALID (SUBFRAME1_WORD_VALID | SUBFRAME2_WORD_VALID | SUBFRAME3_WORD_VALID)
+
+typedef struct
+{
+	unsigned int FrameFlag;
+	unsigned short NavBitNumber;
+	signed short FrameStatus;
+	int tow;						// 
+	unsigned int SubFrame2Data[19];	// buffer to hold subframe 2 data
+	unsigned int SubFrame3Data[9];	// buffer to hold latest subframe data
+} BDS_FRAME_INFO, *PBDS_FRAME_INFO;
 
 typedef struct
 {

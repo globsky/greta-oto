@@ -17,6 +17,7 @@
 #include "TaskQueue.h"
 #include "ChannelManager.h"
 #include "BBCommonFunc.h"
+#include "PvtEntry.h"
 
 CHANNEL_STATE ChannelStateArray[TOTAL_CHANNEL_NUMBER];
 extern PTRACKING_CONFIG TrackingConfig[][4];
@@ -252,7 +253,9 @@ void ProcessCohData(PCHANNEL_STATE ChannelState)
 	}
 	
 	ChannelState->FftCount ++;
-	printf("SV%2d I/Q=%6d %6d\n", ChannelState->Svid, (S16)(ChannelState->StateBufferCache.CoherentSum[4] >> 16), (S16)(ChannelState->StateBufferCache.CoherentSum[4] & 0xffff));
+//	printf("SV%2d I/Q[4]=%6d %6d I/Q[0]=%6d %6d\n", ChannelState->Svid,
+//		(S16)(ChannelState->StateBufferCache.CoherentSum[4] >> 16), (S16)(ChannelState->StateBufferCache.CoherentSum[4] & 0xffff),
+//		(S16)(ChannelState->StateBufferCache.CoherentSum[0] >> 16), (S16)(ChannelState->StateBufferCache.CoherentSum[0] & 0xffff));
 
 	// perform PLL
 	if (((ChannelState->State & STAGE_MASK) >= STAGE_TRACK) && (ChannelState->pll_k1 > 0))	// tracking stage uses PLL (change to more flexible condition in the future)
@@ -323,19 +326,15 @@ int ComposeMeasurement(int ChannelID, PBB_MEASUREMENT Measurement, U32 *DataBuff
 
 	Measurement->CodeFreq = STATE_BUF_GET_CODE_FREQ(StateBuffer);
 	Measurement->CodeNCO = STATE_BUF_GET_CODE_PHASE(StateBuffer);
-	if (FREQ_ID_IS_L1CA(ChannelState->FreqID))
-		Measurement->CodeCount = StateBuffer->PrnCount >> 14;
-	else if (FREQ_ID_IS_E1(ChannelState->FreqID))
-		Measurement->CodeCount = StateBuffer->PrnCount - (StateBuffer->PrnCount >> 10);	// 4MSB*1023 + 10LSB = (4MSB*1024+10LSB) - 4MSB
-	else // if (FREQ_ID_IS_B1C_L1C(ChannelState->FreqID))
-		Measurement->CodeCount = StateBuffer->PrnCount;
+	Measurement->CodeCount = GET_PRN_COUNT(ChannelState->FreqID, StateBuffer->PrnCount);
 	Measurement->CodeCount = (Measurement->CodeCount << 1) + STATE_BUF_GET_CODE_SUB_PHASE(StateBuffer) - 4;	// compensate 4 correlator interval to align to COR4
 	CohCount = STATE_BUF_GET_COH_COUNT(StateBuffer);
 	// check whether CurrentCor != 0, if so, CohCount has 1 lag to Cor0
 	CurrentCor = STATE_BUF_GET_CUR_CORR(&(ChannelState->StateBufferCache));
 	if (CurrentCor)
 		CohCount ++;
-	Measurement->CodeCount += (ChannelState->DataStream.CurrentAccTime + CohCount) * 2046;
+	if (FREQ_ID_IS_L1CA(ChannelState->FreqID))	// L1C/A need to add millisecond count within 20ms
+		Measurement->CodeCount += (ChannelState->DataStream.CurrentAccTime + CohCount) * 2046;
 
 	Measurement->CarrierFreq = STATE_BUF_GET_CARRIER_FREQ(StateBuffer);
 	Measurement->CarrierNCO = STATE_BUF_GET_CARRIER_PHASE(StateBuffer);
@@ -343,33 +342,33 @@ int ComposeMeasurement(int ChannelID, PBB_MEASUREMENT Measurement, U32 *DataBuff
 	// fill data stream here
 	Measurement->DataNumber = ChannelState->DataStream.DataCount;
 	if ((ChannelState->State & DATA_STREAM_PRN2) && FREQ_ID_IS_B1C_L1C(ChannelState->FreqID))	// B1C/L1C using decoding data channel
-	{
-		Measurement->FrameIndex = ChannelState->FrameCounter - ChannelState->DataStream.DataCount;
-		if (Measurement->FrameIndex < 0)
-			Measurement->FrameIndex += 1800;
-	}
+		Measurement->FrameIndex = ChannelState->DataStream.StartIndex;
 	else
 		Measurement->FrameIndex = -1;
 	Measurement->DataStreamAddr = DataBuffer;
 	if ((ChannelState->State & DATA_STREAM_MASK) == DATA_STREAM_1BIT)
 	{
 		WordNumber = (Measurement->DataNumber + 31) / 32;
+		ChannelState->DataStream.DataBuffer[WordNumber-1] <<= ((~Measurement->DataNumber + 1) & 0x1f);	// last word shift to MSB
 		memcpy(Measurement->DataStreamAddr, ChannelState->DataStream.DataBuffer, sizeof(U32) * WordNumber);
-		DataBuffer[WordNumber-1] <<= ((~Measurement->DataNumber + 1) & 0x1f);	// last word shift to MSB
 	}
 	else if ((ChannelState->State & DATA_STREAM_MASK) == DATA_STREAM_4BIT)
 	{
 		WordNumber = (Measurement->DataNumber + 7) / 8;
+		ChannelState->DataStream.DataBuffer[WordNumber-1] <<= (((~Measurement->DataNumber + 1) & 0x7) * 4);	// last word shift to MSB
 		memcpy(Measurement->DataStreamAddr, ChannelState->DataStream.DataBuffer, sizeof(U32) * WordNumber);
-		DataBuffer[WordNumber-1] <<= (((~Measurement->DataNumber + 1) & 0x7) * 4);	// last word shift to MSB
 	}
 	else if ((ChannelState->State & DATA_STREAM_MASK) == DATA_STREAM_8BIT)
 	{
 		WordNumber = (Measurement->DataNumber + 3) / 4;
+		ChannelState->DataStream.DataBuffer[WordNumber-1] <<= (((~Measurement->DataNumber + 1) & 0x3) * 8);	// last word shift to MSB
 		memcpy(Measurement->DataStreamAddr, ChannelState->DataStream.DataBuffer, sizeof(U32) * WordNumber);
-		DataBuffer[WordNumber-1] <<= (((~Measurement->DataNumber + 1) & 0x3) * 8);	// last word shift to MSB
+		ChannelState->DataStream.ChannelState = ChannelState;
+		if ((ChannelState->State & DATA_STREAM_PRN2) && ChannelState->DataStream.DataCount > 0)
+			AddTaskToQueue(&PostMeasTask, BdsDecodeTask, &(ChannelState->DataStream), sizeof(DATA_STREAM) - 32 + WordNumber);
 	}
 	ChannelState->DataStream.DataCount= 0;
+	ChannelState->DataStream.StartIndex = ChannelState->FrameCounter;
 
 	Measurement->CN0 = ChannelState->CN0;
 	Measurement->LockIndicator = 100;
@@ -681,7 +680,7 @@ int DataSyncTask(void *Param)
 			BitSyncData->ChannelState->BitSyncResult = SyncPilotData(DataWord, B1CSecondCode[Svid-1]);
 		else if (BitSyncData->ChannelState->BitSyncResult > 0 && BitSyncData->ChannelState->BitSyncResult <= 1800)	// confirm
 		{
-			i = BitSyncData->ChannelState->BitSyncResult + 15;	// index to confirm
+			i = BitSyncData->ChannelState->BitSyncResult + 15;	// index to confirm (+16 to next 16bit and -1 to compensate SyncPilotData() offset)
 			if (i >= 1800) i -= 1800;
 			code_index = i / 32;
 			bit_index = i & 0x1f;
@@ -689,20 +688,14 @@ int DataSyncTask(void *Param)
 			if (bit_index > 16)
 				CodeWord |= (B1CSecondCode[Svid-1][code_index+1] << (32 - bit_index));
 			CodeWord &= 0xffff;
+			// calculate bit count at TimeTag = 0, -16 to get time tag at start of current 16bit
+			i -= (BitSyncData->TimeTag / 10 - 16);
+			i %= 1800;
+			if (i < 0) i += 1800;
 			if (DataWord == CodeWord)	// match positive
-			{
-				i -= (BitSyncData->TimeTag / 10 - 16);	// calculate bit count at TimeTag = 0
-				i %= 1800;
-				if (i < 0) i += 1800;
-				BitSyncData->ChannelState->BitSyncResult = i + 2000;	// 2000~3799 for positive match result
-			}
+				BitSyncData->ChannelState->BitSyncResult = i + 0x800;	// bit11 for positive match result
 			else if (DataWord == (CodeWord ^ 0xffff))	// match negative
-			{
-				i -= BitSyncData->TimeTag / 10;	// calculate bit count at TimeTag = 0
-				i %= 1800;
-				if (i < 0) i += 1800;
-				BitSyncData->ChannelState->BitSyncResult = i + 4000;	// 4000~5799 for negative match result
-			}
+				BitSyncData->ChannelState->BitSyncResult = i + 0x1000;	// bit12 for negative match result
 			else	// confirm fail, search again
 				BitSyncData->ChannelState->BitSyncResult = SyncPilotData(DataWord, B1CSecondCode[Svid-1]);
 		}
