@@ -27,7 +27,7 @@
 #define LIGHT_SPEED_MS (LIGHT_SPEED * 0.001)		// distance light travels within 1ms
 
 #define PVT_MAX_SYSTEM_ID 3						// max system used in PVT
-#define MAX_RAW_MSR_NUMBER 36					// maximum total raw measurement number
+#define MAX_RAW_MSR_NUMBER 32					// maximum total raw measurement number
 #define DIMENSION_MAX_X MAX_RAW_MSR_NUMBER
 #define DIMENSION_MAX_Y 3
 #define STATE_VECTOR_SIZE (7 + PVT_MAX_SYSTEM_ID)	// 3 position, 3 velocity, 1 clock drift plus clock error

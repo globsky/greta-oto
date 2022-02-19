@@ -138,7 +138,13 @@ int StageDetermination(PCHANNEL_STATE ChannelState)
 	{
 		// switch to decode data channel
 		STATE_BUF_ENABLE_PRN2(&(ChannelState->StateBufferCache));
-		ChannelState->State |= (DATA_STREAM_PRN2 | NH_SEGMENT_UPDATE);
+		STATE_BUF_ENABLE_BOC(&(ChannelState->StateBufferCache));	// enable BOC
+		STATE_BUF_SET_NARROW_FACTOR(&(ChannelState->StateBufferCache), 2);	// set correlator interval to 1/8 chip
+		// remove 1.023MHz carrier offset
+		ChannelState->StateBufferCache.CarrierFreq -= DIVIDE_ROUND(1023000LL << 32, SAMPLE_FREQ);
+		ChannelState->CarrierFreqBase -= DIVIDE_ROUND(1023000LL << 32, SAMPLE_FREQ);
+		ChannelState->CarrierFreqSave -= DIVIDE_ROUND(1023000LL << 32, SAMPLE_FREQ);
+		ChannelState->State |= (DATA_STREAM_PRN2 | STATE_ENABLE_BOC | NH_SEGMENT_UPDATE | STATE_CACHE_FREQ_DIRTY);
 		Time = ChannelState->BitSyncResult & 0x7ff;
 		// if negative stream, rotate phase by PI
 		if (ChannelState->BitSyncResult & 0x1000)

@@ -85,3 +85,9 @@
 		Add BDS frame decode function
 	Function and feature change
 		Optimize correlator state dump logic in RTL
+2/19/2022
+	Bug fix
+		Fix bug in Doppler calculation when tracking side band of BOC signal
+		Add missing B1C secondary code array file ConstTable.c
+	Function and feature change
+		Enable BOC tracking in track 1 stage for BOC signal

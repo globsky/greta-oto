@@ -115,8 +115,11 @@ do \
 // bit 10 for data channel selection
 #define DATA_STREAM_PRN2 0x400	// decode data using second PRN
 
-// bit 11 for NH update required
-#define NH_SEGMENT_UPDATE 0x800	// NH code longer than 25bit
+// bit 11 for BOC enable
+#define STATE_ENABLE_BOC 0x800	// enable BOC tracking
+
+// bit 12 for NH update required
+#define NH_SEGMENT_UPDATE 0x1000	// NH code longer than 25bit
 
 // bit16~18 for tracking loop update
 #define TRACKING_UPDATE_PLL 0x10000

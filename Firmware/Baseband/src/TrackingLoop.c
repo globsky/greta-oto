@@ -58,6 +58,7 @@ void CalcDiscriminator(PCHANNEL_STATE ChannelState, unsigned int Method)
 	S16 CorResutReal, CorResultImag;
 	int CohLength = ChannelState->CoherentNumber;
 	int NoncohLength = CohLength * ChannelState->FftNumber * ChannelState->NonCohNumber;
+	int NarrowFactor = EXTRACT_UINT((ChannelState->StateBufferCache.CorrConfig), 10, 2);
 
 	// for FLL and DLL, search for peak power
 	if (Method & (TRACKING_UPDATE_FLL | TRACKING_UPDATE_DLL))
@@ -90,7 +91,7 @@ void CalcDiscriminator(PCHANNEL_STATE ChannelState, unsigned int Method)
 		Denominator = 2 * SearchResult.PeakPower - SearchResult.EarlyPower - SearchResult.LatePower;
 		Numerator = SearchResult.EarlyPower - SearchResult.LatePower;
 		// (E-L)/(2P-E-L))
-		ChannelState->DelayDiff = Denominator ? -((Numerator << 13) / Denominator) : 0;
+		ChannelState->DelayDiff = Denominator ? -((Numerator << (13 - NarrowFactor)) / Denominator) : 0;
 		ChannelState->DelayDiff += (SearchResult.CorDiff << 14);
 		// lock indicator
 		AdjustLockIndicator(&(ChannelState->DLD), ChannelState->DelayDiff >> 11);

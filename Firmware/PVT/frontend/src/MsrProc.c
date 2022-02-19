@@ -296,6 +296,8 @@ void CalculateRawMsr(PCHANNEL_STATUS pChannelStatus, PBB_MEASUREMENT pMsr, int C
 	}
 
 	// Doppler is actual carrier frequency minus nominal number
+	if (pChannelStatus->FreqID != FREQ_L1CA && !(pChannelStatus->state & STATE_ENABLE_BOC))
+		IFFreq += 1023000;
 	pChannelStatus->DopplerHz = (double)pMsr->CarrierFreq * ScaleDoubleU(SAMPLE_FREQ, 32) - IFFreq;
 	pChannelStatus->Doppler = pChannelStatus->DopplerHz * WaveLength;
 
