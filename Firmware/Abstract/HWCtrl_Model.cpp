@@ -6,6 +6,8 @@
 //
 //----------------------------------------------------------------------
 
+#include <stdio.h>
+#include <memory.h>
 #include "GnssTop.h"
 #include "HWCtrl.h"
 extern "C" {
@@ -94,8 +96,21 @@ void SetInputFile(char *FileName)
 //* in real system, read from flash or host
 // Parameters:
 //   Buffer: address to store load parameters
-void LoadParameters(void *Buffer)
+int LoadParameters(int Offset, void *Buffer, int Size)
 {
+	FILE *fp;
+	int ReturnValue;
+
+	if ((fp = fopen("ParamFile.bin", "rb")) == NULL)
+	{
+		memset(Buffer, 0, Size);
+		return 0;
+	}
+	fseek(fp, Offset, SEEK_SET);
+	ReturnValue = fread(Buffer, 1, Size, fp);
+	fclose(fp);
+
+	return ReturnValue;
 }
 
 //*************** Save parameter (ephemeris/almanac, receiver position etc.) ****************
@@ -103,8 +118,15 @@ void LoadParameters(void *Buffer)
 //* in real system, write to flash or host
 // Parameters:
 //   Buffer: address to store load parameters
-void SaveParameters(void *Buffer)
+void SaveParameters(int Offset, void *Buffer, int Size)
 {
+	FILE *fp;
+
+	if ((fp = fopen("ParamFile.bin", "rb+")) == NULL)
+		return;
+	fseek(fp, Offset, SEEK_SET);
+	fwrite(Buffer, 1, Size, fp);
+	fclose(fp);
 }
 
 //*************** enable RF clock ****************
@@ -117,7 +139,7 @@ void EnableRF()
 	while (Baseband.Process(SAMPLE_COUNT) >= 0)
 	{
 //		printf("ProcessCount=%d\n", ProcessCount);
-		if (ProcessCount == 30070)
+		if (ProcessCount == 497400)
 			ProcessCount = ProcessCount;
 		DoTaskQueue(&BasebandTask);
 		DoTaskQueue(&PostMeasTask);
@@ -125,7 +147,7 @@ void EnableRF()
 		if (DebugFunc)
 			DebugFunc((void *)(&Baseband), ProcessCount);
 		ProcessCount ++;
-		if (ProcessCount == 40000)
-			break;
+//		if (ProcessCount == 520000)
+//			break;
 	}
 }

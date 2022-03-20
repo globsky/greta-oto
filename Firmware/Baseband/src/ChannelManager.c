@@ -252,17 +252,17 @@ void ProcessCohData(PCHANNEL_STATE ChannelState)
 		return;
 	}
 	
-	ChannelState->FftCount ++;
+//	if (ChannelState->Svid == 19)
 //	printf("SV%2d I/Q[4]=%6d %6d I/Q[0]=%6d %6d\n", ChannelState->Svid,
-//		(S16)(ChannelState->StateBufferCache.CoherentSum[4] >> 16), (S16)(ChannelState->StateBufferCache.CoherentSum[4] & 0xffff),
-//		(S16)(ChannelState->StateBufferCache.CoherentSum[0] >> 16), (S16)(ChannelState->StateBufferCache.CoherentSum[0] & 0xffff));
+//		(S16)(ChannelState->PendingCoh[4] >> 16), (S16)(ChannelState-PendingCoh[4] & 0xffff),
+//		(S16)(ChannelState->PendingCoh[0] >> 16), (S16)(ChannelState->PendingCoh[0] & 0xffff));
 
 	// perform PLL
 	if (((ChannelState->State & STAGE_MASK) >= STAGE_TRACK) && (ChannelState->pll_k1 > 0))	// tracking stage uses PLL (change to more flexible condition in the future)
 		CalcDiscriminator(ChannelState, TRACKING_UPDATE_PLL);
 
 	// do FFT and non-coherent accumulation
-	if (ChannelState->FftCount == ChannelState->FftNumber)
+	if (++ChannelState->FftCount == ChannelState->FftNumber)
 	{
 		ChannelState->FftCount = 0;
 		if (ChannelState->FftNumber > 1)
@@ -278,7 +278,7 @@ void ProcessCohData(PCHANNEL_STATE ChannelState)
 		DoTrackingLoop(ChannelState);
 
 //	if ((ChannelState->State & STAGE_MASK) >= STAGE_TRACK)
-//		printf("T=%4d I/Q=%6d %6d\n", ChannelState->TrackingTime, (S16)(ChannelState->StateBufferCache.CoherentSum[4] >> 16), (S16)(ChannelState->StateBufferCache.CoherentSum[4] & 0xffff));
+//		printf("T=%4d I/Q=%6d %6d\n", ChannelState->TrackingTime, (S16)(ChannelState->PendingCoh[4] >> 16), (S16)(ChannelState->PendingCoh[4] & 0xffff));
 	
 	// collect correlation result for bit sync if in bit sync stage
 	if ((ChannelState->State & STAGE_MASK) == STAGE_BIT_SYNC)
@@ -300,8 +300,8 @@ void ProcessCohData(PCHANNEL_STATE ChannelState)
 /*	printf("SV%2d", ChannelState->Svid);
 	for (i = 0; i < 8; i ++)
 	{
-		CohResultI = (S16)(ChannelState->StateBufferCache.CoherentSum[i] >> 16);
-		CohResultQ = (S16)(ChannelState->StateBufferCache.CoherentSum[i] & 0xffff);
+		CohResultI = (S16)(ChannelState->PendingCoh[i] >> 16);
+		CohResultQ = (S16)(ChannelState->PendingCoh[i] & 0xffff);
 		printf(" %5d %5d,", CohResultI, CohResultQ);
 	}
 	printf("\n");*/
@@ -386,7 +386,7 @@ void CollectBitSyncData(PCHANNEL_STATE ChannelState)
 {
 	PBIT_SYNC_DATA BitSyncData = &(ChannelState->BitSyncData);
 
-	BitSyncData->CorData[BitSyncData->CorDataCount] = ChannelState->StateBufferCache.CoherentSum[4];	// copy peak correlator result
+	BitSyncData->CorData[BitSyncData->CorDataCount] = ChannelState->PendingCoh[4];	// copy peak correlator result
 	if (++BitSyncData->CorDataCount == 20)	// 20 correlation result, send to bit sync task
 	{
 		BitSyncData->TimeTag = ChannelState->TrackingTime;
@@ -414,13 +414,13 @@ void DecodeDataStream(PCHANNEL_STATE ChannelState)
 	DataStream->CurrentAccTime += ChannelState->CoherentNumber;
 	if (ChannelState->State & DATA_STREAM_PRN2)
 	{
-		DataStream->CurReal += (S16)(ChannelState->StateBufferCache.CoherentSum[0] >> 16);
-		DataStream->CurImag += (S16)(ChannelState->StateBufferCache.CoherentSum[0] & 0xffff);
+		DataStream->CurReal += (S16)(ChannelState->PendingCoh[0] >> 16);
+		DataStream->CurImag += (S16)(ChannelState->PendingCoh[0] & 0xffff);
 	}
 	else
 	{
-		DataStream->CurReal += (S16)(ChannelState->StateBufferCache.CoherentSum[4] >> 16);
-		DataStream->CurImag += (S16)(ChannelState->StateBufferCache.CoherentSum[4] & 0xffff);
+		DataStream->CurReal += (S16)(ChannelState->PendingCoh[4] >> 16);
+		DataStream->CurImag += (S16)(ChannelState->PendingCoh[4] & 0xffff);
 	}
 
 //	if (ChannelState->Svid == 30)

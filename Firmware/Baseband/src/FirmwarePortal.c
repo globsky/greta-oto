@@ -7,6 +7,7 @@
 //----------------------------------------------------------------------
 
 #include <memory.h>
+#include <stdio.h>
 #include "CommonDefines.h"
 #include "RegAddress.h"
 #include "BBDefines.h"
@@ -16,6 +17,17 @@
 #include "TEManager.h"
 #include "ChannelManager.h"
 #include "PvtEntry.h"
+#include "GlobalVar.h"
+
+#define PARAM_OFFSET_CONFIG		1024*0
+#define PARAM_OFFSET_RCVRINFO	1024*1
+#define PARAM_OFFSET_IONOUTC	1024*2
+#define PARAM_OFFSET_GPSALM		1024*4
+#define PARAM_OFFSET_BDSALM		1024*8
+#define PARAM_OFFSET_GALALM		1024*16
+#define PARAM_OFFSET_GPSEPH		1024*24
+#define PARAM_OFFSET_BDSEPH		1024*32
+#define PARAM_OFFSET_GALEPH		1024*48
 
 TASK_QUEUE RequestTask;
 TASK_ITEM RequestItems[32];
@@ -29,6 +41,8 @@ U32 PostMeasBuffer[1024];
 TASK_QUEUE InputOutputTask;
 TASK_ITEM InputOutputItems[8];
 U32 InputOutputBuffer[1024];
+
+void LoadAllParameters();
 
 //*************** Baseband interrupt service routine ****************
 //* this function is a task function
@@ -74,7 +88,7 @@ void FirmwareInitialize()
 		FREQ_SVID(FREQ_B1C, 19),
 		FREQ_SVID(FREQ_B1C, 21),
 		FREQ_SVID(FREQ_B1C, 22),
-		FREQ_SVID(FREQ_B1C, 26), 0,
+		FREQ_SVID(FREQ_B1C, 26),
 		FREQ_SVID(FREQ_L1CA, 3),
 		FREQ_SVID(FREQ_L1CA, 4),
 		FREQ_SVID(FREQ_L1CA, 7),
@@ -119,6 +133,13 @@ void FirmwareInitialize()
 	InitTaskQueue(&PostMeasTask, PostMeasItems, 32, PostMeasBuffer, sizeof(PostMeasBuffer));
 	InitTaskQueue(&InputOutputTask, InputOutputItems, 8, InputOutputBuffer, sizeof(InputOutputBuffer));
 
+	if (1)	// hot start
+	{
+		LoadAllParameters();
+		g_ReceiverInfo.GpsTimeQuality = g_ReceiverInfo.BdsTimeQuality = g_ReceiverInfo.GalileoTimeQuality = UnknownTime;
+		g_ReceiverInfo.PosQuality = ExtSetPos;
+	}
+
 	// start acquisition
 	for (i = 0; i < 32; i ++)
 	{
@@ -140,4 +161,36 @@ void FirmwareInitialize()
 	AcqConfig.StrideNumber = 19;
 	AcqConfig.StrideInterval = 500;
 	AddTaskToQueue(&RequestTask, AcquisitionTask, &AcqConfig, sizeof(AcqConfig));
+}
+
+void LoadAllParameters()
+{
+	LoadParameters(PARAM_OFFSET_CONFIG, &g_PvtConfig, sizeof(g_PvtConfig));
+	LoadParameters(PARAM_OFFSET_RCVRINFO, &g_ReceiverInfo, sizeof(g_ReceiverInfo));
+	LoadParameters(PARAM_OFFSET_IONOUTC, &g_GpsIonoParam, sizeof(g_GpsIonoParam));
+	LoadParameters(PARAM_OFFSET_IONOUTC+sizeof(g_GpsIonoParam), &g_BdsIonoParam, sizeof(g_BdsIonoParam));
+	LoadParameters(PARAM_OFFSET_IONOUTC+sizeof(g_GpsIonoParam)+sizeof(g_BdsIonoParam), &g_GpsUtcParam, sizeof(g_GpsUtcParam));
+	LoadParameters(PARAM_OFFSET_IONOUTC+sizeof(g_GpsIonoParam)+sizeof(g_BdsIonoParam)+sizeof(g_GpsUtcParam), &g_BdsUtcParam, sizeof(g_BdsUtcParam));
+	LoadParameters(PARAM_OFFSET_GPSALM, &g_GpsAlmanac, sizeof(g_GpsAlmanac));
+	LoadParameters(PARAM_OFFSET_BDSALM, &g_BdsAlmanac, sizeof(g_BdsAlmanac));
+	LoadParameters(PARAM_OFFSET_GALALM, &g_GalileoAlmanac, sizeof(g_GalileoAlmanac));
+	LoadParameters(PARAM_OFFSET_GPSEPH, &g_GpsEphemeris, sizeof(g_GpsEphemeris));
+	LoadParameters(PARAM_OFFSET_BDSEPH, &g_BdsEphemeris, sizeof(g_BdsEphemeris));
+	LoadParameters(PARAM_OFFSET_GALEPH, &g_GalileoEphemeris, sizeof(g_GalileoEphemeris));
+}
+
+void SaveAllParameters()
+{
+	SaveParameters(PARAM_OFFSET_CONFIG, &g_PvtConfig, sizeof(g_PvtConfig));
+	SaveParameters(PARAM_OFFSET_RCVRINFO, &g_ReceiverInfo, sizeof(g_ReceiverInfo));
+	SaveParameters(PARAM_OFFSET_IONOUTC, &g_GpsIonoParam, sizeof(g_GpsIonoParam));
+	SaveParameters(PARAM_OFFSET_IONOUTC+sizeof(g_GpsIonoParam), &g_BdsIonoParam, sizeof(g_BdsIonoParam));
+	SaveParameters(PARAM_OFFSET_IONOUTC+sizeof(g_GpsIonoParam)+sizeof(g_BdsIonoParam), &g_GpsUtcParam, sizeof(g_GpsUtcParam));
+	SaveParameters(PARAM_OFFSET_IONOUTC+sizeof(g_GpsIonoParam)+sizeof(g_BdsIonoParam)+sizeof(g_GpsUtcParam), &g_BdsUtcParam, sizeof(g_BdsUtcParam));
+	SaveParameters(PARAM_OFFSET_GPSALM, &g_GpsAlmanac, sizeof(g_GpsAlmanac));
+	SaveParameters(PARAM_OFFSET_BDSALM, &g_BdsAlmanac, sizeof(g_BdsAlmanac));
+	SaveParameters(PARAM_OFFSET_GALALM, &g_GalileoAlmanac, sizeof(g_GalileoAlmanac));
+	SaveParameters(PARAM_OFFSET_GPSEPH, &g_GpsEphemeris, sizeof(g_GpsEphemeris));
+	SaveParameters(PARAM_OFFSET_BDSEPH, &g_BdsEphemeris, sizeof(g_BdsEphemeris));
+	SaveParameters(PARAM_OFFSET_GALEPH, &g_GalileoEphemeris, sizeof(g_GalileoEphemeris));
 }

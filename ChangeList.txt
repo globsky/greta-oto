@@ -91,3 +91,8 @@
 		Add missing B1C secondary code array file ConstTable.c
 	Function and feature change
 		Enable BOC tracking in track 1 stage for BOC signal
+3/20/2022
+	Bug fix
+		Fix bug that when CurrentCor!=0, PLL/BitSync/DataDecode use partial coherent sum result
+	Function and feature added
+		Add hot start function

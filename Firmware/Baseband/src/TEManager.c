@@ -166,7 +166,7 @@ void MeasurementProc()
 //   0
 int MeasProcTask(void *Param)
 {
-	int OutputBasebandMeas = 1;
+	int OutputBasebandMeas = 0;
 	PBB_MEAS_PARAM MeasParam = (PBB_MEAS_PARAM)Param;
 	PBB_MEASUREMENT Msr = MeasParam->Measurements;
 

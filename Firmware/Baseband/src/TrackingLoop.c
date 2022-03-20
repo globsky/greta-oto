@@ -104,8 +104,8 @@ void CalcDiscriminator(PCHANNEL_STATE ChannelState, unsigned int Method)
 	}
 	if ((Method & TRACKING_UPDATE_PLL) && ChannelState->pll_k1 > 0)
 	{
-		CorResutReal = (S16)(ChannelState->StateBufferCache.CoherentSum[4] >> 16);
-		CorResultImag = (S16)(ChannelState->StateBufferCache.CoherentSum[4] & 0xffff);
+		CorResutReal = (S16)(ChannelState->PendingCoh[4] >> 16);
+		CorResultImag = (S16)(ChannelState->PendingCoh[4] & 0xffff);
 		ChannelState->PhaseDiff = CordicAtan(CorResutReal, CorResultImag, 0);
 		// lock indicator
 		AdjustLockIndicator(&(ChannelState->PLD), ChannelState->PhaseDiff >> 9);

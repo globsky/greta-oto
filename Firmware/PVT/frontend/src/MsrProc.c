@@ -83,7 +83,7 @@ void MsrProcInit()
 //   none
 void MsrProc(PBB_MEASUREMENT Measurements, unsigned int ActiveMask, int CurMsInterval, int DefaultMsInterval)
 {
-	int ch_num, svid, FreqID, SatID;
+	int ch_num, svid, FreqID, SatID, meas_num;
 	SYSTEM_TIME ReceiverTime;
 
 	// loop to extrace BB measurements and do frame sync
@@ -139,19 +139,28 @@ void MsrProc(PBB_MEASUREMENT Measurements, unsigned int ActiveMask, int CurMsInt
 	ProcessReceiverTime(CurMsInterval, DefaultMsInterval);
 
 	// loop to do measurement calculation if receiver time determined
+	meas_num = 0;
 	if (g_ReceiverInfo.GpsTimeQuality >= CoarseTime)
 	{
-		GpsTimeToUtc(g_ReceiverInfo.WeekNumber, g_ReceiverInfo.GpsMsCount, &ReceiverTime, (PUTC_PARAM)0);
-//		printf("> %04d %02d %02d %02d %02d %02d.%03d0000 0 8 0.0000000\n",
-//			ReceiverTime.Year, ReceiverTime.Month, ReceiverTime.Day, ReceiverTime.Hour, ReceiverTime.Minute, ReceiverTime.Second, ReceiverTime.Millisecond);
 		for (ch_num = 0; ch_num < TOTAL_CHANNEL_NUMBER; ch_num ++)
 		{
 			// if corresponding channel is not activated
 			if ((ActiveMask & (1 << ch_num)) != 0)
 				CalculateRawMsr(&g_ChannelStatus[ch_num], &Measurements[ch_num], CurMsInterval, DefaultMsInterval);
-//			if (g_ChannelStatus[ch_num].ChannelFlag & MEASUREMENT_VALID)
-//				printf("G%02d %13.3f 8 %13.3f 8 %13.3f          48.000\n", g_ChannelStatus[ch_num].svid,
-//				g_ChannelStatus[ch_num].PseudoRangeOrigin, g_ChannelStatus[ch_num].CarrierPhase, g_ChannelStatus[ch_num].DopplerHz);
+			if (g_ChannelStatus[ch_num].ChannelFlag & MEASUREMENT_VALID)
+				meas_num ++;
+		}
+	}
+	if (0 && meas_num > 0)
+	{
+		GpsTimeToUtc(g_ReceiverInfo.WeekNumber, g_ReceiverInfo.GpsMsCount, &ReceiverTime, (PUTC_PARAM)0);
+		printf("> %04d %02d %02d %02d %02d %02d.%03d0000 0 %d 0.0000000\n",
+			ReceiverTime.Year, ReceiverTime.Month, ReceiverTime.Day, ReceiverTime.Hour, ReceiverTime.Minute, ReceiverTime.Second, ReceiverTime.Millisecond, meas_num);
+		for (ch_num = 0; ch_num < TOTAL_CHANNEL_NUMBER; ch_num ++)
+		{
+			if (g_ChannelStatus[ch_num].ChannelFlag & MEASUREMENT_VALID)
+				printf("%c%02d %13.3f 8 %13.3f 8 %13.3f          48.000\n", FREQ_ID_IS_B1C(g_ChannelStatus[ch_num].FreqID) ? 'C' : FREQ_ID_IS_E1(g_ChannelStatus[ch_num].FreqID) ? 'E' : 'G',
+					g_ChannelStatus[ch_num].svid, g_ChannelStatus[ch_num].PseudoRangeOrigin, g_ChannelStatus[ch_num].CarrierPhase, g_ChannelStatus[ch_num].DopplerHz);
 		}
 	}
 

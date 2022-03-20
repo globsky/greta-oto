@@ -26,6 +26,8 @@ int MeasPrintTask(void *Param)
 	{
 		if ((MeasParam->MeasMask & ChannelMask) == 0)
 			continue;
+//		if (Msr[i].Svid != 19)
+//			continue;
 		if ((Msr[i].State & DATA_STREAM_MASK) == DATA_STREAM_1BIT)
 			WordNumber = (Msr[i].DataNumber + 31) / 32;
 		else if ((Msr[i].State & DATA_STREAM_MASK) == DATA_STREAM_4BIT)

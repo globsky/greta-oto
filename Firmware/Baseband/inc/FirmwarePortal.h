@@ -18,5 +18,7 @@ extern TASK_QUEUE PostMeasTask;
 extern TASK_QUEUE InputOutputTask;
 
 void FirmwareInitialize();
+void LoadAllParameters();
+void SaveAllParameters();
 
 #endif // __FIRMWARE_PORTAL_H__

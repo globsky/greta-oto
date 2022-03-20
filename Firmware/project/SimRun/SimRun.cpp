@@ -24,6 +24,7 @@ void main()
 	EnableRF();
 	if (DebugFile)
 		fclose(DebugFile);
+//	SaveAllParameters();
 }
 
 void DebugOutput(void *DebugParam, int DebugValue)

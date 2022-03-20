@@ -15,6 +15,8 @@
 extern "C" {
 #endif
 
+//typedef enum {ParamConfig, ParamReceiverInfo, ParamIonoUtc, ParamGpsEph, ParamBdsEph, ParamGalEph, ParamGpsAlm, ParamBdsAlm, ParamGalAlm } ParameterType;
+
 // declare a pointer to a ISR, only for simulation envirenoment
 typedef void (*InterruptFunction)();
 // declare a pointer to output debug information, only for simulation envirenoment
@@ -33,8 +35,8 @@ void SaveMemory(U32 *BasebandAddr, U32 *SrcAddr, int Size);
 // input file for PC simulation
 void SetInputFile(char *FileName);
 // saved parameter read/write
-void LoadParameters(void *Buffer);
-void SaveParameters(void *Buffer);
+int LoadParameters(int Offset, void *Buffer, int Size);
+void SaveParameters(int Offset, void *Buffer, int Size);
 // RF control
 void EnableRF();
 
