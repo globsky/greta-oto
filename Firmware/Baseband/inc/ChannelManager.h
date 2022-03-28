@@ -32,19 +32,6 @@ typedef struct
 	U32 CorData[20];	// 20 correlation result of peak correlator (or pilot data symbols for pilot data sync)
 } BIT_SYNC_DATA, *PBIT_SYNC_DATA;
 
-typedef struct
-{
-	struct tag_CHANNEL_STATE *ChannelState;	// channel to send data to decode task
-	int PrevReal, PrevImag;	// accumulated I/Q in previous data period
-	int CurReal, CurImag;	// accumulated I/Q in current data period
-	int TotalAccTime;		// total accumulation period in millisecond
-	int CurrentAccTime;		// current accumulated time in millisecond
-	int DataCount;			// number of decoded symbols
-	int StartIndex;			// index of the first data symbol within a frame
-	int PrevSymbol;			// previous symbol (determine data toggle)
-	U32 DataBuffer[128/4];	// maximum 128 bytes to hold decoded symbols
-} DATA_STREAM, *PDATA_STREAM;
-
 // channel related functions and variables
 typedef struct tag_CHANNEL_STATE
 {

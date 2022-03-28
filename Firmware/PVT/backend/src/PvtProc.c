@@ -87,7 +87,7 @@ void PvtProc(int CurMsInterval)
 
 	PosFixResult = PvtFix(CurMsInterval);
 	// TODO: update satellite in view list, adjust observation time etc.
-	if (PosFixResult >= 0)
+	if (1 && PosFixResult >= 0)
 	{
 		GpsTimeToUtc(g_ReceiverInfo.WeekNumber, g_ReceiverInfo.GpsMsCount, &UtcTime, (PUTC_PARAM)0);
 		printf("%04d/%02d/%02d %02d:%02d:%02d.%03d %14.9f %14.9f %10.4f   5   9\n",
@@ -118,6 +118,8 @@ int PvtFix(int MsInterval)
 	int SatCount = 0;
 	PCHANNEL_STATUS ObservationList[DIMENSION_MAX_X];
 	double DeltaT;
+	const double Q[3] = { 25.0, 25.0, 0.25 };	// Qh and Qv are 5^2, Qf is 0.5^2;
+	int PosUseSatCount[PVT_MAX_SYSTEM_ID];
 
 	// use position in g_ReceiverInfo as initial position/velocity
 	if (g_ReceiverInfo.PosQuality < PosTypeLSQ)
@@ -184,9 +186,9 @@ int PvtFix(int MsInterval)
 		return -1;
 	if (g_ReceiverInfo.CurrentPosType == PosTypeKFPos)	// KF PVT
 	{
-/*		KFCalcAPAT(g_PvtCoreData.PMatrix, DeltaT);		// KF prediction APA'
-		KFAddQMatrix(g_PvtCoreData.PMatrix, g_PvtConfig.Qmatrix, &(g_ReceiverInfo.ConvertMatrix), DeltaT);	// KF prediction APA'+Q
-		if ((PosResult = KFPosition(ObservationList, SatCount)) <= 0)	// KF update
+		KFPrediction(g_PvtCoreData.PMatrix, DeltaT);		// KF prediction APA'
+		KFAddQMatrix(g_PvtCoreData.PMatrix, Q, &(g_ReceiverInfo.ConvertMatrix), DeltaT);	// KF prediction APA'+Q
+		if ((PosResult = KFPosition(ObservationList, SatCount, PosUseSatCount)) <= 0)	// KF update
 		{
 			return -1;
 		}
@@ -197,7 +199,7 @@ int PvtFix(int MsInterval)
 			g_ReceiverInfo.BdsTimeQuality = AccurateTime;
 		if (PosResult & PVT_USE_GAL)
 			g_ReceiverInfo.GalileoTimeQuality = AccurateTime;
-		g_ReceiverInfo.PosFlag |= PosResult;*/
+		g_ReceiverInfo.PosFlag |= PosResult;
 	}
 	else if (g_ReceiverInfo.CurrentPosType == PosTypeLSQ)	// normal LSQ PVT
 	{
@@ -226,11 +228,11 @@ int PvtFix(int MsInterval)
 	}
 
 	// for LSQ, determine whether can transfer to KF
-/*	if (g_ReceiverInfo.CurrentPosType == PosTypeLSQ && (g_PvtConfig.PvtConfigFlags & PVT_CONFIG_USE_KF) != 0 && g_ReceiverInfo.PosQuality == AccuratePos)
+	if (g_ReceiverInfo.CurrentPosType == PosTypeLSQ && (g_PvtConfig.PvtConfigFlags & PVT_CONFIG_USE_KF) != 0 && g_ReceiverInfo.PosQuality == AccuratePos)
 	{
 		g_ReceiverInfo.CurrentPosType = PosTypeToKF;
 		InitPMatrix(g_PvtCoreData.PMatrix, g_PvtCoreData.PosInvMatrix, PosResult);
-	}*/
+	}
 
 	// copy back result to receiver info structure
 	g_ReceiverInfo.PosVel.x = STATE_X;

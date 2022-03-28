@@ -138,7 +138,9 @@ void FirmwareInitialize()
 		LoadAllParameters();
 		g_ReceiverInfo.GpsTimeQuality = g_ReceiverInfo.BdsTimeQuality = g_ReceiverInfo.GalileoTimeQuality = UnknownTime;
 		g_ReceiverInfo.PosQuality = ExtSetPos;
+		g_ReceiverInfo.PosVel.vx = g_ReceiverInfo.PosVel.vy = g_ReceiverInfo.PosVel.vz = 0.0;
 	}
+	g_PvtConfig.PvtConfigFlags |= PVT_CONFIG_USE_KF;
 
 	// start acquisition
 	for (i = 0; i < 32; i ++)

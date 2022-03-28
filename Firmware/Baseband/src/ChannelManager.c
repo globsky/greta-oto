@@ -364,6 +364,7 @@ int ComposeMeasurement(int ChannelID, PBB_MEASUREMENT Measurement, U32 *DataBuff
 		ChannelState->DataStream.DataBuffer[WordNumber-1] <<= (((~Measurement->DataNumber + 1) & 0x3) * 8);	// last word shift to MSB
 		memcpy(Measurement->DataStreamAddr, ChannelState->DataStream.DataBuffer, sizeof(U32) * WordNumber);
 		ChannelState->DataStream.ChannelState = ChannelState;
+		ChannelState->DataStream.PrevSymbol = ChannelState->LogicChannel;	// use PrevSymbol to store logic channel ID to BDS data decode
 		if ((ChannelState->State & DATA_STREAM_PRN2) && ChannelState->DataStream.DataCount > 0)
 			AddTaskToQueue(&PostMeasTask, BdsDecodeTask, &(ChannelState->DataStream), sizeof(DATA_STREAM) - 32 + WordNumber);
 	}

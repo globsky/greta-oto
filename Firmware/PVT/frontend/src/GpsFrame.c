@@ -30,12 +30,43 @@
 #define WORD9  (data[1])
 #define WORD10 (data[0])
 
+typedef struct
+{
+	unsigned char toa;
+	unsigned char health;
+	unsigned short ecc;
+	short delta_i;
+	short omega_dot;
+	unsigned int sqrtA;
+	int omega0;
+	int w;
+	int M0;
+	short af0;
+	short af1;
+} RAW_ALMANAC, *PRAW_ALMANAC;
+
+static RAW_ALMANAC RawAlmanac[32];
+static unsigned int RawAlmanacMask;
+
 static void FillInBits(unsigned int *target, unsigned int *src0, unsigned int *src1, int number);
 static int GetTowFromWord(unsigned int word);
 static int GpsFrameDecode(PCHANNEL_STATUS pChannelStatus, unsigned int *data);
 static int DecodeGpsEphemeris(PGNSS_EPHEMERIS pEph, const unsigned int SubframeData[3][10]);
+static void DecodeGpsAlm(const unsigned int *SubframeData, int PageId);
+static void DecodeRawAlm(const int *data, PRAW_ALMANAC pAlm);
+static void ConvertAlmanac(PRAW_ALMANAC pRawAlm, PMIDI_ALMANAC pAlm, int week);
 
 extern BOOL GpsParityCheck(unsigned int word);
+
+//*************** GPS data decode initialization ****************
+// Parameters:
+//   none
+// Return value:
+//   none
+void GpsDecodeInit()
+{
+	RawAlmanacMask = 0;
+}
 
 //*************** GPS Frame sync process ****************
 //* assume maximum epoch interval is 1280ms, which is 64bit
@@ -322,7 +353,7 @@ static int GetTowFromWord(unsigned int word)
 int GpsFrameDecode(PCHANNEL_STATUS pChannelStatus, unsigned int *data)
 {
 	int frame_id = GET_UBITS(HOW_WORD, 8, 3);
-	int i;
+	int i, TOW, PageId;
 	int svid = pChannelStatus->svid;
 	PGPS_FRAME_INFO pFrameInfo = (PGPS_FRAME_INFO)(pChannelStatus->FrameInfo);
 
@@ -377,6 +408,9 @@ int GpsFrameDecode(PCHANNEL_STATUS pChannelStatus, unsigned int *data)
 	else // frame_id == 4 or 5
 	{
 		// decode almanac/UTC parameter etc. here
+		TOW = (int)GET_UBITS(HOW_WORD, 13, 17);
+		PageId = ((TOW - 1) / 5) % 25;
+		DecodeGpsAlm(data, PageId);
 		return frame_id;
 	}
 
@@ -485,4 +519,223 @@ int DecodeGpsEphemeris(PGNSS_EPHEMERIS pEph, const unsigned int SubframeData[3][
 	pEph->omega_t = pEph->omega0 - WGS_OMEGDOTE * pEph->toe;
 	pEph->omega_delta = pEph->omega_dot - WGS_OMEGDOTE;
 	return 1;
+}
+
+//page number  1  2  3  4  5  6  7  8  9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25
+//subframe 5   1  2  3  4  5  6  7  8  9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  51
+//subframe 4  57 25 26 27 28 57 29 30 31  32  57  62  52  53  54  57  55  56  58  59  57  60  61  62  63
+// This is the order in which the subframe 4 page ID's are subcommutated.
+static const int pg2svid4[] = {57,25,26,27,28,57,29,30,31,32,57,62,52,53,54,57,55,56,58,59,57,60,61,62,63};
+// This is the order in which the subframe 5 page ID's are subcommutated.
+static const int pg2svid5[] = {1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,51};
+
+//*************** Decode GPS subframe 4/5 ****************
+// Parameters:
+//   SubframeData: array of 10 WORD of subframe4/5
+//   PageId: page number range 0~24 start from week epoch
+// Return value:
+//   none
+void DecodeGpsAlm(const unsigned int *SubframeData, int PageId)
+{
+	int *data = (int *)SubframeData;
+	int i, PageNumber;
+	int week;
+	PRAW_ALMANAC pAlm;
+	unsigned char toa;
+	int frameid =  (int)GET_UBITS(HOW_WORD, 8, 3);
+	int sv = 0;
+	int WeekNumber;
+
+	if (g_ReceiverInfo.PosFlag & GPS_WEEK_VALID)
+		WeekNumber = g_ReceiverInfo.WeekNumber;
+	else
+		WeekNumber = -1;
+
+	PageNumber = (int)GET_UBITS(WORD3, 22, 6);
+	//check if some satellite invalid
+	if(PageNumber == 0)
+	{
+		if(frameid==4)
+			sv = pg2svid4[PageId];
+		else if(frameid == 5)
+			sv = pg2svid5[PageId];
+		
+		if(sv >= 1 && sv <= 32)
+			g_GpsAlmanac[sv-1].health = 1;
+	}
+
+	if (PageNumber >= 1 && PageNumber <= 32)	// almanac, decode to raw almanac format
+	{
+		if ((RawAlmanacMask & (1 << (PageNumber-1))) != 0)	// do not repeat decode same page
+			return;
+		pAlm = &RawAlmanac[PageNumber-1];	// page number is svid, minus 1 to get index
+		DecodeRawAlm(data, pAlm);
+		RawAlmanacMask |= (1 << (PageNumber-1));
+	}
+	else if (PageNumber == 63)//get 6 bit sv health
+	{
+		g_GpsAlmanac[25 - 1].health = (int)GET_UBITS(WORD8, 6, 6);
+		g_GpsAlmanac[26 - 1].health = (int)GET_UBITS(WORD9, 24, 6);
+		g_GpsAlmanac[27 - 1].health = (int)GET_UBITS(WORD9, 18, 6);
+		g_GpsAlmanac[28 - 1].health = (int)GET_UBITS(WORD9, 12, 6);
+		g_GpsAlmanac[29 - 1].health = (int)GET_UBITS(WORD9, 6, 6);
+		g_GpsAlmanac[30 - 1].health = (int)GET_UBITS(WORD10, 24, 6);
+		g_GpsAlmanac[31 - 1].health = (int)GET_UBITS(WORD10, 18, 6);
+		g_GpsAlmanac[32 - 1].health = (int)GET_UBITS(WORD10, 12, 6);
+	}
+	else if (PageNumber == 51 && WeekNumber >= 0)	// almanac toa and week number
+	{
+		g_GpsAlmanac[1 - 1].health = (int)GET_UBITS(WORD4, 24, 6);
+		g_GpsAlmanac[2 - 1].health = (int)GET_UBITS(WORD4, 18, 6);
+		g_GpsAlmanac[3 - 1].health = (int)GET_UBITS(WORD4, 12, 6);
+		g_GpsAlmanac[4 - 1].health = (int)GET_UBITS(WORD4, 6, 6);
+		g_GpsAlmanac[5 - 1].health = (int)GET_UBITS(WORD5, 24, 6);
+		g_GpsAlmanac[6 - 1].health = (int)GET_UBITS(WORD5, 18, 6);
+		g_GpsAlmanac[7 - 1].health = (int)GET_UBITS(WORD5, 12, 6);
+		g_GpsAlmanac[8 - 1].health = (int)GET_UBITS(WORD5, 6, 6);
+		g_GpsAlmanac[9 - 1].health = (int)GET_UBITS(WORD6, 24, 6);
+		g_GpsAlmanac[10 - 1].health = (int)GET_UBITS(WORD6, 18, 6);
+		g_GpsAlmanac[11 - 1].health = (int)GET_UBITS(WORD6, 12, 6);
+		g_GpsAlmanac[12 - 1].health = (int)GET_UBITS(WORD6, 6, 6);
+		g_GpsAlmanac[13 - 1].health = (int)GET_UBITS(WORD7, 24, 6);
+		g_GpsAlmanac[14 - 1].health = (int)GET_UBITS(WORD7, 18, 6);
+		g_GpsAlmanac[15 - 1].health = (int)GET_UBITS(WORD7, 12, 6);
+		g_GpsAlmanac[16 - 1].health = (int)GET_UBITS(WORD7, 6, 6);
+		g_GpsAlmanac[17 - 1].health = (int)GET_UBITS(WORD8, 24, 6);
+		g_GpsAlmanac[18 - 1].health = (int)GET_UBITS(WORD8, 18, 6);
+		g_GpsAlmanac[19 - 1].health = (int)GET_UBITS(WORD8, 12, 6);
+		g_GpsAlmanac[20 - 1].health = (int)GET_UBITS(WORD8, 6, 6);
+		g_GpsAlmanac[21 - 1].health = (int)GET_UBITS(WORD9, 24, 6);
+		g_GpsAlmanac[22 - 1].health = (int)GET_UBITS(WORD9, 18, 6);
+		g_GpsAlmanac[23 - 1].health = (int)GET_UBITS(WORD9, 12, 6);
+		g_GpsAlmanac[24 - 1].health = (int)GET_UBITS(WORD9, 6, 6);
+
+		if (RawAlmanacMask == 0)	// no raw almanac to decode
+			return;
+
+		// get week number
+		toa = GET_UBITS(WORD3, 14, 8);
+		week = GET_UBITS(WORD3, 6, 8);
+
+		// low 8bit week number match decoded value
+		if (week == (WeekNumber & 0xff))
+			week = WeekNumber;
+		else if (week == ((WeekNumber - 1) & 0xff))
+			week = WeekNumber - 1;
+		else if (week == ((WeekNumber + 1) & 0xff))
+			week = WeekNumber + 1;
+		else
+			RawAlmanacMask = 0;
+
+		for (i = 0; i < 32; i ++)
+		{
+			if (g_GpsAlmanac[i].flag && g_GpsAlmanac[i].week == week)
+				RawAlmanacMask &= ~(1 << i);
+		}
+		for (i = 0; i < 32; i ++)
+		{
+			if (RawAlmanacMask & (1 << i) && RawAlmanac[i].toa == toa)
+			{
+				if(g_GpsAlmanac[i].toa != toa)// judge for fresh
+				{
+					ConvertAlmanac(&RawAlmanac[i], &g_GpsAlmanac[i], week);
+				}
+			}
+		}
+		RawAlmanacMask = 0;
+	}
+	else if (PageNumber == 56)	// ionosphere and UTC parameters
+	{
+		g_GpsIonoParam.a0 = ScaleDouble(GET_BITS(WORD3, 14, 8), 30);
+		g_GpsIonoParam.a1 = ScaleDouble(GET_BITS(WORD3,  6, 8), 27);
+		g_GpsIonoParam.a2 = ScaleDouble(GET_BITS(WORD4, 22, 8), 24);
+		g_GpsIonoParam.a3 = ScaleDouble(GET_BITS(WORD4, 14, 8), 24);
+		g_GpsIonoParam.b0 = ScaleDouble(GET_BITS(WORD4,  6, 8), -11);
+		g_GpsIonoParam.b1 = ScaleDouble(GET_BITS(WORD5, 22, 8), -14);
+		g_GpsIonoParam.b2 = ScaleDouble(GET_BITS(WORD5, 14, 8), -16);
+		g_GpsIonoParam.b3 = ScaleDouble(GET_BITS(WORD5,  6, 8), -16);
+		g_GpsIonoParam.flag = 1;
+
+		if (WeekNumber >= 0)
+		{
+			g_GpsUtcParam.A0 = ScaleDouble(((WORD7 << 2) & 0xffffff00) | GET_UBITS(WORD8, 22, 8), 30);
+			g_GpsUtcParam.A1 = ScaleDouble(GET_BITS(WORD6, 6, 24), 50);
+			g_GpsUtcParam.tot = GET_UBITS(WORD8, 14, 8);// * 4096
+			g_GpsUtcParam.WN = GET_UBITS(WORD8, 6, 8);
+			g_GpsUtcParam.TLS = GET_UBITS(WORD9, 22, 8);
+			g_GpsUtcParam.WNLSF = GET_UBITS(WORD9, 14, 8);
+			g_GpsUtcParam.DN = GET_UBITS(WORD9, 6, 8);
+			g_GpsUtcParam.TLSF = GET_UBITS(WORD10, 22, 8);
+			g_GpsUtcParam.flag = 1;
+
+			// restore WN and WNLSF from truncated value
+			// absolute diff of untruncated value of WeekNumber and WN shall not exceed 127
+			g_GpsUtcParam.WN |= (WeekNumber & 0xff00);
+			if ((g_GpsUtcParam.WN - WeekNumber) < -127)
+				g_GpsUtcParam.WN += 256;
+			else if ((g_GpsUtcParam.WN - WeekNumber) > 127)
+				g_GpsUtcParam.WN -= 256;
+
+			// WNLSF shall not less than WN
+			g_GpsUtcParam.WNLSF |= (g_GpsUtcParam.WN & 0xff00);
+			if (g_GpsUtcParam.WNLSF < g_GpsUtcParam.WN)
+				g_GpsUtcParam.WNLSF += 256;
+		}
+	}
+}
+
+//*************** Decode subframe data to raw almanac ****************
+//* raw almanac is fixed point almanac parameters decoded from data segment of subframe data
+//* the raw almanac will be converted to almanac structure after week number decoded
+// Parameters:
+//   dData: array of 10 WORD of subframe4/5
+//   pAlm: pointer to raw almanac
+// Return value:
+//   none
+void DecodeRawAlm(const int *data, PRAW_ALMANAC pAlm)
+{
+	pAlm->toa = (int)GET_UBITS(WORD4, 22, 8);
+	pAlm->health = GET_UBITS(WORD5, 6, 8);
+	pAlm->ecc = GET_UBITS(WORD3, 6, 16);
+	pAlm->delta_i = GET_BITS(WORD4, 6, 16);
+	pAlm->omega_dot = GET_BITS(WORD5, 14, 16);
+	pAlm->sqrtA = GET_UBITS(WORD6, 6, 24);
+	pAlm->omega0 = GET_BITS(WORD7, 6, 24);
+	pAlm->w = GET_BITS(WORD8, 6, 24);
+	pAlm->M0 = GET_BITS(WORD9, 6, 24);
+	pAlm->af0 = (short)GET_BITS(WORD10, 22, 8) << 3;
+	pAlm->af0 |= GET_UBITS(WORD10, 8, 3);
+	pAlm->af1 = (short)GET_BITS(WORD10, 11, 11);
+}
+
+//*************** Convert raw almanac to almanac structure ****************
+// Parameters:
+//   pRawAlm: pointer to raw almanac
+//   pAlm: pointer to almanac structure
+//   week: week number of almanac
+// Return value:
+//   none
+void ConvertAlmanac(PRAW_ALMANAC pRawAlm, PMIDI_ALMANAC pAlm, int week)
+{
+	pAlm->health = pRawAlm->health;
+	pAlm->toa = (unsigned long)pRawAlm->toa << 12;
+	pAlm->week = week;
+	pAlm->M0 = ScaleDouble(pRawAlm->M0, 24);
+	pAlm->ecc = ScaleDoubleU(pRawAlm->ecc, 21);
+	pAlm->sqrtA = ScaleDoubleU(pRawAlm->sqrtA, 11);
+	pAlm->omega0 = ScaleDouble(pRawAlm->omega0, 24);
+	pAlm->i0 = (0.3 + ScaleDouble(pRawAlm->delta_i, 19)) * PI;
+	pAlm->w = ScaleDouble(pRawAlm->w, 23) * PI;
+	pAlm->omega_dot = ScaleDouble(pRawAlm->omega_dot, 39);
+	pAlm->af0 = ScaleDouble(pRawAlm->af0, 20);
+	pAlm->af1 = ScaleDouble(pRawAlm->af1, 38);
+
+	pAlm->flag = 1;
+
+	// calculate derived variables
+	pAlm->axis = pAlm->sqrtA * pAlm->sqrtA;
+	pAlm->n = WGS_SQRT_GM / (pAlm->sqrtA * pAlm->axis) / (2 * PI);
+	pAlm->root_ecc = sqrt(1.0 - pAlm->ecc * pAlm->ecc);
+	pAlm->omega_t = pAlm->omega0 - WGS_OMEGDOTE / (2 * PI) * (pAlm->toa);
+	pAlm->omega_delta = pAlm->omega_dot - WGS_OMEGDOTE / (2 * PI);
 }

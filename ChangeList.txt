@@ -96,3 +96,9 @@
 		Fix bug that when CurrentCor!=0, PLL/BitSync/DataDecode use partial coherent sum result
 	Function and feature added
 		Add hot start function
+3/27/022
+	Bug fix
+		Fix bug in raw measurement correction using incorrect satellite information
+	Function and feature added
+		Add almanac, ionoshpere and UTC parameter decode
+		Add kalman filter positioning function

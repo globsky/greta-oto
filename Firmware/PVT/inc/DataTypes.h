@@ -325,6 +325,7 @@ typedef struct
 #define PVT_CONFIG_USE_BDS			(1 << SYSTEM_BDS)
 #define PVT_CONFIG_USE_GAL			(1 << SYSTEM_GAL)
 #define PVT_CONFIG_USE_KF			(0x100)
+#define PVT_CONFIG_WEIGHTED_LSQ		(0x200)
 
 typedef struct
 {

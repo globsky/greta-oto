@@ -142,6 +142,7 @@ int FilterObservation(PCHANNEL_STATUS ObservationList[], int ObsCount)
 void ApplyCorrection(PCHANNEL_STATUS ObservationList[], int ObsCount)
 {
 	int i, sv_index;
+	PSATELLITE_INFO SatelliteInfo = g_GpsSatelliteInfo;
 
 	// calculate Tclk + Trel - Tgd - Ttrop  - Tiono (earth rotate correction applied in GeometryDistanceXYZ())
 	// ObservationList[i]->DeltaT has already assigned with clock error and relativistic correction in CalcSatelliteInfo()
@@ -150,17 +151,28 @@ void ApplyCorrection(PCHANNEL_STATUS ObservationList[], int ObsCount)
 		sv_index = ObservationList[i]->svid - 1;
 
 		// group delay
-		ObservationList[i]->DeltaT -= g_GpsEphemeris[sv_index].tgd;
+		if (ObservationList[i]->FreqID == FREQ_L1CA || ObservationList[i]->FreqID == FREQ_L1C)
+			ObservationList[i]->DeltaT -= g_GpsEphemeris[sv_index].tgd;
+		else if (ObservationList[i]->FreqID == FREQ_B1C)
+		{
+			ObservationList[i]->DeltaT -= g_BdsEphemeris[sv_index].tgd;
+			SatelliteInfo = g_BdsSatelliteInfo;
+		}
+		else if (ObservationList[i]->FreqID == FREQ_E1)
+		{
+			ObservationList[i]->DeltaT -= g_GalileoEphemeris[sv_index].tgd;
+			SatelliteInfo = g_GalileoSatelliteInfo;
+		}
 		// ionosphere delay
-		if (g_ReceiverInfo.PosQuality != UnknownPos && (g_GpsSatelliteInfo[sv_index].SatInfoFlag & SAT_INFO_ELAZ_VALID)) 	// user position and satellite el/az valid
+		if (g_ReceiverInfo.PosQuality != UnknownPos && (SatelliteInfo[sv_index].SatInfoFlag & SAT_INFO_ELAZ_VALID)) 	// user position and satellite el/az valid
 		{
 			// ionosphere correction
 			if (g_GpsIonoParam.flag)	// first try GPS ionosphere parameter
-				ObservationList[i]->DeltaT -= GpsIonoDelay(&g_GpsIonoParam, &(g_ReceiverInfo.PosLLH), g_ReceiverInfo.GpsMsCount, &g_GpsSatelliteInfo[sv_index]);
+				ObservationList[i]->DeltaT -= GpsIonoDelay(&g_GpsIonoParam, &(g_ReceiverInfo.PosLLH), g_ReceiverInfo.GpsMsCount, &SatelliteInfo[sv_index]);
 //			else if (g_BdsIonoParam.flag)	// then try BD2 ionosphere parameter
-//				ObservationList[i]->DeltaT -= BdsIonoDelay(&g_BdsIonoParam, &(g_ReceiverInfo.PosLLH), g_ReceiverInfo.GpsMsCount, &g_GpsSatelliteInfo[sv_index]);
+//				ObservationList[i]->DeltaT -= BdsIonoDelay(&g_BdsIonoParam, &(g_ReceiverInfo.PosLLH), g_ReceiverInfo.GpsMsCount, &SatelliteInfo[sv_index]);
 			// troposphere correction
-			ObservationList[i]->DeltaT -= TropoDelay(g_GpsSatelliteInfo[sv_index].el, &g_ReceiverInfo);
+			ObservationList[i]->DeltaT -= TropoDelay(SatelliteInfo[sv_index].el, &g_ReceiverInfo);
 		}
 		// calculate corrected PSR
 		ObservationList[i]->PseudoRange = ObservationList[i]->PseudoRangeOrigin + ObservationList[i]->DeltaT * LIGHT_SPEED;

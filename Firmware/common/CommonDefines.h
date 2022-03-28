@@ -197,6 +197,22 @@ typedef struct
 	PBB_MEASUREMENT Measurements;
 } BB_MEAS_PARAM, *PBB_MEAS_PARAM;
 
+//==========================
+// data stream sent to decode task
+//==========================
+typedef struct
+{
+	struct tag_CHANNEL_STATE *ChannelState;	// channel to send data to decode task
+	int PrevReal, PrevImag;	// accumulated I/Q in previous data period
+	int CurReal, CurImag;	// accumulated I/Q in current data period
+	int TotalAccTime;		// total accumulation period in millisecond
+	int CurrentAccTime;		// current accumulated time in millisecond
+	int DataCount;			// number of decoded symbols
+	int StartIndex;			// index of the first data symbol within a frame
+	int PrevSymbol;			// previous symbol (determine data toggle)
+	U32 DataBuffer[128/4];	// maximum 128 bytes to hold decoded symbols
+} DATA_STREAM, *PDATA_STREAM;
+
 #pragma pack(pop)	//restore original alignment
 
 #endif	// __COMMON_DEFINES_H__

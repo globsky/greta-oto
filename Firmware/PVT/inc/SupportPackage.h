@@ -61,5 +61,9 @@ void SymMatrixMultiply(double *DeltaPos, double *Inv, double *Delta, int dim);
 
 // position fix functions
 int PvtLsq(PCHANNEL_STATUS ObservationList[], int ObsCount, int LoopCount);
+void InitPMatrix(double *PMatrix, const double *PMatrixInit, unsigned int PosFlag);
+void KFPrediction(double *PMatrix, double DeltaT);
+void KFAddQMatrix(double *PMatrix, const double *QConfig, PCONVERT_MATRIX pConvertMatrix, double DeltaT);
+int KFPosition(PCHANNEL_STATUS ObservationList[], int ObsCount, int PosUseSatCount[PVT_MAX_SYSTEM_ID]);
 
 #endif //__SUPPORT_PKG_H__

@@ -9,7 +9,6 @@
 #include <string.h>
 #include <math.h>
 
-#include "ChannelManager.h"
 #include "DataTypes.h"
 #include "GlobalVar.h"
 #include "SupportPackage.h"
@@ -40,7 +39,7 @@ void BdsDecodeInit()
 int BdsDecodeTask(void *Param)
 {
 	PDATA_STREAM DataStream = (PDATA_STREAM)Param;
-	int ChannelIndex = (int)DataStream->ChannelState->LogicChannel;
+	int ChannelIndex = DataStream->PrevSymbol;	// get logic channel ID
 	PBDS_FRAME_INFO BdsFrameInfo = (PBDS_FRAME_INFO)g_ChannelStatus[ChannelIndex].FrameInfo;
 	U16 *FrameBuffer = DataFrame + ChannelIndex * BUFFER_LENGTH;
 	int StartPos = 0;	// position of symbol in data stream to decode

@@ -1,6 +1,6 @@
 //----------------------------------------------------------------------
-// PvtProc.c:
-//   PVT process functions
+// PvtLsq.c:
+//   PVT least square process functions
 //
 //          Copyright (C) 2020-2029 by Jun Mo, All rights reserved.
 //

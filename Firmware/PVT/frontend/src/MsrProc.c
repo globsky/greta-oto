@@ -159,8 +159,8 @@ void MsrProc(PBB_MEASUREMENT Measurements, unsigned int ActiveMask, int CurMsInt
 		for (ch_num = 0; ch_num < TOTAL_CHANNEL_NUMBER; ch_num ++)
 		{
 			if (g_ChannelStatus[ch_num].ChannelFlag & MEASUREMENT_VALID)
-				printf("%c%02d %13.3f 8 %13.3f 8 %13.3f          48.000\n", FREQ_ID_IS_B1C(g_ChannelStatus[ch_num].FreqID) ? 'C' : FREQ_ID_IS_E1(g_ChannelStatus[ch_num].FreqID) ? 'E' : 'G',
-					g_ChannelStatus[ch_num].svid, g_ChannelStatus[ch_num].PseudoRangeOrigin, g_ChannelStatus[ch_num].CarrierPhase, g_ChannelStatus[ch_num].DopplerHz);
+				printf("%c%02d %13.3f 8 %13.3f 8 %13.3f          %6.3f\n", FREQ_ID_IS_B1C(g_ChannelStatus[ch_num].FreqID) ? 'C' : FREQ_ID_IS_E1(g_ChannelStatus[ch_num].FreqID) ? 'E' : 'G',
+					g_ChannelStatus[ch_num].svid, g_ChannelStatus[ch_num].PseudoRangeOrigin, g_ChannelStatus[ch_num].CarrierPhase, g_ChannelStatus[ch_num].DopplerHz, g_ChannelStatus[ch_num].cn0 / 100.);
 		}
 	}
 
@@ -335,14 +335,18 @@ void CalculateRawMsr(PCHANNEL_STATUS pChannelStatus, PBB_MEASUREMENT pMsr, int C
 	// Step 3: add the fractional part of carrier phase
 	pChannelStatus->CarrierPhase = (double)pChannelStatus->CarrierCountAcc - ScaleDoubleU(pMsr->CarrierNCO, 32);
 	// Step 4: determine whether to add 0.5 cycle to compensate negative data stream
-	if (pGpsFrameInfo->FrameFlag & POLARITY_VALID)
+	if (pChannelStatus->FreqID == FREQ_L1CA)	// only L1C/A has half cycle
 	{
-		if ((pGpsFrameInfo->FrameFlag & NEGATIVE_STREAM))
-			pChannelStatus->CarrierPhase += 0.5;
+		if (pGpsFrameInfo->FrameFlag & POLARITY_VALID)
+		{
+			if ((pGpsFrameInfo->FrameFlag & NEGATIVE_STREAM))
+				pChannelStatus->CarrierPhase += 0.5;
+		}
+		else
+			pChannelStatus->ChannelFlag |= HALF_CYCLE;
 	}
-	else
-		pChannelStatus->ChannelFlag |= HALF_CYCLE;
 	pChannelStatus->ChannelFlag |= ADR_VALID;
+	pChannelStatus->CarrierCountOld = pMsr->CarrierCount;
 
 	pChannelStatus->ChannelFlag |= MEASUREMENT_VALID;
 }
