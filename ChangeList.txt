@@ -102,3 +102,7 @@
 	Function and feature added
 		Add almanac, ionoshpere and UTC parameter decode
 		Add kalman filter positioning function
+4/25/022
+	Bug fix
+		Fix bug in noise calculation RTL to avoid potential wrong acc data calculation
+		Fix bug in AE PRN code load RTL to avoid potential PRN load error

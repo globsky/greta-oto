@@ -528,7 +528,7 @@ always @(posedge clk or negedge rst_b)
 		load_code0 <= 1'b0;
 	else if (preload_code || start_load_code0)
 		load_code0 <= 1'b1;
-	else if (load_code0 && load_code_count == `CODE_LENGTH - 1)
+	else if (load_code0 && ready_to_shift && load_code_count == `CODE_LENGTH - 1)
 		load_code0 <= 1'b0;
 
 always @(posedge clk or negedge rst_b)
@@ -536,7 +536,7 @@ always @(posedge clk or negedge rst_b)
 		load_code1 <= 1'b0;
 	else if (start_load_code1)
 		load_code1 <= 1'b1;
-	else if (load_code1 && load_code_count == `CODE_LENGTH - 1)
+	else if (load_code1 && ready_to_shift && load_code_count == `CODE_LENGTH - 1)
 		load_code1 <= 1'b0;
 
 wire ready_to_shift;

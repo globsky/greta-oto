@@ -61,23 +61,27 @@ assign data_add_q = prn_code[9] ? -q_data_down : q_data_down;
 always @(posedge clk or negedge rst_b)
 	if (!rst_b)
 		acc_i <= 'd0;
-	else if (data_down_en) begin
-		if (last_sample_d[0])
+	else if (last_sample_d[0]) begin
+		if (data_down_en)
 			acc_i <= data_add_i;
 		else
-			acc_i <= acc_i + {{10{data_add_i[5]}}, data_add_i};
+			acc_i <= 'd0;
 	end
+	else if (data_down_en)
+		acc_i <= acc_i + {{10{data_add_i[5]}}, data_add_i};
 
 always @(posedge clk or negedge rst_b)
 	if (!rst_b)
 		acc_q <= 'd0;
-	else if (data_down_en) begin
-		if (last_sample_d[0])
+	else if (last_sample_d[0]) begin
+		if (data_down_en)
 			acc_q <= data_add_q;
 		else
-			acc_q <= acc_q + {{10{data_add_q[5]}}, data_add_q};
+			acc_q <= 'd0;
 	end
- 
+	else if (data_down_en)
+			acc_q <= acc_q + {{10{data_add_q[5]}}, data_add_q};
+
 //----------------------------------------------------------
 // calculate smoothed noise floor
 //----------------------------------------------------------
