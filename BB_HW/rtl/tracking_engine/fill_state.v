@@ -32,7 +32,7 @@ output reg [4:0]  bit_length,		// bit length in ms
 output reg [5:0]	coherent_number,  // coherent number
 output reg [24:0] nh_code,  // NH code
 output reg [4:0] 	nh_length,  // NH data lenth
-output reg [15:0] dump_length,  	// dump data length
+output reg [19:0] dump_length,  	// dump data length (16LSB for DumpLength, or 20bit NH Code2)
 output reg [31:0] prn_config,			// PRN config
 output reg [31:0] prn2_config,		// PRN2 config
 
@@ -150,7 +150,7 @@ always @(posedge clk or negedge rst_b)
 				nh_code         <= state_d4rd[24:0];
 				nh_length       <= state_d4rd[31:27];
 			end
-			dump_length_en:	dump_length <= state_d4rd[15:0];
+			dump_length_en:	dump_length <= state_d4rd[19:0];
 			prn_config_en:  prn_config  <= state_d4rd;
 			prn_config2_en: prn2_config <= state_d4rd;
 		endcase

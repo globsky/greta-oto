@@ -126,7 +126,7 @@ output shift_code,
 
 // control and state signals
 input	fill_finished,			// set this signal when all physical channel fill finish
-input cor_finished,				// set this signal when correlation of all samples finish
+input coh_finished,				// set this signal when coherent sum finish and decode data is ready
 input [31:0] coh_acc_data,		// coherent acc data from coherent sum module
 output     cor_ready,			// correlator ready to accept input sample
 output     coherent_done_o,    //coherent data is ready
@@ -386,27 +386,27 @@ reg [15:0] q_acc_result_sel;
 
 always @ (*)
 	case(acc_data_select)
-		4'h0 : i_acc_result_sel = i_acc_result[0];
-		4'h1 : i_acc_result_sel = i_acc_result[1];
-		4'h2 : i_acc_result_sel = i_acc_result[2];
-		4'h3 : i_acc_result_sel = i_acc_result[3];
-		4'h4 : i_acc_result_sel = i_acc_result[4];
-		4'h5 : i_acc_result_sel = i_acc_result[5];
-		4'h6 : i_acc_result_sel = i_acc_result[6];
-		4'h7 : i_acc_result_sel = i_acc_result[7];
+		3'h0 : i_acc_result_sel = i_acc_result[0];
+		3'h1 : i_acc_result_sel = i_acc_result[1];
+		3'h2 : i_acc_result_sel = i_acc_result[2];
+		3'h3 : i_acc_result_sel = i_acc_result[3];
+		3'h4 : i_acc_result_sel = i_acc_result[4];
+		3'h5 : i_acc_result_sel = i_acc_result[5];
+		3'h6 : i_acc_result_sel = i_acc_result[6];
+		3'h7 : i_acc_result_sel = i_acc_result[7];
 		default: i_acc_result_sel = 16'd0;
 	endcase
 
 always @ (*)
 	case(acc_data_select)
-		4'h0 : q_acc_result_sel = q_acc_result[0];
-		4'h1 : q_acc_result_sel = q_acc_result[1];
-		4'h2 : q_acc_result_sel = q_acc_result[2];
-		4'h3 : q_acc_result_sel = q_acc_result[3];
-		4'h4 : q_acc_result_sel = q_acc_result[4];
-		4'h5 : q_acc_result_sel = q_acc_result[5];
-		4'h6 : q_acc_result_sel = q_acc_result[6];
-		4'h7 : q_acc_result_sel = q_acc_result[7];
+		3'h0 : q_acc_result_sel = q_acc_result[0];
+		3'h1 : q_acc_result_sel = q_acc_result[1];
+		3'h2 : q_acc_result_sel = q_acc_result[2];
+		3'h3 : q_acc_result_sel = q_acc_result[3];
+		3'h4 : q_acc_result_sel = q_acc_result[4];
+		3'h5 : q_acc_result_sel = q_acc_result[5];
+		3'h6 : q_acc_result_sel = q_acc_result[6];
+		3'h7 : q_acc_result_sel = q_acc_result[7];
 		default: q_acc_result_sel = 16'd0;
 	endcase
 
@@ -499,7 +499,7 @@ always @(posedge clk or negedge rst_b)
 		decode_data_o <= 32'd0;
 	else if (decode_data_en)
 		decode_data_o <= decode_data_i;
-	else if (cor_finished && data_decode_valid)
+	else if (coh_finished && data_decode_valid)
 		decode_data_o <= decode_data;
 		
 assign cor_ready = (jump_count_o[7])|(~(|jump_count_o[6:0]));

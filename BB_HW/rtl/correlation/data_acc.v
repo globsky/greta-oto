@@ -6,7 +6,7 @@
 //
 //----------------------------------------------------------------------
 
-module data_acc #(parameter ACC_DATA_WIDTH = 16)
+module data_acc #(parameter ACC_DATA_WIDTH = 16, parameter IQ_DATA_WIDTH = 6)
 (
 // system signals
 input	clk,
@@ -17,19 +17,19 @@ input [ACC_DATA_WIDTH-1:0] i_acc_i,
 input [ACC_DATA_WIDTH-1:0] q_acc_i,
 // input data and PRN
 input acc_clear,
-input [5:0] i_data_pos,
-input [5:0] q_data_pos,
-input [5:0] i_data_neg,
-input [5:0] q_data_neg,
+input [IQ_DATA_WIDTH-1:0] i_data_pos,
+input [IQ_DATA_WIDTH-1:0] q_data_pos,
+input [IQ_DATA_WIDTH-1:0] i_data_neg,
+input [IQ_DATA_WIDTH-1:0] q_data_neg,
 input prn_code,
 output reg [ACC_DATA_WIDTH-1:0] i_acc_o,
 output reg [ACC_DATA_WIDTH-1:0] q_acc_o
 );
 
-localparam EXPAND_WIDTH = ACC_DATA_WIDTH - 6;
+localparam EXPAND_WIDTH = ACC_DATA_WIDTH - IQ_DATA_WIDTH;
 
-wire [5:0] i_acc;
-wire [5:0] q_acc;
+wire [IQ_DATA_WIDTH-1:0] i_acc;
+wire [IQ_DATA_WIDTH-1:0] q_acc;
 assign i_acc = prn_code ? i_data_neg : i_data_pos;
 assign q_acc = prn_code ? q_data_neg : q_data_pos;
 
@@ -44,7 +44,7 @@ always @ (posedge clk or negedge rst_b)
 	else if (acc_in_en)
 		i_acc_o <= i_acc_i;
 	else
-		i_acc_o <= i_acc_feedback + {{EXPAND_WIDTH{i_acc[5]}}, i_acc};
+		i_acc_o <= i_acc_feedback + {{EXPAND_WIDTH{i_acc[IQ_DATA_WIDTH-1]}}, i_acc};
 
 always @ (posedge clk or negedge rst_b)
 	if (~rst_b)
@@ -52,6 +52,6 @@ always @ (posedge clk or negedge rst_b)
 	else if (acc_in_en)
 		q_acc_o <= q_acc_i;
 	else
-		q_acc_o <= q_acc_feedback + {{EXPAND_WIDTH{q_acc[5]}}, q_acc};
+		q_acc_o <= q_acc_feedback + {{EXPAND_WIDTH{q_acc[IQ_DATA_WIDTH-1]}}, q_acc};
 
 endmodule

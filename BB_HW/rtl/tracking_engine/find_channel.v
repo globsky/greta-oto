@@ -15,6 +15,7 @@ input rst_b, // reset signal, low active
 // control signal interface to TE
 input latch_enable_channel,
 input start_find,
+input te_over,
 output find_channel_done,
 input [31:0] te_channel_enable,
 output reg [31:0] channel_remain,
@@ -114,7 +115,7 @@ always @(posedge clk or negedge rst_b)
 always @(posedge clk or negedge rst_b)
 	if (!rst_b)
 		physical_channel_en <= 4'h0;
-	else if (start_find)
+	else if (start_find || te_over)
 		physical_channel_en <= 4'h0;
 	else if (cur_state == SET_POSITION)
 		case (physical_channel_index)

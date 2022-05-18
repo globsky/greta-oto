@@ -15,7 +15,7 @@
 
 #define COH_OFFSET(ch_index, cor_index) ((ch_index << 5) + 24 + (cor_index >> 2))
 
-CTrackingEngine::CTrackingEngine(CTeFifoMem *pTeFifo, unsigned int *MemCodeBuffer) : pTeFifo(pTeFifo)
+CTrackingEngine::CTrackingEngine(CTeFifoMem *pTeFifo, unsigned int *MemCodeBuffer) : pTeFifo(pTeFifo), NoiseCalc(10)
 {
 	int i;
 

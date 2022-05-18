@@ -6,15 +6,15 @@
 //
 //----------------------------------------------------------------------
 
-module noise_calc
+module noise_calc #(parameter CODE_LENGTH = 10, parameter DATA_BITS = 6)
 (
 // system signals
 input clk,   // system clock
 input rst_b, // reset signal, low active
 // input data
 input data_down_en,
-input [5:0] i_data_down,
-input [5:0] q_data_down,
+input [DATA_BITS-1:0] i_data_down,
+input [DATA_BITS-1:0] q_data_down,
 // control signal
 input shift_code,
 input [1:0] smooth_factor,
@@ -24,25 +24,28 @@ input [15:0] noise_floor_i,
 output [15:0] noise_floor
 );
 
+localparam RESET_STATE = (CODE_LENGTH == 10) ? 10'h3ff : 14'h0ade;
+
 reg [23:0] noise_floor_r;
-reg [9:0] prn_code;
+reg [CODE_LENGTH-1:0] prn_code;
 reg [15:0] acc_i, acc_q;
 
 //----------------------------------------------------------
 // m serial
 //----------------------------------------------------------
 wire feedback;
-assign feedback = prn_code[9] ^ prn_code[2];
+wire [CODE_LENGTH-1:0] next_state;
+wire last_sample;
+reg [2:0] last_sample_d;
+assign feedback = (CODE_LENGTH == 10) ? (prn_code[CODE_LENGTH-1] ^ prn_code[2]) : (prn_code[CODE_LENGTH-1] ^ prn_code[7] ^ prn_code[5] ^ prn_code[0]);
+assign next_state = {prn_code[CODE_LENGTH-2:0], feedback};
+assign last_sample = (next_state == RESET_STATE) & shift_code;
 
 always @(posedge clk or negedge rst_b)
 	if (!rst_b)
-		prn_code <= 10'h3ff;
+		prn_code <= {CODE_LENGTH{1'b1}};	// all zero
 	else if (shift_code)
-		prn_code <= {prn_code[8:0], feedback};
-
-wire last_sample;
-reg [2:0] last_sample_d;
-assign last_sample = (&{prn_code[8:0], feedback}) & shift_code;
+		prn_code <= last_sample ? {CODE_LENGTH{1'b1}} : next_state;
 
 always @(posedge clk or negedge rst_b)
 	if (!rst_b)
@@ -50,13 +53,12 @@ always @(posedge clk or negedge rst_b)
 	else
 		last_sample_d <= {last_sample_d[1:0], last_sample};
 
-
 //----------------------------------------------------------
 // accumulate sample
 //----------------------------------------------------------
-wire signed [5:0] data_add_i, data_add_q;
-assign data_add_i = prn_code[9] ? -i_data_down : i_data_down;
-assign data_add_q = prn_code[9] ? -q_data_down : q_data_down;
+wire signed [DATA_BITS-1:0] data_add_i, data_add_q;
+assign data_add_i = prn_code[CODE_LENGTH-1] ? -i_data_down : i_data_down;
+assign data_add_q = prn_code[CODE_LENGTH-1] ? -q_data_down : q_data_down;
 
 always @(posedge clk or negedge rst_b)
 	if (!rst_b)
@@ -68,7 +70,7 @@ always @(posedge clk or negedge rst_b)
 			acc_i <= 'd0;
 	end
 	else if (data_down_en)
-		acc_i <= acc_i + {{10{data_add_i[5]}}, data_add_i};
+		acc_i <= acc_i + {{(16-DATA_BITS){data_add_i[DATA_BITS-1]}}, data_add_i};
 
 always @(posedge clk or negedge rst_b)
 	if (!rst_b)
@@ -80,7 +82,7 @@ always @(posedge clk or negedge rst_b)
 			acc_q <= 'd0;
 	end
 	else if (data_down_en)
-			acc_q <= acc_q + {{10{data_add_q[5]}}, data_add_q};
+			acc_q <= acc_q + {{(16-DATA_BITS){data_add_q[DATA_BITS-1]}}, data_add_q};
 
 //----------------------------------------------------------
 // calculate smoothed noise floor

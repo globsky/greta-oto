@@ -14,7 +14,7 @@
 class CNoiseCalc
 {
 public:
-	CNoiseCalc();
+	CNoiseCalc(int CodeLength);
 	~CNoiseCalc();
 
 	void Reset();
@@ -28,6 +28,8 @@ public:
 	reg_uint SmoothFactor;			// 2bit
 	reg_uint SmoothedNoise;			// 24bit
 	reg_uint PrnCode;				// 10bit
+
+	int CodeLength;		// 10 for L1 and 14 for L5
 
 	complex_int NoiseAcc;
 };

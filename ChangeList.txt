@@ -106,3 +106,6 @@
 	Bug fix
 		Fix bug in noise calculation RTL to avoid potential wrong acc data calculation
 		Fix bug in AE PRN code load RTL to avoid potential PRN load error
+5/18/022
+	Function and feature change
+		Modification to have some module reused by L5 tracking engine

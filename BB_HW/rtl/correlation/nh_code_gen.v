@@ -97,6 +97,11 @@ always @ (*)
 	    5'd17: nh_code2_select = nh_code2[17];
 	    5'd18: nh_code2_select = nh_code2[18];
 	    5'd19: nh_code2_select = nh_code2[19];
+	    5'd20: nh_code2_select = nh_code2[0];
+	    5'd21: nh_code2_select = nh_code2[1];
+	    5'd22: nh_code2_select = nh_code2[2];
+	    5'd23: nh_code2_select = nh_code2[3];
+	    5'd24: nh_code2_select = nh_code2[4];
 	    default: nh_code2_select = 1'b0;
 	endcase
 

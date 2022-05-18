@@ -11,7 +11,7 @@
 
 CGeneralPrn::CGeneralPrn(const unsigned int PolySettings[])
 {
-	PrnPolySettings = PolySettings;
+	PrnPolyRegs = PolySettings;
 	Reset();
 }
 
@@ -41,6 +41,9 @@ void CGeneralPrn::Reset()
 // ...
 void CGeneralPrn::FillState(unsigned int *StateBuffer)
 {
+	int PrnSel = EXTRACT_UINT(StateBuffer[0], 30, 2);
+
+	PrnPolySettings = PrnPolyRegs + PrnSel * 4;
 	G1InitState = EXTRACT_UINT(StateBuffer[0], 0, 14);
 	G2InitState = EXTRACT_UINT(StateBuffer[0], 14, 14);
 	G1CurState = EXTRACT_UINT(StateBuffer[1], 0, 14);

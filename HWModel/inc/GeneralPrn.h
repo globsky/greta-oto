@@ -27,6 +27,7 @@ public:
 	reg_uint GlobalCount;					// 32bit RW
 	reg_uint ParallelSerial;				// 1bit RO
 
+	const unsigned int *PrnPolyRegs;			// 8 32bit registers for polynomial and length
 	const unsigned int *PrnPolySettings;			// 2 32bit registers for polynomial and length
 
 	void FillState(unsigned int *StateBuffer);

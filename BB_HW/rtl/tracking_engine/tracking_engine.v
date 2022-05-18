@@ -195,6 +195,7 @@ find_channel u_find_channel
 	.rst_b                (rst_b                 ),
 	.latch_enable_channel (latch_enable_channel  ),
 	.start_find           (find_channel_start    ),
+	.te_over              (te_over               ),
 	.find_channel_done    (find_channel_done     ),
 	.te_channel_enable    (te_channel_enable     ),
 	.channel_remain       (channel_remain        ),
@@ -272,7 +273,7 @@ wire [4:0]  bit_length [3:0];
 wire [5:0]	coherent_number [3:0];
 wire [24:0] nh_code [3:0];
 wire [4:0] 	nh_length [3:0];
-wire [15:0] dump_length [3:0];
+wire [19:0] dump_length [3:0];
 wire [31:0] prn_config [3:0];
 wire [31:0] prn2_config [3:0];
 
@@ -462,7 +463,7 @@ generate
 		.coherent_number        (coherent_number[i_gen]    ),
 		.nh_code                (nh_code[i_gen]            ),
 		.nh_length              (nh_length[i_gen]          ),
-		.dump_length            (dump_length[i_gen]        ),
+		.dump_length            (dump_length[i_gen][15:0]  ),
 	
 		.carrier_phase_en       (carrier_phase_en[i_gen]   ),
 		.carrier_phase_i        (state_d4rd                ),
@@ -547,7 +548,7 @@ generate
 		.shift_code             (shift_code[i_gen]         ),
 
 		.fill_finished          (fill_state_done           ),
-		.cor_finished           (dump_start                ),
+		.coh_finished           (dump_start                ),
 		.coh_acc_data           (coh_acc_data[i_gen]       ),
 		.cor_ready              (cor_ready[i_gen]          ),
 		.coherent_done_o        (coherent_done[i_gen]      ),

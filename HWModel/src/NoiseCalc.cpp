@@ -9,7 +9,7 @@
 #include "CommonOps.h"
 #include "NoiseCalc.h"
 
-CNoiseCalc::CNoiseCalc()
+CNoiseCalc::CNoiseCalc(int CodeLength) : CodeLength(CodeLength)
 {
 	Reset();
 	SmoothFactor= 0;
@@ -21,9 +21,9 @@ CNoiseCalc::~CNoiseCalc()
 
 void CNoiseCalc::Reset()
 {
-	PrnCode = 0x3ff;	// reset to all 1
+	PrnCode = (1 << CodeLength) - 1;	// reset to all 1
 	NoiseAcc = complex_int(0,0);
-	SmoothedNoise = 784 << 8;
+	SmoothedNoise = (CodeLength == 14) ? (1920 << 8) : (784 << 8);
 }
 
 void CNoiseCalc::SetSmoothFactor(int Factor)
@@ -44,7 +44,7 @@ unsigned int CNoiseCalc::GetNoise()
 void CNoiseCalc::AccumulateSample(complex_int Sample)
 {
 	// accumulate input sample correlated with m serial
-	if (PrnCode & 0x200)
+	if (PrnCode & (1 << (CodeLength-1)))
 		NoiseAcc -= Sample;
 	else
 		NoiseAcc += Sample;
@@ -52,20 +52,25 @@ void CNoiseCalc::AccumulateSample(complex_int Sample)
 
 void CNoiseCalc::ShiftCode()
 {
-	int Feedback = ((PrnCode << 7) ^ PrnCode) & 0x200;
+	int Feedback;
 	int Adjust;
 
 	// shift m serial
+	if (CodeLength == 14)
+		Feedback = ((PrnCode >> 13) ^ (PrnCode >> 7) ^ (PrnCode >> 5) ^ PrnCode) & 1;
+	else
+		Feedback = ((PrnCode >> 9) ^ (PrnCode >> 2)) & 1;
 	PrnCode <<= 1;
 	PrnCode += Feedback ? 1 : 0;
 	// determine end of sequence
-	if ((PrnCode & 0x3ff) == 0x3ff)
+	if ((PrnCode & ((1 << CodeLength) - 1)) == ((CodeLength == 14) ? 0xade : 0x3ff))
 	{
+		PrnCode = (1 << CodeLength) - 1;	// reset to all 1
 		// calculate smoothed value
 		Adjust = Amplitude(NoiseAcc) - (SmoothedNoise >> 8);
 		Adjust >>= (SmoothFactor * 2);
 		SmoothedNoise += Adjust;
-//		printf("%d %d %d\n", NoiseAcc.real, NoiseAcc.imag, SmoothedNoise >> 8);
+//		printf("%d %d %d %d\n", NoiseAcc.real, NoiseAcc.imag, Amplitude(NoiseAcc), SmoothedNoise);
 		// reset accumulator
 		NoiseAcc = complex_int(0,0);
 	}
