@@ -234,6 +234,10 @@ always @(posedge clk or negedge rst_b)
 	else if ((cur_state == LOAD_CHANNEL_PARAM) || (result_state == RESULT_SAVE))
 		channel_param_addr <= channel_param_addr + 1;
 
+// clock gating for each physical correlator
+wire gated_clk;
+gated_clock_wrapper u_gated_clock (.clk_out(gated_clk), .clk_in(clk), .en(~(cur_state == IDLE)), .te(1'b0));
+
 //----------------------------------------------------------
 // adjust channel control registers
 //----------------------------------------------------------
@@ -457,7 +461,7 @@ assign noncoh_first_sample = coh_first_sample && (noncoh_count == 'd0);
 
 read_sample u_read_sample
 (
-	.clk               (clk                 ),
+	.clk               (gated_clk           ),
 	.rst_b             (rst_b               ),
 	.clear             (start_load_sample   ),
 	.carrier_freq      (carrier_freq        ),
@@ -520,8 +524,11 @@ always @(posedge clk or negedge rst_b)
 
 // assign load code 0 and 1 signal
 wire start_load_code0, start_load_code1;
+wire shift_code;
+wire ready_to_shift;
 assign start_load_code0 = start_load_code_d[2] && code_select_d[2];
 assign start_load_code1 = start_load_code_d[2] && ~code_select_d[2];
+assign shift_code = (load_code0 || load_code1) && ready_to_shift;
 
 always @(posedge clk or negedge rst_b)
 	if (!rst_b)
@@ -539,9 +546,6 @@ always @(posedge clk or negedge rst_b)
 	else if (load_code1 && ready_to_shift && load_code_count == `CODE_LENGTH - 1)
 		load_code1 <= 1'b0;
 
-wire ready_to_shift;
-wire shift_code;
-assign shift_code = (load_code0 || load_code1) && ready_to_shift;
 
 always @(posedge clk or negedge rst_b)
 	if (!rst_b)
@@ -555,7 +559,7 @@ always @(posedge clk or negedge rst_b)
 
 ae_prn_gen u_ae_prn_gen
 (
-	.clk                 (clk                 ),
+	.clk                 (gated_clk           ),
 	.rst_b               (rst_b               ),
 
 	.phase_init          (preload_code        ),
@@ -619,7 +623,7 @@ always @(posedge clk or negedge rst_b)
 
 mf_core	#(.SYNC_SIGNAL_NUMBER(4)) u_mf_core
 (
-	.clk          (clk             ),
+	.clk          (gated_clk       ),
 	.rst_b        (rst_b           ),
 	.sync_in      ({value_select, noncoh_first_sample, coh_first_sample, segment_first_sample}),
 	.sync_out     ({value_select_out, mf_noncoh_first, mf_coh_first, mf_segment_first}),
@@ -680,9 +684,10 @@ wire next_twiddle;
 assign coh_ram_addr = (cur_state == FORCE_OUTPUT) ? last_read_addr : coh_buffer_addr;
 assign coh_rd = coh_buffer_rd | last_read_en;
 
-spram #(.RAM_SIZE(`MATCH_FILTER_DEPTH), .ADDR_WIDTH(10), .DATA_WIDTH(192)) coh_buffer_sram
+//spram #(.RAM_SIZE(`MATCH_FILTER_DEPTH), .ADDR_WIDTH(10), .DATA_WIDTH(192)) coh_buffer_sram
+ae_coh_buffer_682x192_wrapper coh_buffer_sram
 (
-	.clk   (clk            ),
+	.clk   (gated_clk      ),
 	.en    (coh_rd | coh_buffer_we),
 	.we    (coh_buffer_we  ),
 	.addr  (coh_ram_addr   ),
@@ -844,7 +849,7 @@ always @(posedge clk or negedge rst_b)
 // coherent sum module
 coh_acc #(.COH_DATA_NUMBER(`MATCH_FILTER_DEPTH)) u_coh_acc
 (
-	.clk              (clk              ),
+	.clk              (gated_clk        ),
 	.rst_b            (rst_b            ),
 
 	.cor_result_i     (mf_out_i         ),
@@ -997,7 +1002,7 @@ wire noise_floor_valid;
 
 noncoh_acc #(.DATA_LENGTH(`MATCH_FILTER_DEPTH)) u_noncoh_acc
 (
-	.clk               (clk               ),
+	.clk               (gated_clk         ),
 	.rst_b             (rst_b             ),
 
 	.coh_rd_valid      (coh_rd            ),
@@ -1025,9 +1030,10 @@ noncoh_acc #(.DATA_LENGTH(`MATCH_FILTER_DEPTH)) u_noncoh_acc
 	.d4rd              (noncoh_buffer_d4rd)
 );
 
-spram #(.RAM_SIZE(682), .ADDR_WIDTH(10), .DATA_WIDTH(64)) noncoh_buffer_sram
+//spram #(.RAM_SIZE(682), .ADDR_WIDTH(10), .DATA_WIDTH(64)) noncoh_buffer_sram
+ae_noncoh_buffer_682x64_wrapper noncoh_buffer_sram
 (
-	.clk               (clk               ),
+	.clk               (gated_clk         ),
 	.en                (noncoh_buffer_rd | noncoh_buffer_we),
 	.we                (noncoh_buffer_we  ),
 	.addr              (noncoh_buffer_addr),
@@ -1115,7 +1121,7 @@ wire [3:0] peak_exp;
 
 peak_sorter u_peak_sorter
 (
-	.clk               (clk             ),
+	.clk               (gated_clk       ),
 	.rst_b             (rst_b           ),
 
 	.clear             (clear_peak      ),

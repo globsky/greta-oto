@@ -258,7 +258,8 @@ wire [31:0] ae_ram_d4rd;
 wire ae_ram_en;
 wire ae_ram_we;
 
-spram #(.RAM_SIZE(32768), .ADDR_WIDTH(15), .DATA_WIDTH(32)) ae_buffer
+//spram #(.RAM_SIZE(32768), .ADDR_WIDTH(15), .DATA_WIDTH(32)) ae_buffer
+ae_sample_buffer_32768x32_wrapper ae_buffer
 (
 		.clk      (clk           ),
 		.en       (ae_ram_ena    ),
@@ -349,7 +350,8 @@ assign te_memcode_data = memcode_data;
 assign ae_memcode_data = memcode_data;
 
 // Legendre and memory code
-sprom #(.ROM_SIZE(640), .ADDR_WIDTH(10), .DATA_WIDTH(16)) b1c_legendre_data
+//sprom #(.ROM_SIZE(640), .ADDR_WIDTH(10), .DATA_WIDTH(16)) b1c_legendre_data
+b1c_legendre_rom_640x16_wrapper b1c_legendre_data
 (
 	.clk (clk),
 	.rd (legendre_rd_b1c),
@@ -357,7 +359,8 @@ sprom #(.ROM_SIZE(640), .ADDR_WIDTH(10), .DATA_WIDTH(16)) b1c_legendre_data
 	.rdata (legendre_data_b1c)
 );
 
-sprom #(.ROM_SIZE(640), .ADDR_WIDTH(10), .DATA_WIDTH(16)) l1c_legendre_data
+//sprom #(.ROM_SIZE(640), .ADDR_WIDTH(10), .DATA_WIDTH(16)) l1c_legendre_data
+l1c_legendre_rom_640x16_wrapper l1c_legendre_data
 (
 	.clk (clk),
 	.rd (legendre_rd_l1c),
@@ -365,7 +368,8 @@ sprom #(.ROM_SIZE(640), .ADDR_WIDTH(10), .DATA_WIDTH(16)) l1c_legendre_data
 	.rdata (legendre_data_l1c)
 );
 
-sprom #(.ROM_SIZE(12800), .ADDR_WIDTH(14), .DATA_WIDTH(32)) memory_code_rom
+//sprom #(.ROM_SIZE(12800), .ADDR_WIDTH(14), .DATA_WIDTH(32)) memory_code_rom
+memory_code_rom_12800x32_wrapper memory_code_rom
 (
 	.clk (clk),
 	.rd (memcode_rd),

@@ -170,7 +170,8 @@ wire [4*DATA_WIDTH-1:0] ram_read_data;
 reg [ADDR_WIDTH-3:0] addr_to_write;
 reg [ADDR_WIDTH-1:0] cur_read_addr;
 
-spram #(.RAM_SIZE(FIFO_SIZE/4), .ADDR_WIDTH(ADDR_WIDTH-2), .DATA_WIDTH(DATA_WIDTH*4)) fifo_ram
+//spram #(.RAM_SIZE(FIFO_SIZE/4), .ADDR_WIDTH(ADDR_WIDTH-2), .DATA_WIDTH(DATA_WIDTH*4)) fifo_ram
+te_fifo_ram_2560x32_wrapper fifo_ram
 (
 		.clk (clk),
 		.en (read_fifo_valid | write_fifo_valid),

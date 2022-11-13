@@ -413,6 +413,13 @@ multiplex_4_1 #(32) multiplex_state
 //----------------------------------------------------------
 // correlator
 //----------------------------------------------------------
+// clock gating for each physical correlator
+wire [3:0] gated_clk;
+gated_clock_wrapper gated_clock_u1 (.clk_out(gated_clk[0]), .clk_in(clk), .en(physical_channel_en[0]), .te(1'b0));
+gated_clock_wrapper gated_clock_u2 (.clk_out(gated_clk[1]), .clk_in(clk), .en(physical_channel_en[1]), .te(1'b0));
+gated_clock_wrapper gated_clock_u3 (.clk_out(gated_clk[2]), .clk_in(clk), .en(physical_channel_en[2]), .te(1'b0));
+gated_clock_wrapper gated_clock_u4 (.clk_out(gated_clk[3]), .clk_in(clk), .en(physical_channel_en[3]), .te(1'b0));
+
 //correlation instance
 wire [3:0] acc_dump_en;
 assign acc_dump_en = physical_channel_en & {4{state_addr[4]}};
@@ -444,7 +451,7 @@ generate
 	begin: correlator_gen
 	correlator u_correlator
 	(
-		.clk                    (clk                       ),
+		.clk                    (gated_clk[i_gen]          ),
 		.rst_b                  (rst_b                     ),
 	
 		.fifo_data_en           (fifo_data_valid           ),
@@ -600,7 +607,7 @@ m_rom_arbiter #(.ADDR_WIDTH(14), .DATA_WIDTH(32)) rom_arbiter_memcode
 		.mem_d4rd_i (memcode_data)
 );
 
-assign cor_ready_all = cor_ready[0] & cor_ready[1] & cor_ready[2] & cor_ready[3];
+assign cor_ready_all = &((~physical_channel_en) | cor_ready);
 
 //----------------------------------------------------------
 // coherent data ready and overwrite protect registers
@@ -765,7 +772,8 @@ wire [9:0] coh_buffer_addr;
 wire [31:0] coh_buffer_wdata;
 wire [31:0] coh_buffer_rdata;
 
-spram #(.RAM_SIZE(1024), .ADDR_WIDTH(10), .DATA_WIDTH(32)) coherent_buffer
+//spram #(.RAM_SIZE(1024), .ADDR_WIDTH(10), .DATA_WIDTH(32)) coherent_buffer
+te_state_buffer_1024x32_wrapper coherent_buffer
 (
 		.clk (clk),
 		.en (coh_buffer_rd | coh_buffer_wr),

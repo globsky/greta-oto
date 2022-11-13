@@ -212,17 +212,18 @@ wire [7:0] config_buffer_addr;
 wire [31:0] config_buffer_d4rd;
 wire [31:0] config_buffer_d4wt;
 
-dpram_full #(.RAM_SIZE(256), .ADDR_WIDTH(8), .DATA_WIDTH(32))	ae_config_buffer
+//dpram_full #(.RAM_SIZE(256), .ADDR_WIDTH(8), .DATA_WIDTH(32))	ae_config_buffer
+ae_config_buffer_256x32_wrapper ae_config_buffer
 (
    	.clk_a      (clk                 ),
    	.addr_a     (config_buffer_addr  ),
-   	.rd_a       (config_buffer_rd    ),
-   	.wr_a       (config_buffer_wt    ),
+   	.en_a       (config_buffer_rd    ),
+   	.wr_a       (config_buffer_wt | config_buffer_wt),
    	.wdata_a    (config_buffer_d4wt  ),
    	.rdata_a    (config_buffer_d4rd  ),
    	.clk_b      (clk                 ),
    	.addr_b     (ae_addr             ),
-   	.rd_b       (ae_rd & ae_buffer_cs),
+   	.en_b       ((ae_rd | ae_wr) & ae_buffer_cs),
    	.wr_b       (ae_wr & ae_buffer_cs),
    	.wdata_b    (ae_d4wt             ),
    	.rdata_b    (ae_rd_buffer        )

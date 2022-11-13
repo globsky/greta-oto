@@ -96,16 +96,20 @@
 		Fix bug that when CurrentCor!=0, PLL/BitSync/DataDecode use partial coherent sum result
 	Function and feature added
 		Add hot start function
-3/27/022
+3/27/2022
 	Bug fix
 		Fix bug in raw measurement correction using incorrect satellite information
 	Function and feature added
 		Add almanac, ionoshpere and UTC parameter decode
 		Add kalman filter positioning function
-4/25/022
+4/25/2022
 	Bug fix
 		Fix bug in noise calculation RTL to avoid potential wrong acc data calculation
 		Fix bug in AE PRN code load RTL to avoid potential PRN load error
 5/18/022
 	Function and feature change
 		Modification to have some module reused by L5 tracking engine
+11/13/2022
+	Function and feature added
+		Add RAM/ROM wrapper to RTL
+		Add clock gating to AE and TE
