@@ -104,7 +104,7 @@ void CCorrelator::FillState(unsigned int *StateBuffer)
 	CodeSubPhase = EXTRACT_UINT(StateBuffer[12], 8, 1);
 	PrnCode2 = EXTRACT_UINT(StateBuffer[12], 12, 4);
 	BitCount = EXTRACT_UINT(StateBuffer[12], 16, 5);
-	CoherentCount = EXTRACT_UINT(StateBuffer[12], 21, 5);
+	CoherentCount = EXTRACT_UINT(StateBuffer[12], 21, 6);
 	NHCount = EXTRACT_UINT(StateBuffer[12], 27, 5);
 	DecodeData = StateBuffer[13];
 
@@ -387,7 +387,7 @@ int CCorrelator::ProcessOverflow(S16 DumpDataI[], S16 DumpDataQ[], int CorIndex[
 // return 1 means there is correlator reaches last coherent sum
 int CCorrelator::DumpData(S16 DumpDataI[], S16 DumpDataQ[], int CorIndex[], int &CurrentLength)
 {
-	unsigned int NextCoherentCount = (CoherentCount + 1) & 0x1f;
+	unsigned int NextCoherentCount = (CoherentCount + 1) & 0x3f;
 	int DataReady = 0;
 
 	// fill in coherent data FIFO with accumulated value

@@ -25,8 +25,12 @@ input [31:0] host_d4wt,
 output [31:0] host_d4rd,
 
 // interactive signals
+input pps_clk,
 input event_mark,
-output pps_pulse,
+output pps_pulse1,
+output pps_pulse2,
+output pps_pulse3,
+output pps_irq,	// edge trigger, pps_event masked by int_enable
 output irq	// level trigger
 );
 
@@ -47,11 +51,12 @@ wire te_running;
 wire te_ready;
 wire te_over;
 
-wire host_cs_global, host_cs_ae, host_cs_te_fifo, host_cs_te;
+wire host_cs_global, host_cs_ae, host_cs_te_fifo, host_cs_pps, host_cs_te;
 wire host_cs_te_buffer, host_cs_ae_buffer;
 assign host_cs_global    = host_cs & (host_addr[13:10] == (`GLB_BASE_ADDR     >> 10));
 assign host_cs_ae        = host_cs & (host_addr[13:10] == (`AE_BASE_ADDR      >> 10));
 assign host_cs_te_fifo   = host_cs & (host_addr[13:10] == (`TE_FIFO_BASE_ADDR >> 10));
+assign host_cs_pps       = host_cs & (host_addr[13:10] == (`PERIPHERAL_BASE   >> 10));
 assign host_cs_te        = host_cs & (host_addr[13:10] == (`TE_BASE_ADDR      >> 10));
 assign host_cs_te_buffer = host_cs & (host_addr[13:10] == (`TE_BUFFER_ADDR    >> 10));
 assign host_cs_ae_buffer = host_cs & (host_addr[13:10] == (`AE_BUFFER_ADDR    >> 10));
@@ -93,7 +98,7 @@ end
 
 // write actions
 wire reset_fifo, reset_te, reset_ae;
-wire clear_fifo, latch_fifo;
+wire clear_fifo, latch_fifo, latch_pps;
 wire start_te;
 wire assign_meas_count, assign_request_count;
 wire clear_int;
@@ -102,6 +107,7 @@ assign reset_te   = host_cs_global && host_wr && (host_addr[4:0] == `GLB_BB_RESE
 assign reset_ae   = host_cs_global && host_wr && (host_addr[4:0] == `GLB_BB_RESET) && host_d4wt[0];
 assign clear_fifo = host_cs_global && host_wr && (host_addr[4:0] == `GLB_FIFO_CLEAR) && host_d4wt[8];
 assign latch_fifo = host_cs_global && host_wr && (host_addr[4:0] == `GLB_FIFO_CLEAR) && host_d4wt[0];
+assign latch_pps  = host_cs_global && host_wr && (host_addr[4:0] == `GLB_FIFO_CLEAR) && host_d4wt[9];
 assign start_te   = host_cs_global && host_wr && (host_addr[4:0] == `GLB_TRACKING_START) && host_d4wt[0];
 assign assign_meas_count    = host_cs_global && host_wr && (host_addr[4:0] == `GLB_MEAS_COUNT);
 assign assign_request_count = host_cs_global && host_wr && (host_addr[4:0] == `GLB_REQUEST_COUNT);
@@ -114,6 +120,7 @@ assign clear_int            = host_cs_global && host_wr && (host_addr[4:0] == `G
 wire [31:0] ae_reg_d4rd;
 wire [31:0] te_fifo_reg_d4rd;
 wire [31:0] te_reg_d4rd;
+wire [31:0] pps_reg_d4rd;
 wire [31:0] ae_rd_buffer;
 wire [31:0] te_rd_buffer;
 reg [31:0] reg_d4rd;
@@ -127,6 +134,7 @@ always @(posedge clk or negedge rst_b)
 			(`AE_BASE_ADDR      >> 10): reg_d4rd <= ae_reg_d4rd;
 			(`TE_FIFO_BASE_ADDR >> 10): reg_d4rd <= te_fifo_reg_d4rd;
 			(`TE_BASE_ADDR      >> 10): reg_d4rd <= te_reg_d4rd;
+			(`PERIPHERAL_BASE   >> 10): reg_d4rd <= pps_reg_d4rd;
 			default                   : reg_d4rd <= 32'h0;
 		endcase
 end
@@ -168,6 +176,7 @@ wire fifo_rewind;
 wire fifo_skip;
 wire fifo_data_valid;
 wire [7:0] fifo_data;
+wire pps_latch;
 
 te_fifo #(.FIFO_SIZE(10240), .ADDR_WIDTH(14), .DATA_WIDTH(8), .TRIGGER_WIDTH(1)) u_te_fifo
 (
@@ -181,7 +190,7 @@ te_fifo #(.FIFO_SIZE(10240), .ADDR_WIDTH(14), .DATA_WIDTH(8), .TRIGGER_WIDTH(1))
 
 	.cpu_latch        (latch_fifo          ),
 	.em_latch         (em_latch            ),
-	.pps_latch        (1'b0                ),
+	.pps_latch        (pps_latch           ),
 	.ae_latch         (ae_latch            ),
 
 	.sample_valid     (sample_valid        ),
@@ -454,6 +463,29 @@ always @(posedge clk or negedge rst_b)
 
 assign irq = |(int_flag & int_mask);
 
-assign pps_pulse = 0;	// TODO: add PPS module
+//----------------------------------------------------------
+// PPS
+//----------------------------------------------------------
+pps u_pps
+(
+	.clk                 (clk             ),
+	.pps_clk             (pps_clk         ),
+	.rst_b               (rst_b           ),
+
+	.host_cs             (host_cs_pps     ),
+	.host_rd             (host_rd         ),
+	.host_wr             (host_wr         ),
+	.host_addr           (host_addr[5:0]  ),
+	.host_d4wt           (host_d4wt       ),
+	.host_d4rd           (pps_reg_d4rd    ),
+
+	.event_mark          (pps_pulse3      ),
+	.cpu_latch           (latch_pps       ),
+	.pps_pulse1          (pps_pulse1      ),
+	.pps_pulse2          (pps_pulse2      ),
+	.pps_pulse3          (pps_pulse3      ),
+	.pps_event           (pps_latch       ),
+	.pps_irq             (pps_irq         )
+);
 
 endmodule

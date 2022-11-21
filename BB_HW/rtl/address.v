@@ -72,7 +72,22 @@
 `define TE_NOISE_FLOOR            'h19
 `define TE_CURR_STATE_MACHINE     'h20
 // Peripheral registers
-`define  PERIPHERAL_BASE          'h1c00
+`define PERIPHERAL_BASE           'h1c00
+`define PPS_CTRL                  'h0
+`define PPS_EM_CTRL               'h1
+`define PPS_PULSE_INTERVAL        'h2
+`define PPS_PULSE_ADJUST          'h3
+`define PPS_PULSE_CTRL1           'h4
+`define PPS_PULSE_WIDTH1          'h5
+`define PPS_PULSE_CTRL2           'h6
+`define PPS_PULSE_WIDTH2          'h7
+`define PPS_PULSE_CTRL3           'h8
+`define PPS_PULSE_WIDTH3          'h9
+`define PPS_CLK_COUNT_LATCH_CPU   'hc
+`define PPS_PULSE_COUNT_LATCH_CPU 'hd
+`define PPS_CLK_COUNT_LATCH_EM    'he
+`define PPS_PULSE_COUNT_LATCH_EM  'hf
+
 // te buffer
 `define TE_BUFFER_ADDR            'h2000
 `define AE_BUFFER_ADDR            'h3000

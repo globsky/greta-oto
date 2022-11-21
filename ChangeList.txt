@@ -113,3 +113,8 @@
 	Function and feature added
 		Add RAM/ROM wrapper to RTL
 		Add clock gating to AE and TE
+11/21/2022
+	Function and feature added
+		Add PPS description and RTL implementation
+	Bug fix
+		Fix C model error in CoherentCount bit number
