@@ -81,7 +81,7 @@ void InterruptService()
 //   none
 // Return value:
 //   none
-void FirmwareInitialize()
+void FirmwareInitialize(StartType Start, PSYSTEM_TIME CurTime, LLH *CurPosition)
 {
 	int i, sv_list[32] = {
 		FREQ_SVID(FREQ_B1C, 8),
@@ -127,12 +127,6 @@ void FirmwareInitialize()
 	BdsDecodeInit();
 	MsrProcInit();
 	PvtProcInit((PRECEIVER_INFO)0);
-	// initial request task queue
-	InitTaskQueue(&RequestTask, RequestItems, 32, RequestBuffer, sizeof(RequestBuffer));
-	InitTaskQueue(&BasebandTask, BasebandItems, 32, BasebandBuffer, sizeof(BasebandBuffer));
-	InitTaskQueue(&PostMeasTask, PostMeasItems, 32, PostMeasBuffer, sizeof(PostMeasBuffer));
-	InitTaskQueue(&InputOutputTask, InputOutputItems, 8, InputOutputBuffer, sizeof(InputOutputBuffer));
-
 	if (1)	// hot start
 	{
 		LoadAllParameters();
@@ -141,6 +135,12 @@ void FirmwareInitialize()
 		g_ReceiverInfo.PosVel.vx = g_ReceiverInfo.PosVel.vy = g_ReceiverInfo.PosVel.vz = 0.0;
 	}
 	g_PvtConfig.PvtConfigFlags |= PVT_CONFIG_USE_KF;
+	// initial request task queue
+	InitTaskQueue(&RequestTask, RequestItems, 32, RequestBuffer, sizeof(RequestBuffer));
+	InitTaskQueue(&BasebandTask, BasebandItems, 32, BasebandBuffer, sizeof(BasebandBuffer));
+	InitTaskQueue(&PostMeasTask, PostMeasItems, 32, PostMeasBuffer, sizeof(PostMeasBuffer));
+	InitTaskQueue(&InputOutputTask, InputOutputItems, 8, InputOutputBuffer, sizeof(InputOutputBuffer));
+
 
 	// start acquisition
 	for (i = 0; i < 32; i ++)

@@ -40,6 +40,9 @@ void SaveParameters(int Offset, void *Buffer, int Size);
 // RF control
 void EnableRF();
 
+extern SYSTEM_TIME InitTime;
+extern LLH InitPosition;
+
 #ifdef __cplusplus
 }
 #endif

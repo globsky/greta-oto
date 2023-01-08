@@ -10,6 +10,8 @@
 #define __PVT_CONST_H__
 
 #define PI				3.1415926535897932
+#define RAD2DEG(r) (r * (180. / PI))
+#define DEG2RAD(d) (d * (PI / 180.))
 
 #define WGS_AXIS_A		6378137.0				// A - WGS-84 earth's semi major axis
 #define	WGS_AXIS_B		6356752.3142451795		// B - WGS-84 earth's semi minor axis

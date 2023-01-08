@@ -267,18 +267,18 @@ double GeometryDistance(const PKINEMATIC_INFO pReceiver, const PKINEMATIC_INFO p
 //   pSatellite: pointer to satellite position/velocity structure
 // Return value:
 //   relative speed in m/s (negative value means departing)
-double SatRelativeSpeed(PKINEMATIC_INFO pReceiver, PSATELLITE_INFO pSatellite)
+double SatRelativeSpeed(PKINEMATIC_INFO pReceiver, PKINEMATIC_INFO pSatellite)
 {
 	double dx, dy, dz;
 	double dvx, dvy, dvz;
 	double Distance;
 
-	dx = pReceiver->x - pSatellite->PosVel.x;
-	dy = pReceiver->y - pSatellite->PosVel.y;
-	dz = pReceiver->z - pSatellite->PosVel.z;
-	dvx = pReceiver->vx - pSatellite->PosVel.vx;
-	dvy = pReceiver->vy - pSatellite->PosVel.vy;
-	dvz = pReceiver->vz - pSatellite->PosVel.vz;
+	dx = pReceiver->x - pSatellite->x;
+	dy = pReceiver->y - pSatellite->y;
+	dz = pReceiver->z - pSatellite->z;
+	dvx = pReceiver->vx - pSatellite->vx;
+	dvy = pReceiver->vy - pSatellite->vy;
+	dvz = pReceiver->vz - pSatellite->vz;
 	Distance = (double)sqrt(dx * dx + dy * dy + dz * dz);
 	return (dx * dvx + dy * dvy + dz * dvz) / Distance;
 }

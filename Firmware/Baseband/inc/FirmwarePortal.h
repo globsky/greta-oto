@@ -17,7 +17,7 @@ extern TASK_QUEUE BasebandTask;
 extern TASK_QUEUE PostMeasTask;
 extern TASK_QUEUE InputOutputTask;
 
-void FirmwareInitialize();
+void FirmwareInitialize(StartType Start, PSYSTEM_TIME CurTime, LLH *CurPosition);
 void LoadAllParameters();
 void SaveAllParameters();
 

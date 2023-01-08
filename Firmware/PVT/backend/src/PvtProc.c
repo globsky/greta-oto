@@ -57,6 +57,18 @@ void PvtProcInit(PRECEIVER_INFO pReceiverInfo)
 
 	if (!pReceiverInfo)	// if initialize structure is NULL
 		return;
+	else
+	{
+		memcpy(&g_ReceiverInfo, pReceiverInfo, sizeof(RECEIVER_INFO));
+		if (g_ReceiverInfo.PosQuality > ExtSetPos)
+			g_ReceiverInfo.PosQuality = ExtSetPos;
+		if (g_ReceiverInfo.GpsTimeQuality > ExtSetTime)
+			g_ReceiverInfo.GpsTimeQuality = ExtSetTime;
+		if (g_ReceiverInfo.BdsTimeQuality > ExtSetTime)
+			g_ReceiverInfo.BdsTimeQuality = ExtSetTime;
+		if (g_ReceiverInfo.GalileoTimeQuality > ExtSetTime)
+			g_ReceiverInfo.GalileoTimeQuality = ExtSetTime;
+	}
 
 	// initialize state with input parameter
 	g_PvtCoreData.StateVector[0] = g_ReceiverInfo.PosVel.vx;

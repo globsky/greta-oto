@@ -383,8 +383,7 @@ void CAcqEngine::DoAcquisition()
 
 		// Do searching
 		SearchOneChannel(pSatParam);
-
-		printf("Svid%2d Amp=%f Cor=%4d Freq=%f\n", Svid, PeakSorter.Peaks[0].Amp, PeakSorter.Peaks[0].PhasePos, (PeakSorter.Peaks[0].FreqPos - 3.5) * 62.5);
+//		printf("Svid%2d Amp=%f Cor=%4d Freq=%f\n", Svid, PeakSorter.Peaks[0].Amp, PeakSorter.Peaks[0].PhasePos, (PeakSorter.Peaks[0].FreqPos - 3.5) * 62.5);
 
 		// determine global exp
 		GlobalExp = int(log10(PeakSorter.Peaks[0].Amp) / 0.3010 + 1) - 8;	// this is number of shift to have max amplitude fit in 8bit
@@ -398,7 +397,7 @@ void CAcqEngine::DoAcquisition()
 		ChannelConfig[i][5] = (Amp[0] << 24) | ((PeakSorter.Peaks[0].FreqPos & 0x1ff) << 15) | PeakSorter.Peaks[0].PhasePos;
 		ChannelConfig[i][6] = (Amp[1] << 24) | ((PeakSorter.Peaks[1].FreqPos & 0x1ff) << 15) | PeakSorter.Peaks[1].PhasePos;
 		ChannelConfig[i][7] = (Amp[2] << 24) | ((PeakSorter.Peaks[2].FreqPos & 0x1ff) << 15) | PeakSorter.Peaks[2].PhasePos;
-		printf("%08x %08x %08x %08x\n", ChannelConfig[i][4], ChannelConfig[i][5], ChannelConfig[i][6], ChannelConfig[i][7]);
+//		printf("%08x %08x %08x %08x\n", ChannelConfig[i][4], ChannelConfig[i][5], ChannelConfig[i][6], ChannelConfig[i][7]);
 	}
 }
 
@@ -478,7 +477,7 @@ void CAcqEngine::AssignChannelParam(PSATELLITE_PARAM pSatelliteParam, GNSS_TIME 
 	Time2CodeEnd = 1 - TransmitTime.SubMilliSeconds;
 	if (PrnSelect != 0 && MilliSeconds != 0)
 		Time2CodeEnd += (BitLength - MilliSeconds);
-	pSatAcqParam->Time2CodeEnd = (Time2CodeEnd + 2.5 / SAMPLE_COUNT) * 2046;	// convert to unit of 1/2 code chip with compensation of filter delay (2.5 samples)
+	pSatAcqParam->Time2CodeEnd = (Time2CodeEnd + 2.5 / SAMPLES_1MS) * 2046;	// convert to unit of 1/2 code chip with compensation of filter delay (2.5 samples)
 	pSatAcqParam->Doppler = (-pSatelliteParam->RelativeSpeed) / GPS_L1_WAVELENGTH;
 	pSatAcqParam->Amplitude = 2 * pow(10, (pSatelliteParam->CN0 - 3000) / 2000.) * NOISE_AMP_SQRT2;
 	// generate bits

@@ -49,7 +49,7 @@ int SatPosSpeedEph(double TransmitTime, PGNSS_EPHEMERIS pEph, PKINEMATIC_INFO pP
 void SatPosSpeedAlm(int WeekNumber, int TransmitTime, PMIDI_ALMANAC pAlm, PKINEMATIC_INFO pPosVel);
 double GeometryDistanceXYZ(const double *ReceiverPos, const double *SatellitePos);
 double GeometryDistance(const PKINEMATIC_INFO pReceiver, const PKINEMATIC_INFO pSatellite);
-double SatRelativeSpeed(PKINEMATIC_INFO pReceiver, PSATELLITE_INFO pSatellite);
+double SatRelativeSpeed(PKINEMATIC_INFO pReceiver, PKINEMATIC_INFO pSatellite);
 double SatRelativeSpeedXYZ(double *ReceiverState, double *SatPosVel);
 void SatElAz(PKINEMATIC_INFO pReceiver, PSATELLITE_INFO pSatellite);
 

@@ -151,7 +151,7 @@ do \
 #endif
 #define RF_FREQ 1575420000
 #define IF_FREQ_BOC (IF_FREQ + 1023000)
-#define SAMPLE_COUNT (SAMPLE_FREQ / 1000)
+#define SAMPLES_1MS (SAMPLE_FREQ / 1000)
 #define GPS_L1_WAVELENGTH 0.19029367279836488
 
 #define DIVIDE_ROUND(divident, divisor) (S32)(((divident) + divisor/2) / divisor)
@@ -212,6 +212,44 @@ typedef struct
 	int PrevSymbol;			// previous symbol (determine data toggle)
 	U32 DataBuffer[128/4];	// maximum 128 bytes to hold decoded symbols
 } DATA_STREAM, *PDATA_STREAM;
+
+//==========================
+// satellite prediction and aiding
+//==========================
+typedef struct
+{
+	U8 FreqID;	// system and frequency
+	U8 Svid;	// SVID start from 1
+	U16 TimeTag;
+	unsigned int Flag;
+	double Doppler;			// predicted doppler in Hz
+	double PredictPsr;		// predicted PSR with clock error adjustment
+} SAT_PREDICT_PARAM, *PSAT_PREDICT_PARAM;
+
+typedef enum
+{
+	ColdStart = 0,
+	WarmStart = 1,
+	HotStart = 2,
+} StartType;
+
+typedef struct
+{
+	int Year;
+	int Month;
+	int Day;
+	int Hour;
+	int Minute;
+	int Second;
+	int Millisecond;
+} SYSTEM_TIME, *PSYSTEM_TIME;
+
+typedef struct
+{
+	double lat;
+	double lon;
+	double hae;
+} LLH;
 
 #pragma pack(pop)	//restore original alignment
 

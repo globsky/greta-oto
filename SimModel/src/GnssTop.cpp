@@ -154,7 +154,6 @@ U32 CGnssTop::GetRegValue(int Address)
 
 void CGnssTop::SetInputFile(char *FileName)
 {
-	LLA_POSITION StartPos;
 	int i = 0, index;
 	CXmlElementTree XmlTree;
 	CXmlElement *RootElement, *Element;
@@ -234,14 +233,14 @@ void CGnssTop::SetInputFile(char *FileName)
 	TrackingEngine.SetNavBit(NavBitArray);
 }
 
-int CGnssTop::Process(int ReadBlockSize)
+int CGnssTop::Process(int BlockSize)
 {
-	int ScenarioFinish = StepToNextTime(1);
+	int ScenarioFinish = StepToNextTime();
 
-	TeFifo.StepOneBlock();	// to have TE FIFO progress 1 block of data (1ms)
+	TeFifo.StepOneBlock(BlockSize);	// to have TE FIFO progress 1 block of data (1ms)
 	if (TrackingEngineEnable)
 	{
-		InterruptFlag |= TrackingEngine.ProcessData(CurTime, SatParamList, TotalSatNumber) ? 0x100 : 0;
+		InterruptFlag |= TrackingEngine.ProcessData(BlockSize, CurTime, SatParamList, TotalSatNumber) ? 0x100 : 0;
 		MeasurementCount ++;
 		if (MeasurementCount == MeasurementNumber)
 		{
@@ -263,20 +262,20 @@ int CGnssTop::Process(int ReadBlockSize)
 	return ScenarioFinish;
 }
 
-int CGnssTop::StepToNextTime(int TimeInterval)
+int CGnssTop::StepToNextTime()
 {
 	int i, index;
 	LLA_POSITION PosLLA;
 	int ListCount;
 	PSIGNAL_POWER PowerList;
 
-	if (!Trajectory.GetNextPosVelECEF(TimeInterval / 1000., CurPos))
+	if (!Trajectory.GetNextPosVelECEF(0.001, CurPos))
 		return -1;
 
-	ListCount = PowerControl.GetPowerControlList(TimeInterval, PowerList);
+	ListCount = PowerControl.GetPowerControlList(1, PowerList);
 	// calculate new satellite parameter
 	PosLLA = EcefToLla(CurPos);
-	CurTime.MilliSeconds += TimeInterval;
+	CurTime.MilliSeconds ++;
 	if (CurTime.MilliSeconds > 604800000)
 	{
 		CurTime.Week ++;

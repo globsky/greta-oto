@@ -52,6 +52,7 @@ public:
 	UTC_TIME UtcTime;
 	CTrajectory Trajectory;
 	CNavData NavData;
+	LLA_POSITION StartPos;
 	KINEMATIC_INFO CurPos;
 	LOCAL_SPEED StartVel;
 	OUTPUT_PARAM OutputParam;
@@ -72,9 +73,9 @@ public:
 	CAcqEngine AcqEngine;
 	CTeFifoSim TeFifo;
 
-	int Process(int ReadBlockSize);
+	int Process(int BlockSize);
 	void SetInputFile(char *FileName);
-	int StepToNextTime(int TimeInterval);
+	int StepToNextTime();
 
 	InterruptFunction InterruptService;
 };

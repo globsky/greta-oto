@@ -15,11 +15,13 @@ extern "C" {
 #include "FirmwarePortal.h"
 }
 
-#define SAMPLE_FREQ 4113000
-#define SAMPLE_COUNT (SAMPLE_FREQ / 1000)
+#define BLOCK_SIZE (SAMPLE_FREQ / 1000)		// one data block has 1ms length
 
 static CGnssTop Baseband;
 static DebugFunction DebugFunc = 0;
+
+SYSTEM_TIME InitTime;
+LLH InitPosition;
 
 //*************** Attach ISR to baseband interrupt ****************
 // Parameters:
@@ -89,6 +91,16 @@ void SaveMemory(U32 *BasebandAddr, U32 *SrcAddr, int Size)
 void SetInputFile(char *FileName)
 {
 	Baseband.SetInputFile(FileName);
+	InitTime.Year = Baseband.UtcTime.Year;
+	InitTime.Month = Baseband.UtcTime.Month;
+	InitTime.Day = Baseband.UtcTime.Day;
+	InitTime.Hour = Baseband.UtcTime.Hour;
+	InitTime.Minute = Baseband.UtcTime.Minute;
+	InitTime.Second = (int)Baseband.UtcTime.Second;
+	InitTime.Millisecond = (int)((Baseband.UtcTime.Second - InitTime.Second) * 1000);
+	InitPosition.lon = Baseband.StartPos.lon;
+	InitPosition.lat = Baseband.StartPos.lat;
+	InitPosition.hae = Baseband.StartPos.alt;
 }
 
 //*************** Load parameter (ephemeris/almanac, receiver position etc.) ****************
@@ -136,7 +148,7 @@ void EnableRF()
 {
 	static int ProcessCount = 0;
 
-	while (Baseband.Process(SAMPLE_COUNT) >= 0)
+	while (Baseband.Process(BLOCK_SIZE) >= 0)
 	{
 //		printf("ProcessCount=%d\n", ProcessCount);
 		if (ProcessCount == 497400)
@@ -147,7 +159,7 @@ void EnableRF()
 		if (DebugFunc)
 			DebugFunc((void *)(&Baseband), ProcessCount);
 		ProcessCount ++;
-//		if (ProcessCount == 520000)
-//			break;
+		if (ProcessCount == 40000)
+			break;
 	}
 }

@@ -12,7 +12,6 @@
 #include "CommonDefines.h"
 
 #define FIFO_SIZE 10240
-#define BLOCK_SIZE SAMPLE_COUNT
 #define ADDR_WIDTH 14
 #define CLK_COUNT_WIDTH (20 - ADDR_WIDTH)
 
@@ -25,7 +24,7 @@ public:
 	void Clear();
 	void SetRegValue(int Address, U32 Value);
 	U32 GetRegValue(int Address);
-	void StepOneBlock();
+	void StepOneBlock(int BlockSize);
 	void LatchWriteAddress(int Source);
 	
 	unsigned int FifoGuard;					// 16bit

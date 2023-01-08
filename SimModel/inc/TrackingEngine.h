@@ -97,7 +97,7 @@ public:
 
 	void SetTEBuffer(unsigned int Address, U32 Value);
 	U32 GetTEBuffer(unsigned int Address);
-	int ProcessData(GNSS_TIME CurTime, PSATELLITE_PARAM SatParam[], int SatNumber);
+	int ProcessData(int BlockSize, GNSS_TIME CurTime, PSATELLITE_PARAM SatParam[], int SatNumber);
 
 	static const double Bpsk4PeakValues[160];
 	static const double Boc4PeakValues[160];
@@ -106,7 +106,7 @@ public:
 	int FindSvid(unsigned int ConfigArray[], int ArraySize, U32 PrnConfig);
 	SATELLITE_PARAM* FindSatParam(int ChannelId, PSATELLITE_PARAM SatParam[], int SatNumber);
 	void GetCorrelationResult(ChannelConfig *ChannelParam, CarrierParameter *CarrierParam, GNSS_TIME CurTime, SATELLITE_PARAM *pSatParam, int DumpDataI[], int DumpDataQ[], int CorIndex[], int CorPos[], int NHCode[], int DataLength);
-	int CalculateCounter(ChannelConfig *ChannelParam, int CorIndex[], int CorPos[], int NHCode[], int &DataLength);
+	int CalculateCounter(int BlockSize, ChannelConfig *ChannelParam, int CorIndex[], int CorPos[], int NHCode[], int &DataLength);
 	void DecodeDataAcc(ChannelConfig *ChannelParam, int DataValue);
 	void InitChannel(int ChannelId, GNSS_TIME CurTime, PSATELLITE_PARAM SatParam[], int SatNumber);
 	double NarrowCompensation(int CorIndex, int NarrowFactor);

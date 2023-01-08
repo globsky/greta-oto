@@ -106,12 +106,12 @@ U32 CTeFifoSim::GetRegValue(int Address)
 	}
 }
 
-void CTeFifoSim::StepOneBlock()
+void CTeFifoSim::StepOneBlock(int BlockSize)
 {
-	ReadAddress += BLOCK_SIZE;
+	ReadAddress += BlockSize;
 	if (ReadAddress >= FIFO_SIZE)
 		ReadAddress -= FIFO_SIZE;
-	WriteAddress += BLOCK_SIZE;
+	WriteAddress += BlockSize;
 	if (WriteAddress >= FIFO_SIZE)
 	{
 		WriteAddress -= FIFO_SIZE;

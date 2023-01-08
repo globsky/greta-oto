@@ -89,8 +89,8 @@ int ProcessAcqResult(void *Param)
 	if (AddressGap < 0)
 		AddressGap += 41943040;	// 2^12 * 10240
 	// get remnant of address gap
-	AddressGap %= (SAMPLE_FREQ / 50);	// remnant of 20ms
-	PhaseGap = (AddressGap * 1023 * 16) / SAMPLE_COUNT;	// convert to code phase with 16x scale
+	AddressGap %= (SAMPLES_1MS * 20);	// remnant of 20ms
+	PhaseGap = (AddressGap * 1023 * 16) / SAMPLES_1MS;	// convert to code phase with 16x scale
 
 	for (i = 0; i < AcqConfig->AcqChNumber; i ++)
 	{

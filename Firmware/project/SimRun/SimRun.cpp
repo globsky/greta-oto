@@ -20,7 +20,7 @@ void main()
 	SetInputFile("test_obs2.xml");
 
 	AttachDebugFunc(DebugOutput);
-	FirmwareInitialize();
+	FirmwareInitialize(HotStart, &InitTime, &InitPosition);
 	EnableRF();
 	if (DebugFile)
 		fclose(DebugFile);

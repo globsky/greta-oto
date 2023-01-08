@@ -118,3 +118,10 @@
 		Add PPS description and RTL implementation
 	Bug fix
 		Fix C model error in CoherentCount bit number
+1/7/2023
+	Function and feature added
+		Add hot start feature in firmware
+		Add a project to do post process on baseband observation data
+		Minor changes to support future data block size change
+	Bug fix
+		Fix BOC signal uses incorrect correlation peak shape table in SimModel

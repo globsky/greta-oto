@@ -313,7 +313,7 @@ U32 CTrackingEngine::GetTEBuffer(unsigned int Address)
 // process one system
 // input parameter specify the system index
 // return 1 if any correlator in any channel has data ready
-int CTrackingEngine::ProcessData(GNSS_TIME CurTime, PSATELLITE_PARAM SatParam[], int SatNumber)
+int CTrackingEngine::ProcessData(int BlockSize, GNSS_TIME CurTime, PSATELLITE_PARAM SatParam[], int SatNumber)
 {
 	unsigned int EnableMask;
 	int i, j;
@@ -343,7 +343,7 @@ int CTrackingEngine::ProcessData(GNSS_TIME CurTime, PSATELLITE_PARAM SatParam[],
 		pSatParam = FindSatParam(i, SatParam, SatNumber);
 
 		// recalculate corresponding counter of channel
-		if (CalculateCounter(&ChannelParam[i], CorIndex, CorPos, NHCode, DataLength))
+		if (CalculateCounter(BlockSize, &ChannelParam[i], CorIndex, CorPos, NHCode, DataLength))
 			CohDataReady |= EnableMask;
 		// calculate 1ms correlation result
 		GetCorrelationResult(&ChannelParam[i], &CarrierParam[i], CurTime, pSatParam, DumpDataI, DumpDataQ, CorIndex, CorPos, NHCode, DataLength);
@@ -482,7 +482,7 @@ void CTrackingEngine::GetCorrelationResult(ChannelConfig *ChannelParam, CarrierP
 		CarrierPhase = pSatParam->TravelTime * 1575.42e6 - pSatParam->IonoDelay / GPS_L1_WAVELENGTH;
 //		printf("Phase=%.5f", CarrierPhase);
 		CarrierPhase -= (int)CarrierPhase;
-		CarrierPhase = 1 - CarrierPhase;
+		CarrierPhase = 1 - CarrierPhase;	// carrier is fractional part of negative of travel time, equvalent to 1 minus positive fractional part
 //		printf(" %.5f\n", CarrierPhase);
 //		printf("Diff=%.5f", CarrierPhase - ChannelParam->CarrierPhase / 4294967296.);
 		// assign new value
@@ -547,8 +547,8 @@ void CTrackingEngine::GetCorrelationResult(ChannelConfig *ChannelParam, CarrierP
 			CodeDiff[i] -= CodeDiffIndex;
 			if (CodeDiffIndex < 159)
 			{
-				AmpRatio = Bpsk4PeakValues[CodeDiffIndex];
-				AmpRatio += (Bpsk4PeakValues[CodeDiffIndex+1] - Bpsk4PeakValues[CodeDiffIndex]) * CodeDiff[i];
+				AmpRatio = PeakValues[CodeDiffIndex];
+				AmpRatio += (PeakValues[CodeDiffIndex+1] - PeakValues[CodeDiffIndex]) * CodeDiff[i];
 				if (((CorIndex[i] >> 2) == 0) && ChannelParam->EnableSecondPrn)
 				{
 					AmpRatio = DataBit ? -AmpRatio : AmpRatio;
@@ -583,7 +583,7 @@ void CTrackingEngine::GetCorrelationResult(ChannelConfig *ChannelParam, CarrierP
 	}
 }
 
-int CTrackingEngine::CalculateCounter(ChannelConfig *ChannelParam, int CorIndex[], int CorPos[], int NHCode[], int &DataLength)
+int CTrackingEngine::CalculateCounter(int BlockSize, ChannelConfig *ChannelParam, int CorIndex[], int CorPos[], int NHCode[], int &DataLength)
 {
 	int i;
 	U64 Count;
@@ -601,13 +601,13 @@ int CTrackingEngine::CalculateCounter(ChannelConfig *ChannelParam, int CorIndex[
 
 	// carrier related counter
 	Count = (((U64)ChannelParam->CarrierCount) << 32) | ChannelParam->CarrierPhase;
-	Count += (U64)ChannelParam->CarrierFreqInt * SAMPLE_COUNT;
+	Count += (U64)ChannelParam->CarrierFreqInt * BlockSize;
 	ChannelParam->CarrierCount = (unsigned int)(Count >> 32);	// upper 32bit
 	ChannelParam->CarrierPhase = (unsigned int)(Count & 0xffffffff);	// lower 32bit
 //	printf("Local=%d %f\n", ChannelParam->CarrierCount, ChannelParam->CarrierPhase / 4294967296.);
 
 	// number of code NCO overflow
-	Count = (U64)ChannelParam->CodePhase + (U64)ChannelParam->CodeFreqInt * SAMPLE_COUNT;
+	Count = (U64)ChannelParam->CodePhase + (U64)ChannelParam->CodeFreqInt * BlockSize;
 	OverflowCount = (int)(Count >> 32);
 	OverflowCount += ChannelParam->JumpCount;
 	ChannelParam->JumpCount = 0;	// reset JumpCount after each round

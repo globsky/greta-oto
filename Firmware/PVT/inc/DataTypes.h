@@ -9,6 +9,7 @@
 #ifndef __DATA_TYPES_H__
 #define __DATA_TYPES_H__
 
+#include "CommonDefines.h"
 #include "PvtConst.h"
 
 #pragma pack(push)	// push current alignment
@@ -71,13 +72,6 @@ typedef struct
 		double PosVel[6];
 	};
 } KINEMATIC_INFO, *PKINEMATIC_INFO;
-
-typedef struct
-{
-	double lat;
-	double lon;
-	double hae;
-} LLH;
 
 typedef struct CONVERT_MATRIX
 {
@@ -356,17 +350,6 @@ typedef struct
 #define SAT_INFO_PSR_VALID		0x20	// satellite predicted PSR, geometry distance and Doppler by satellite movement is valid
 #define SAT_INFO_LOS_VALID		0x40	// satellite LOS vector is valid
 #define SAT_INFO_LOS_MATCH		0x80	// satellite LOS vector match recent satellite position
-
-typedef struct
-{
-	int Year;
-	int Month;
-	int Day;
-	int Hour;
-	int Minute;
-	int Second;
-	int Millisecond;
-} SYSTEM_TIME, *PSYSTEM_TIME;
 
 typedef struct
 {
