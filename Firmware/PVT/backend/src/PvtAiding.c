@@ -90,7 +90,7 @@ int PredictSatelliteParam(double Time, PGNSS_EPHEMERIS Ephemeris, PKINEMATIC_INF
 //	Trel = WGS_F_GTR * Ephemeris[sv_index].ecc * Ephemeris[sv_index].sqrtA * sin(Ephemeris[sv_index].Ek);
 //	DeltaT += Trel;
 	SatParam->PredictPsr = GeometryDistance(ReceiverPos, &(SatInfo.PosVel));
-	SatParam->Doppler = SatRelativeSpeed(ReceiverPos, &(SatInfo.PosVel)) / GPS_L1_WAVELENGTH;
+	SatParam->Doppler = -SatRelativeSpeed(ReceiverPos, &(SatInfo.PosVel)) / GPS_L1_WAVELENGTH;
 	SatElAz(ReceiverPos, &SatInfo);
 	if (SatInfo.el > DEG2RAD(5))
 		return 1;

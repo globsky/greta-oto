@@ -17,6 +17,7 @@
 #include "TEManager.h"
 #include "ChannelManager.h"
 #include "PvtEntry.h"
+#include "SupportPackage.h"
 #include "GlobalVar.h"
 
 #define PARAM_OFFSET_CONFIG		1024*0
@@ -84,20 +85,23 @@ void InterruptService()
 void FirmwareInitialize(StartType Start, PSYSTEM_TIME CurTime, LLH *CurPosition)
 {
 	int i, sv_list[32] = {
+		FREQ_SVID(FREQ_L1CA, 3),
+//		FREQ_SVID(FREQ_L1CA, 4),
+		FREQ_SVID(FREQ_L1CA, 7),
+		FREQ_SVID(FREQ_L1CA, 8),
+		FREQ_SVID(FREQ_L1CA, 9),
+//		FREQ_SVID(FREQ_L1CA, 14),
+		FREQ_SVID(FREQ_L1CA, 16),
+		FREQ_SVID(FREQ_L1CA, 27),
+		FREQ_SVID(FREQ_L1CA, 30),
 		FREQ_SVID(FREQ_B1C, 8),
 		FREQ_SVID(FREQ_B1C, 19),
 		FREQ_SVID(FREQ_B1C, 21),
 		FREQ_SVID(FREQ_B1C, 22),
 		FREQ_SVID(FREQ_B1C, 26),
-		FREQ_SVID(FREQ_L1CA, 3),
-		FREQ_SVID(FREQ_L1CA, 4),
-		FREQ_SVID(FREQ_L1CA, 7),
-		FREQ_SVID(FREQ_L1CA, 8),
-		FREQ_SVID(FREQ_L1CA, 9),
-		FREQ_SVID(FREQ_L1CA, 14),
-		FREQ_SVID(FREQ_L1CA, 16),
-		FREQ_SVID(FREQ_L1CA, 27),
-		FREQ_SVID(FREQ_L1CA, 30), 0};	// for debug use only
+	0 };	// for debug use only
+	int SatNumber;
+	SAT_PREDICT_PARAM SatList[32];
 
 	MeasurementInterval = 100;
 
@@ -127,12 +131,22 @@ void FirmwareInitialize(StartType Start, PSYSTEM_TIME CurTime, LLH *CurPosition)
 	BdsDecodeInit();
 	MsrProcInit();
 	PvtProcInit((PRECEIVER_INFO)0);
-	if (1)	// hot start
+	if (Start != ColdStart)
 	{
 		LoadAllParameters();
-		g_ReceiverInfo.GpsTimeQuality = g_ReceiverInfo.BdsTimeQuality = g_ReceiverInfo.GalileoTimeQuality = UnknownTime;
+		if (Start == HotStart)
+		{
+			UtcToGpsTime(CurTime, &(g_ReceiverInfo.WeekNumber), &(g_ReceiverInfo.GpsMsCount), &g_GpsUtcParam);
+			g_ReceiverInfo.GpsTimeQuality = g_ReceiverInfo.BdsTimeQuality = g_ReceiverInfo.GalileoTimeQuality = ExtSetTime;
+		}
+		else
+			g_ReceiverInfo.GpsTimeQuality = g_ReceiverInfo.BdsTimeQuality = g_ReceiverInfo.GalileoTimeQuality = UnknownTime;
 		g_ReceiverInfo.PosQuality = ExtSetPos;
 		g_ReceiverInfo.PosVel.vx = g_ReceiverInfo.PosVel.vy = g_ReceiverInfo.PosVel.vz = 0.0;
+		SatNumber = GetSatelliteInView(SatList);
+		for (i = 0; i < SatNumber; i ++)
+			sv_list[i] = FREQ_SVID(SatList[i].FreqID, SatList[i].Svid);
+		sv_list[i] = 0;
 	}
 	g_PvtConfig.PvtConfigFlags |= PVT_CONFIG_USE_KF;
 	// initial request task queue
@@ -155,12 +169,12 @@ void FirmwareInitialize(StartType Start, PSYSTEM_TIME CurTime, LLH *CurPosition)
 		case FREQ_B1C:
 		case FREQ_L1C:	AcqConfig.SatConfig[i].CodeSpan = 30; break;
 		}
-		AcqConfig.SatConfig[i].CenterFreq = 0;
+		AcqConfig.SatConfig[i].CenterFreq = (Start == ColdStart) ? 0 : (int)SatList[i].Doppler;
 	}
 	AcqConfig.AcqChNumber = i;
 	AcqConfig.CohNumber = 4;
 	AcqConfig.NoncohNumber = 1;
-	AcqConfig.StrideNumber = 19;
+	AcqConfig.StrideNumber = (Start == ColdStart) ? 19 : (Start == ColdStart) ? 3 : 1;
 	AcqConfig.StrideInterval = 500;
 	AddTaskToQueue(&RequestTask, AcquisitionTask, &AcqConfig, sizeof(AcqConfig));
 }

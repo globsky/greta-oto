@@ -336,7 +336,7 @@ void CAcqEngine::SearchOneChannel(AeBufferSatParam *pSatParam)
 void CAcqEngine::DoAcquisition()
 {
 	int i, j;
-	unsigned int Freq;
+	int Freq;
 	AeBufferSatParam *pSatParam;
 	int GlobalExp;
 	int Amp[3];
@@ -359,9 +359,9 @@ void CAcqEngine::DoAcquisition()
 		PrnSelect = EXTRACT_UINT(ChannelConfig[i][1], 30, 2);
 		CodeSpan = EXTRACT_UINT(ChannelConfig[i][2], 0, 5);
 		ReadAddress = EXTRACT_UINT(ChannelConfig[i][2], 8, 5);
-		Freq = EXTRACT_UINT(ChannelConfig[i][2], 20, 11);
+		Freq = (int)EXTRACT_UINT(ChannelConfig[i][2], 20, 11);
 		DftTwiddlePhase = Freq * PI / 8192;
-		Freq = EXTRACT_UINT(ChannelConfig[i][3], 0, 22);
+		Freq = (int)EXTRACT_UINT(ChannelConfig[i][3], 0, 22);
 		StrideInterval = Freq * 2.046e6 / 4294967296.;
 		PhaseCount = 2046;	// default value for total phase count
 
@@ -383,7 +383,7 @@ void CAcqEngine::DoAcquisition()
 
 		// Do searching
 		SearchOneChannel(pSatParam);
-//		printf("Svid%2d Amp=%f Cor=%4d Freq=%f\n", Svid, PeakSorter.Peaks[0].Amp, PeakSorter.Peaks[0].PhasePos, (PeakSorter.Peaks[0].FreqPos - 3.5) * 62.5);
+		printf("Svid%2d Amp=%f Cor=%4d Freq=%f\n", Svid, PeakSorter.Peaks[0].Amp, PeakSorter.Peaks[0].PhasePos, (PeakSorter.Peaks[0].FreqPos - 3.5) * 62.5 + CenterFreq);
 
 		// determine global exp
 		GlobalExp = int(log10(PeakSorter.Peaks[0].Amp) / 0.3010 + 1) - 8;	// this is number of shift to have max amplitude fit in 8bit
@@ -459,7 +459,7 @@ void CAcqEngine::AssignChannelParam(PSATELLITE_PARAM pSatelliteParam, GNSS_TIME 
 		break;
 	}
 	// calculate TransmitTimeMs, TransmitTime as Time - TravelTime
-	TransmitTime = GetTransmitTime(Time, pSatelliteParam->TravelTime + pSatelliteParam->IonoDelay / LIGHT_SPEED);
+	TransmitTime = GetTransmitTime(Time, GetTravelTime(pSatelliteParam, 0));
 	// calculate frame count and bit count
 //	if (PrnSelect == 0)
 		TransmitTime.MilliSeconds ++;	// time of NEXT code round
@@ -478,7 +478,7 @@ void CAcqEngine::AssignChannelParam(PSATELLITE_PARAM pSatelliteParam, GNSS_TIME 
 	if (PrnSelect != 0 && MilliSeconds != 0)
 		Time2CodeEnd += (BitLength - MilliSeconds);
 	pSatAcqParam->Time2CodeEnd = (Time2CodeEnd + 2.5 / SAMPLES_1MS) * 2046;	// convert to unit of 1/2 code chip with compensation of filter delay (2.5 samples)
-	pSatAcqParam->Doppler = (-pSatelliteParam->RelativeSpeed) / GPS_L1_WAVELENGTH;
+	pSatAcqParam->Doppler = GetDoppler(pSatelliteParam, 0);
 	pSatAcqParam->Amplitude = 2 * pow(10, (pSatelliteParam->CN0 - 3000) / 2000.) * NOISE_AMP_SQRT2;
 	// generate bits
 	BitCount = 0;

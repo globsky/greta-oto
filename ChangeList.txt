@@ -125,3 +125,9 @@
 		Minor changes to support future data block size change
 	Bug fix
 		Fix BOC signal uses incorrect correlation peak shape table in SimModel
+1/23/2023
+	Function and feature added
+		Narrow down AE Doppler search range on hot start
+		Rearrange SimModel code for tracking engine and use new function interface of SignalSim
+	Bug fix
+		Bug fix on incorrect Doppler estimation in function PredictSatelliteParam()

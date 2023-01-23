@@ -39,7 +39,7 @@ void DebugOutput(void *DebugParam, int DebugValue)
 	double LocalPhase, LocalDoppler, CodePhase;
 	double PhaseDiff, DopplerDiff, CodeDiff;
 	GNSS_TIME TransmitTime;
-	ChannelConfig *ChannelParam; 
+	CTrackingChannel *TrackingChannel; 
 
 	if (!DebugFile)
 		return;
@@ -55,23 +55,23 @@ void DebugOutput(void *DebugParam, int DebugValue)
 		pSatParam = TrackingEngine->FindSatParam(i, GnssTop->SatParamList, GnssTop->TotalSatNumber);
 		if (pSatParam)
 		{
-			ChannelParam = &(TrackingEngine->ChannelParam[i]);
-			CarrierPhase = pSatParam->TravelTime * 1575.42e6 - pSatParam->IonoDelay / GPS_L1_WAVELENGTH;
+			TrackingChannel = &(TrackingEngine->LogicChannel[i]);
+			CarrierPhase = GetCarrierPhase(pSatParam, 0);
 			CarrierPhase -= (int)CarrierPhase;
 			CarrierPhase = 1 - CarrierPhase;
-			Doppler = -pSatParam->RelativeSpeed / GPS_L1_WAVELENGTH;
-			TransmitTime = GetTransmitTime(GnssTop->CurTime, pSatParam->TravelTime + pSatParam->IonoDelay / LIGHT_SPEED);
+			Doppler = GetDoppler(pSatParam, 0);
+			TransmitTime = GetTransmitTime(GnssTop->CurTime, GetTravelTime(pSatParam, 0));
 			PeakPosition = TransmitTime.SubMilliSeconds * 2046;
-			if (ChannelParam->SystemSel == SignalE1)	// Galileo E1
+			if (TrackingChannel->SystemSel == SignalE1)	// Galileo E1
 				PeakPosition += (TransmitTime.MilliSeconds % 4) * 2046;
-			else if (ChannelParam->SystemSel >= SignalB1C)	// B1C or L1C
+			else if (TrackingChannel->SystemSel >= SignalB1C)	// B1C or L1C
 				PeakPosition += (TransmitTime.MilliSeconds % 10) * 2046;
-			LocalPhase = ChannelParam->CarrierPhase / 4294967296.;
-			LocalDoppler = ChannelParam->CarrierFreq - IF_FREQ;
-			if (ChannelParam->SystemSel != SignalL1CA && ChannelParam->EnableBOC == 0)	// using sidelobe tracking
+			LocalPhase = TrackingChannel->CarrierPhase / 4294967296.;
+			LocalDoppler = TrackingChannel->CarrierFreq - IF_FREQ;
+			if (TrackingChannel->SystemSel != SignalL1CA && TrackingChannel->EnableBOC == 0)	// using sidelobe tracking
 				LocalDoppler -= 1023000.;
-			PrnCount2x = ChannelParam->PrnCount * 2 + ChannelParam->CodeSubPhase - 4;
-			CodePhase = PrnCount2x + (double)ChannelParam->CodePhase / 4294967296.;
+			PrnCount2x = TrackingChannel->PrnCount * 2 + TrackingChannel->CodeSubPhase - 4;
+			CodePhase = PrnCount2x + (double)TrackingChannel->CodePhase / 4294967296.;
 			PhaseDiff = LocalPhase - CarrierPhase;
 			if (PhaseDiff < -0.25)
 				PhaseDiff += 1.0;

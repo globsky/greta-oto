@@ -16,6 +16,8 @@
 #include "XmlInterpreter.h"
 #include "Coordinate.h"
 
+double CTrackingChannel::CovarMatrix[4][SUM_N(COR_NUMBER)];
+
 CGnssTop::CGnssTop()
 {
 	InterruptService = (InterruptFunction)0;
@@ -23,6 +25,11 @@ CGnssTop::CGnssTop()
 	NavBitArray[1] = &GpsBits;	// for Galileo E1
 	NavBitArray[2] = &BdsBits;	// for BDS B1C
 	NavBitArray[3] = &GpsBits;	// for GPS L1C
+	// calculate relative matrix for noise generation
+	CalculateCovar(COR_NUMBER, 2, CTrackingChannel::CovarMatrix[0]);
+	CalculateCovar(COR_NUMBER, 4, CTrackingChannel::CovarMatrix[1]);
+	CalculateCovar(COR_NUMBER, 8, CTrackingChannel::CovarMatrix[2]);
+	CalculateCovar(COR_NUMBER, 2, CTrackingChannel::CovarMatrix[3]);
 }
 
 CGnssTop::~CGnssTop()
@@ -42,6 +49,8 @@ void CGnssTop::Clear(U32 ClearMask)
 void CGnssTop::SetRegValue(int Address, U32 Value)
 {
 	int AddressOffset = Address & 0xfff;
+	int ChannelNumber;
+	SATELLITE_PARAM *pSatParam;
 
 	switch (Address & 0xf000)
 	{
@@ -99,7 +108,11 @@ void CGnssTop::SetRegValue(int Address, U32 Value)
 	case ADDR_BASE_TE_BUFFER:
 		TrackingEngine.SetTEBuffer(AddressOffset >> 2, Value);
 		if (((AddressOffset >> 2) & 0x1f) == STATE_OFFSET_PRN_CONFIG)	// if set PRN_CONFIG, assume initial channel with new SVID
-			TrackingEngine.InitChannel((Address >> 7) & 0x1f, CurTime, SatParamList, TotalSatNumber);
+		{
+			ChannelNumber = (Address >> 7) & 0x1f;
+			if ((pSatParam = TrackingEngine.FindSatParam(ChannelNumber, SatParamList, TotalSatNumber)) != NULL)
+				TrackingEngine.LogicChannel[ChannelNumber].Initial(CurTime, pSatParam, NavBitArray[TrackingEngine.LogicChannel[ChannelNumber].SystemSel]);
+		}
 		break;
 	case ADDR_BASE_AE_BUFFER:
 		AcqEngine.ChannelConfig[AddressOffset >> 5][(AddressOffset >> 2) & 0x7] = Value;
@@ -230,7 +243,6 @@ void CGnssTop::SetInputFile(char *FileName)
 		GetSatelliteCN0(ListCount, PowerList, PowerControl.InitCN0, PowerControl.Adjust, &GalSatParam[index]);
 		SatParamList[TotalSatNumber ++] = &GalSatParam[index];
 	}
-	TrackingEngine.SetNavBit(NavBitArray);
 }
 
 int CGnssTop::Process(int BlockSize)
