@@ -49,9 +49,11 @@ public:
 	CAcqEngine AcqEngine;
 	complex_int *FileData;
 	unsigned char *SampleQuant;
+	int AeProcessCount;		// simulate AE acquisition process delay
 
 	int Process(int ReadBlockSize);
 	void SetInputFile(char *FileName) { IfFile.OpenIfFile(FileName); }
+	int GetAeProcessTime();
 
 	InterruptFunction InterruptService;
 };

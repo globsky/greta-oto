@@ -1,15 +1,17 @@
 //----------------------------------------------------------------------
-// pps.v:
-//   PPS generation
+// pps_async.v:
+//   PPS generation using asynchronize PPS clock
 //
 //          Copyright (C) 2020-2029 by Jun Mo, All rights reserved.
 //
 //----------------------------------------------------------------------
 
-module pps
+// PPS clock pps_clk and system clock clk can be asynchronize
+module pps_async
 (
 // system signals
 input clk,   // system clock
+input pps_clk,   // PPS clock
 input rst_b, // reset signal, low active
 
 // host interface
@@ -29,6 +31,68 @@ output pps_pulse3,
 output reg pps_event,	// PPS event to TE FIFO
 output pps_irq	// edge trigger, pps_event masked by int_enable
 );
+
+//----------------------------------------------------------
+// control registers write
+//----------------------------------------------------------
+// write flag toggle and address/data latch in system clock domain
+reg write_flag;
+reg [5:0] write_addr;
+reg [31:0] write_data;
+
+always @(posedge clk or negedge rst_b)
+	if (!rst_b)
+		write_flag <= 1'b0;
+  else if (host_cs & host_wr)
+		write_flag <= ~write_flag;
+
+always @(posedge clk or negedge rst_b)
+	if (!rst_b) begin
+		write_addr <= 'd0;
+		write_data <= 'd0;
+	end
+  else if (host_cs & host_wr) begin
+		write_addr <= host_addr;
+		write_data <= host_d4wt;
+	end
+
+// write flag toggle detection in PPS clock domain
+reg write_flag_d1;
+reg write_flag_d2;
+wire write_flag_pps;
+assign write_flag_pps = write_flag_d1 ^ write_flag_d2;
+
+always @(posedge pps_clk or negedge rst_b)
+	if (!rst_b) begin
+		write_flag_d1 <= 1'b0;
+		write_flag_d2 <= 1'b0;
+	end
+  else begin
+		write_flag_d1 <= write_flag;
+		write_flag_d2 <= write_flag_d1;
+	end
+
+// convert cpu_latch signal to toggle signal
+reg latch_flag;
+reg latch_flag_d1, latch_flag_d2;
+wire cpu_latch_flag;
+assign cpu_latch_flag = latch_flag_d1 ^ latch_flag_d2;
+
+always @(posedge clk or negedge rst_b)
+	if (!rst_b)
+		latch_flag <= 1'b0;
+  else if (cpu_latch)
+		latch_flag <= ~latch_flag;
+
+always @(posedge pps_clk or negedge rst_b)
+	if (!rst_b) begin
+		latch_flag_d1 <= 1'b0;
+		latch_flag_d2 <= 1'b0;
+	end
+  else begin
+		latch_flag_d1 <= latch_flag;
+		latch_flag_d2 <= latch_flag_d1;
+	end
 
 //----------------------------------------------------------
 // registers read/write
@@ -52,7 +116,7 @@ reg [30:0] clk_count_latch_em;
 reg [7:0] pulse_count_latch_em;
 
 // write registers
-always @(posedge clk or negedge rst_b)
+always @(posedge pps_clk or negedge rst_b)
 	if (!rst_b) begin
 		pps_enable      <= 1'b0;
 		int_enable      <= 1'b0;
@@ -72,17 +136,17 @@ always @(posedge clk or negedge rst_b)
 		pulse3_delay    <= 'd0;
 		pulse3_width    <= 'd0;
 	end
-	else if (host_cs & host_wr) begin
-		case (host_addr)
-			`PPS_CTRL           : {int_enable, pps_enable} <= host_d4wt[1:0];
-			`PPS_EM_CTRL        : {em_polar, em_enable} <= host_d4wt[1:0];
-			`PPS_PULSE_INTERVAL : pulse_interval <= host_d4wt[29:0];
-			`PPS_PULSE_CTRL1    : {pulse1_polar, pulse1_enable, pulse1_delay} <= host_d4wt[17:0];
-			`PPS_PULSE_WIDTH1   : pulse1_width   <= host_d4wt[29:0];
-			`PPS_PULSE_CTRL2    : {pulse2_polar, pulse2_enable, pulse2_delay} <= host_d4wt[17:0];
-			`PPS_PULSE_WIDTH2   : pulse2_width   <= host_d4wt[29:0];
-			`PPS_PULSE_CTRL3    : {pulse3_polar, pulse3_enable, pulse3_delay} <= host_d4wt[17:0];
-			`PPS_PULSE_WIDTH3   : pulse3_width   <= host_d4wt[29:0];
+	else if (write_flag_pps) begin
+		case (write_addr)
+			`PPS_CTRL           : {int_enable, pps_enable} <= write_data[1:0];
+			`PPS_EM_CTRL        : {em_polar, em_enable} <= write_data[1:0];
+			`PPS_PULSE_INTERVAL : pulse_interval <= write_data[29:0];
+			`PPS_PULSE_CTRL1    : {pulse1_polar, pulse1_enable, pulse1_delay} <= write_data[17:0];
+			`PPS_PULSE_WIDTH1   : pulse1_width   <= write_data[29:0];
+			`PPS_PULSE_CTRL2    : {pulse2_polar, pulse2_enable, pulse2_delay} <= write_data[17:0];
+			`PPS_PULSE_WIDTH2   : pulse2_width   <= write_data[29:0];
+			`PPS_PULSE_CTRL3    : {pulse3_polar, pulse3_enable, pulse3_delay} <= write_data[17:0];
+			`PPS_PULSE_WIDTH3   : pulse3_width   <= write_data[29:0];
 		endcase
 	end
 
@@ -118,7 +182,7 @@ assign counter_next = clk_counter + 1;
 assign interval_sum = {1'b0, pulse_interval} + {pulse_adjust[29], pulse_adjust};
 assign count_match = (counter_next == interval_sum);
 
-always @(posedge clk or negedge rst_b)
+always @(posedge pps_clk or negedge rst_b)
 	if (!rst_b)
 		clk_counter <= 'd0;
 	else if (count_match)
@@ -126,24 +190,24 @@ always @(posedge clk or negedge rst_b)
 	else if (pps_enable)
 		clk_counter <= counter_next;
 
-always @(posedge clk or negedge rst_b)
+always @(posedge pps_clk or negedge rst_b)
 	if (!rst_b)
 		pulse_counter <= 'd0;
 	else if (count_match)
 		pulse_counter <= pulse_counter + 1;
 
-always @(posedge clk or negedge rst_b)
+always @(posedge pps_clk or negedge rst_b)
 	if (!rst_b)
 		pulse_adjust <= 'd0;
 	else if (count_match)
 		pulse_adjust <= 'd0;
-	else if ((host_cs & host_wr) && (host_addr == `PPS_PULSE_ADJUST))
-		pulse_adjust <= host_d4wt[29:0];
+	else if (write_flag_pps && (write_addr == `PPS_PULSE_ADJUST))
+		pulse_adjust <= write_data[29:0];
 
 // generate edge of PPS event with enough hold time (32 PPS clock cycles)
 reg [4:0] event_counter;
 
-always @(posedge clk or negedge rst_b)
+always @(posedge pps_clk or negedge rst_b)
 	if (!rst_b)
 		pps_event <= 1'b0;
 	else if (count_match)
@@ -151,7 +215,7 @@ always @(posedge clk or negedge rst_b)
 	else if (event_counter == 5'h1f)
 		pps_event <= 1'b0;
 
-always @(posedge clk or negedge rst_b)
+always @(posedge pps_clk or negedge rst_b)
 	if (!rst_b)
 		event_counter <= 'd0;
 	else if (pps_event)
@@ -168,7 +232,7 @@ reg [15:0] delay_counter1, delay_counter2, delay_counter3;
 reg [29:0] width_counter1, width_counter2, width_counter3;
 
 // first PPS signal
-always @(posedge clk or negedge rst_b)
+always @(posedge pps_clk or negedge rst_b)
 	if (!rst_b)
 		pps_signal1 <= 1'b0;
 	else if (count_match && (pulse1_delay == 0))	// in case of delay==0 set PPS immediately
@@ -178,7 +242,7 @@ always @(posedge clk or negedge rst_b)
 	else if (width_counter1 == pulse1_width)	// clear after width time
 		pps_signal1 <= 1'b0;
 
-always @(posedge clk or negedge rst_b)
+always @(posedge pps_clk or negedge rst_b)
 	if (!rst_b)
 		signal_pending1 <= 1'b0;
 	else if (count_match && (pulse1_delay != 0))	// set pending if delay!=0
@@ -186,7 +250,7 @@ always @(posedge clk or negedge rst_b)
 	else if (signal_pending1 && (delay_counter1 == pulse1_delay))	// clear pending after delay time
 		signal_pending1 <= 1'b0;
 
-always @(posedge clk or negedge rst_b)
+always @(posedge pps_clk or negedge rst_b)
 	if (!rst_b)
 		delay_counter1 <= 'd0;
 	else if (signal_pending1 && (delay_counter1 == pulse1_delay))	// clear counter after delay time
@@ -194,7 +258,7 @@ always @(posedge clk or negedge rst_b)
 	else if (signal_pending1)	// increase counter when signal pending
 		delay_counter1 <= delay_counter1 + 1;
 
-always @(posedge clk or negedge rst_b)
+always @(posedge pps_clk or negedge rst_b)
 	if (!rst_b)
 		width_counter1 <= 'd0;
 	else if (width_counter1 == pulse1_width)	// clear counter when clear PPS
@@ -203,7 +267,7 @@ always @(posedge clk or negedge rst_b)
 		width_counter1 <= width_counter1 + 1;
 
 // second PPS signal
-always @(posedge clk or negedge rst_b)
+always @(posedge pps_clk or negedge rst_b)
 	if (!rst_b)
 		pps_signal2 <= 1'b0;
 	else if (count_match && (pulse2_delay == 0))	// in case of delay==0 set PPS immediately
@@ -213,7 +277,7 @@ always @(posedge clk or negedge rst_b)
 	else if (width_counter2 == pulse2_width)	// clear after width time
 		pps_signal2 <= 1'b0;
 
-always @(posedge clk or negedge rst_b)
+always @(posedge pps_clk or negedge rst_b)
 	if (!rst_b)
 		signal_pending2 <= 1'b0;
 	else if (count_match && (pulse2_delay != 0))	// set pending if delay!=0
@@ -221,7 +285,7 @@ always @(posedge clk or negedge rst_b)
 	else if (signal_pending2 && (delay_counter2 == pulse2_delay))	// clear pending after delay time
 		signal_pending2 <= 1'b0;
 
-always @(posedge clk or negedge rst_b)
+always @(posedge pps_clk or negedge rst_b)
 	if (!rst_b)
 		delay_counter2 <= 'd0;
 	else if (signal_pending2 && (delay_counter2 == pulse2_delay))	// clear counter after delay time
@@ -229,7 +293,7 @@ always @(posedge clk or negedge rst_b)
 	else if (signal_pending2)	// increase counter when signal pending
 		delay_counter2 <= delay_counter2 + 1;
 
-always @(posedge clk or negedge rst_b)
+always @(posedge pps_clk or negedge rst_b)
 	if (!rst_b)
 		width_counter2 <= 'd0;
 	else if (width_counter2 == pulse2_width)	// clear counter when clear PPS
@@ -238,7 +302,7 @@ always @(posedge clk or negedge rst_b)
 		width_counter2 <= width_counter2 + 1;
 
 // first PPS signal
-always @(posedge clk or negedge rst_b)
+always @(posedge pps_clk or negedge rst_b)
 	if (!rst_b)
 		pps_signal3 <= 1'b0;
 	else if (count_match && (pulse3_delay == 0))	// in case of delay==0 set PPS immediately
@@ -248,7 +312,7 @@ always @(posedge clk or negedge rst_b)
 	else if (width_counter3 == pulse3_width)	// clear after width time
 		pps_signal3 <= 1'b0;
 
-always @(posedge clk or negedge rst_b)
+always @(posedge pps_clk or negedge rst_b)
 	if (!rst_b)
 		signal_pending3 <= 1'b0;
 	else if (count_match && (pulse3_delay != 0))	// set pending if delay!=0
@@ -256,7 +320,7 @@ always @(posedge clk or negedge rst_b)
 	else if (signal_pending3 && (delay_counter3 == pulse3_delay))	// clear pending after delay time
 		signal_pending3 <= 1'b0;
 
-always @(posedge clk or negedge rst_b)
+always @(posedge pps_clk or negedge rst_b)
 	if (!rst_b)
 		delay_counter3 <= 'd0;
 	else if (signal_pending3 && (delay_counter3 == pulse3_delay))	// clear counter after delay time
@@ -264,7 +328,7 @@ always @(posedge clk or negedge rst_b)
 	else if (signal_pending3)	// increase counter when signal pending
 		delay_counter3 <= delay_counter3 + 1;
 
-always @(posedge clk or negedge rst_b)
+always @(posedge pps_clk or negedge rst_b)
 	if (!rst_b)
 		width_counter3 <= 'd0;
 	else if (width_counter3 == pulse3_width)	// clear counter when clear PPS
@@ -279,16 +343,16 @@ assign pps_pulse3 = (pps_signal3 & pulse3_enable) ^ pulse3_polar;
 //----------------------------------------------------------
 // latch counter
 //----------------------------------------------------------
-always @(posedge clk or negedge rst_b)
+always @(posedge pps_clk or negedge rst_b)
 	if (!rst_b)
 		clk_count_latch_cpu <= 'd0;
-	else if (cpu_latch)
+	else if (cpu_latch_flag)
 		clk_count_latch_cpu <= clk_counter;
 
-always @(posedge clk or negedge rst_b)
+always @(posedge pps_clk or negedge rst_b)
 	if (!rst_b)
 		pulse_count_latch_cpu <= 'd0;
-	else if (cpu_latch)
+	else if (cpu_latch_flag)
 		pulse_count_latch_cpu <= pulse_counter;
 
 wire em_signal;
@@ -297,19 +361,19 @@ wire em_latch_flag;
 assign em_signal = event_mark ^ em_polar;
 assign em_latch_flag = em_signal & (~em_signal_d);	// rising edge
 
-always @(posedge clk or negedge rst_b)
+always @(posedge pps_clk or negedge rst_b)
 	if (!rst_b)
 		em_signal_d <= 'd0;
 	else
 		em_signal_d <= em_signal;
 
-always @(posedge clk or negedge rst_b)
+always @(posedge pps_clk or negedge rst_b)
 	if (!rst_b)
 		clk_count_latch_em <= 'd0;
 	else if (em_latch_flag)
 		clk_count_latch_em <= clk_counter;
 
-always @(posedge clk or negedge rst_b)
+always @(posedge pps_clk or negedge rst_b)
 	if (!rst_b)
 		pulse_count_latch_em <= 'd0;
 	else if (em_latch_flag)

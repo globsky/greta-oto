@@ -66,7 +66,7 @@ void InterruptService()
 		SetRegValue(ADDR_TE_FIFO_CONFIG, 0);			// FIFO config, disable dummy write
 		// call ProcessAcqResult on request interrupt, so it will sync with TE interrupt
 		AddTaskToQueue(&RequestTask, ProcessAcqResult, &AcqConfig, sizeof(AcqConfig));
-		if (!GetRegValue(ADDR_REQUEST_COUNT))	// request count is zero, set a new request
+		if (!GetRegValue(ADDR_REQUEST_COUNT))	// request count is zero, set a new request, otherwise use exist request event
 			SetRegValue(ADDR_REQUEST_COUNT, 1);
 	}
 	// clear interrupt
@@ -174,7 +174,7 @@ void FirmwareInitialize(StartType Start, PSYSTEM_TIME CurTime, LLH *CurPosition)
 	AcqConfig.AcqChNumber = i;
 	AcqConfig.CohNumber = 4;
 	AcqConfig.NoncohNumber = 1;
-	AcqConfig.StrideNumber = (Start == ColdStart) ? 19 : (Start == ColdStart) ? 3 : 1;
+	AcqConfig.StrideNumber = (Start == ColdStart) ? 19 : (Start == WarmStart) ? 3 : 1;
 	AcqConfig.StrideInterval = 500;
 	AddTaskToQueue(&RequestTask, AcquisitionTask, &AcqConfig, sizeof(AcqConfig));
 }

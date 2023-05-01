@@ -131,3 +131,9 @@
 		Rearrange SimModel code for tracking engine and use new function interface of SignalSim
 	Bug fix
 		Bug fix on incorrect Doppler estimation in function PredictSatelliteParam()
+4/30/2023
+	Function and feature change
+		Replace PPS module with a simpified synchronize PPS clock design
+		Estimate AE process time and set AE int flag after estimated time (both in C model and SimModel)
+	Bug fix
+		AE PRN generation C model use uninitialized polynomial settings

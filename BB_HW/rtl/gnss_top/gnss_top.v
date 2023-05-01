@@ -25,7 +25,7 @@ input [31:0] host_d4wt,
 output [31:0] host_d4rd,
 
 // interactive signals
-input pps_clk,
+//input pps_clk,
 input event_mark,
 output pps_pulse1,
 output pps_pulse2,
@@ -290,7 +290,7 @@ wire memcode_read_valid;
 
 wire ae_finish;
 
-ae_top #(.AE_BUFFER_SIZE(16*256)) u_ae_top
+ae_top #(.AE_BUFFER_SIZE(128*256)) u_ae_top
 (
 	.clk                 (clk                  ),
 	.rst_b               (rst_b && ~reset_ae   ),
@@ -469,7 +469,6 @@ assign irq = |(int_flag & int_mask);
 pps u_pps
 (
 	.clk                 (clk             ),
-	.pps_clk             (pps_clk         ),
 	.rst_b               (rst_b           ),
 
 	.host_cs             (host_cs_pps     ),

@@ -72,10 +72,12 @@ public:
 	CTrackingEngine TrackingEngine;
 	CAcqEngine AcqEngine;
 	CTeFifoSim TeFifo;
+	int AeProcessCount;		// simulate AE acquisition process delay
 
 	int Process(int BlockSize);
 	void SetInputFile(char *FileName);
 	int StepToNextTime();
+	int GetAeProcessTime();
 
 	InterruptFunction InterruptService;
 };

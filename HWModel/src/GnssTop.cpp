@@ -104,8 +104,8 @@ void CGnssTop::SetRegValue(int Address, U32 Value)
 		AcqEngine.SetRegValue(AddressOffset, Value);
 		if (AddressOffset == ADDR_OFFSET_AE_BUFFER_CONTROL && (Value & 0x100))	// latch write address when starting fill AE buffer
 			TeFifo.LatchWriteAddress(3);
-		if (AddressOffset == ADDR_OFFSET_AE_CONTROL && (Value & 0x100))	// if do acquisition, set AE finished interrupt
-			InterruptFlag |= (1 << 11);
+		if (AddressOffset == ADDR_OFFSET_AE_CONTROL && (Value & 0x100))	// if do acquisition, set delayed AE finished interrupt
+			AeProcessCount = GetAeProcessTime();
 		break;
 	case ADDR_BASE_TE_FIFO:
 		TeFifo.SetRegValue(AddressOffset, Value);
@@ -201,15 +201,53 @@ int CGnssTop::Process(int ReadBlockSize)
 			InterruptFlag |= (1 << 9);
 		}
 	}
-	if(ReqCount)
+	if (ReqCount)
 	{
-		if(ReqCount == 1)
+		if(--ReqCount == 0)
 			InterruptFlag |= (1 << 10);
-		ReqCount--;
+	}
+	if (AeProcessCount)
+	{
+		if (--AeProcessCount == 0)
+			InterruptFlag |= (1 << 11);
 	}
 
 	if ((InterruptFlag & IntMask) && InterruptService != NULL )
 		InterruptService();
 
 	return 0;
+}
+
+#define AE_CLK_FREQ_MHz 100		// clock frequency for AE module
+#define BLOCK_LENGTH_US 1000	// length in us for each data block
+#define CLK_NUMBER_IN_BLOCK (AE_CLK_FREQ_MHz * BLOCK_LENGTH_US)
+// each channel need number of clock cycles to search is about:
+//   S*R*(682+4096*C*N)
+//   fill sample needs about 2048 clock cycles
+//   match filter needs about 8192 clock cycles for each round
+//   S is tride number
+//   C is coherent number
+//   N is non-coherent number
+//   R is code span
+// one last step of force output needs about 1364 clock cycles
+int CGnssTop::GetAeProcessTime()
+{
+	int i;
+	int TotalCycles = 2;
+	unsigned int (*ChannelConfig)[CHANNEL_CONFIG_LEN] = AcqEngine.ChannelConfig;
+	int StrideNumber, CoherentNumber, NonCoherentNumber, CodeSpan;
+	double ProcessTime;
+
+	for (i = 0; i < (int)AcqEngine.ChannelNumber; i ++)
+	{
+		// fill in config registers
+		StrideNumber = (int)EXTRACT_UINT(ChannelConfig[i][0], 0, 6);
+		CoherentNumber = (int)EXTRACT_UINT(ChannelConfig[i][0], 8, 6);
+		NonCoherentNumber = (int)EXTRACT_UINT(ChannelConfig[i][0], 16, 7);
+		CodeSpan = (int)EXTRACT_UINT(ChannelConfig[i][2], 0, 5);
+		TotalCycles += StrideNumber * CodeSpan * (1 + 6 * CoherentNumber * NonCoherentNumber);
+	}
+
+	ProcessTime = 682. * TotalCycles / CLK_NUMBER_IN_BLOCK;
+	return (int)(ProcessTime + 1);	// round up
 }

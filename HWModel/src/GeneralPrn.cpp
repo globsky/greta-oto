@@ -11,7 +11,7 @@
 
 CGeneralPrn::CGeneralPrn(const unsigned int PolySettings[])
 {
-	PrnPolyRegs = PolySettings;
+	PrnPolySettings = PrnPolyRegs = PolySettings;
 	Reset();
 }
 
