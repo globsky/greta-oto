@@ -13,25 +13,26 @@
 #include "TEManager.h"
 #include "ChannelManager.h"
 
+ACQ_CONFIG AcqConfig;
+
 //*************** Start acquisition with given configuration ****************
 //* this function is a task function
 // Parameters:
-//   Param: pointer to configuration structure
+//   none
 // Return value:
-//   channel number
-int AcquisitionTask(void *Param)
+//   none
+void StartAcquisition(void)
 {
-	PACQ_CONFIG AcqConfig = (PACQ_CONFIG)Param;
 	int i;
-	int DftFreq = (AcqConfig->StrideInterval << 10) / 1000;
+	int DftFreq = (AcqConfig.StrideInterval << 10) / 1000;
 	unsigned int ConfigData[4];
 
-	ConfigData[0] = 0x04000000 | (AcqConfig->NoncohNumber << 16) | (AcqConfig->CohNumber << 8) | AcqConfig->StrideNumber;	// threshold: 3'b100
-	ConfigData[3]= AE_STRIDE_INTERVAL(AcqConfig->StrideInterval);
-	for (i = 0; i < AcqConfig->AcqChNumber; i ++)
+	ConfigData[0] = 0x04000000 | (AcqConfig.NoncohNumber << 16) | (AcqConfig.CohNumber << 8) | AcqConfig.StrideNumber;	// threshold: 3'b100
+	ConfigData[3]= AE_STRIDE_INTERVAL(AcqConfig.StrideInterval);
+	for (i = 0; i < AcqConfig.AcqChNumber; i ++)
 	{
-		ConfigData[1] = (AcqConfig->SatConfig[i].FreqSvid << 24) | (AE_CENTER_FREQ(AcqConfig->SatConfig[i].CenterFreq) & 0xfffff);
-		ConfigData[2] = (DftFreq << 20) | AcqConfig->SatConfig[i].CodeSpan;
+		ConfigData[1] = (AcqConfig.SatConfig[i].FreqSvid << 24) | (AE_CENTER_FREQ(AcqConfig.SatConfig[i].CenterFreq) & 0xfffff);
+		ConfigData[2] = (DftFreq << 20) | AcqConfig.SatConfig[i].CodeSpan;
 		SetRegValue(ADDR_BASE_AE_BUFFER+i*32+ 0, ConfigData[0]);
 		SetRegValue(ADDR_BASE_AE_BUFFER+i*32+ 4, ConfigData[1]);
 		SetRegValue(ADDR_BASE_AE_BUFFER+i*32+ 8, ConfigData[2]);
@@ -49,9 +50,19 @@ int AcquisitionTask(void *Param)
 	SetRegValue(ADDR_BASE_AE_BUFFER+0x110, 0x850087b2); SetRegValue(ADDR_BASE_AE_BUFFER+0x114, 0x971486ae); SetRegValue(ADDR_BASE_AE_BUFFER+0x118, 0x481386ae); SetRegValue(ADDR_BASE_AE_BUFFER+0x11c, 0x36f403d5);
 	SetRegValue(ADDR_AE_CONTROL, 0x100);
 #else	// start AE
-	SetRegValue(ADDR_AE_CONTROL, 0x100+AcqConfig->AcqChNumber);
+	SetRegValue(ADDR_AE_CONTROL, 0x100+AcqConfig.AcqChNumber);
 #endif
-	return i;
+}
+
+//*************** Start acquisition with given configuration ****************
+//* this function is a task function
+// Parameters:
+//   none
+// Return value:
+//   1 if AE buffer fill reaches threshold, otherwise 0
+int AcqBufferReachTh(void)
+{
+	return (GetRegValue(ADDR_AE_STATUS) & 0x20000) ? 1 : 0;
 }
 
 //*************** Add channel of acquired satellite to tracking engine ****************

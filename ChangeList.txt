@@ -137,3 +137,9 @@
 		Estimate AE process time and set AE int flag after estimated time (both in C model and SimModel)
 	Bug fix
 		AE PRN generation C model use uninitialized polynomial settings
+5/8/2023
+	Function and feature change
+		Reorgnize hardware and platform abstract functions
+	Function and feature added
+		Add TaskManager to help manage task queues and task threads
+		Add demo code of hardware and platform abstracted functions on FreeRTOS

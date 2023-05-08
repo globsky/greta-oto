@@ -23,7 +23,7 @@ static void ReleaseWaitItem(PTASK_QUEUE TaskQueue);
 //   BufferSize: size of task parameter buffer in BYTE
 // Return value:
 //   none
-void InitTaskQueue(PTASK_QUEUE TaskQueue, TASK_ITEM ItemArray[], int ItemNumber, U32 *ParamBuffer, int BufferSize)
+void InitTaskQueue(PTASK_QUEUE TaskQueue, TASK_ITEM ItemArray[], int ItemNumber, U32 *ParamBuffer, int BufferSize, U32 Event)
 {
 	int i;
 	
@@ -31,6 +31,7 @@ void InitTaskQueue(PTASK_QUEUE TaskQueue, TASK_ITEM ItemArray[], int ItemNumber,
 	TaskQueue->ItemNumber = ItemNumber;
 	TaskQueue->ParamBuffer = ParamBuffer;
 	TaskQueue->BufferSize = BufferSize / 4;	// convert to DWORD size
+	TaskQueue->Event = Event;
 	// read/write position at the beginning of ParamBuffer
 	TaskQueue->ReadPosition = TaskQueue->WritePosition = 0;
 	// initial link list
@@ -45,12 +46,12 @@ void InitTaskQueue(PTASK_QUEUE TaskQueue, TASK_ITEM ItemArray[], int ItemNumber,
 //*************** Add one task to task queue ****************
 // Parameters:
 //   TaskQueue: pointer to task queue structure
-//   TaskFunction: pointer to task function
+//   TaskFunc: pointer to task function
 //   Param: pointer to parameter passed to task function
 //   ParamSize: size of parameter in bytes
 // Return value:
 //   return none zero if success
-int AddTaskToQueue(PTASK_QUEUE TaskQueue, TaskFunction TaskFunction, void *Param, int ParamSize)
+int AddTaskToQueue(PTASK_QUEUE TaskQueue, TaskFunction TaskFunc, void *Param, int ParamSize)
 {
 	PTASK_ITEM NewTask;
 	int ParamSpace = (ParamSize + 3) / 4;	// convert to DWORD
@@ -136,7 +137,7 @@ int AddTaskToQueue(PTASK_QUEUE TaskQueue, TaskFunction TaskFunction, void *Param
 		TaskQueue->WaitQueue = NewTask;
 	
 	// fill content of new task item
-	NewTask->CallbackFunction = TaskFunction;
+	NewTask->CallbackFunction = TaskFunc;
 	NewTask->ParamAddr = (void *)ParamPointer;
 	NewTask->ParamSize = ParamSize;
 	NewTask->pNextItem = 0;

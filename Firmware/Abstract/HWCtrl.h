@@ -34,9 +34,6 @@ void LoadMemory(U32 *DestAddr, U32 *BasebandAddr, int Size);
 void SaveMemory(U32 *BasebandAddr, U32 *SrcAddr, int Size);
 // input file for PC simulation
 void SetInputFile(char *FileName);
-// saved parameter read/write
-int LoadParameters(int Offset, void *Buffer, int Size);
-void SaveParameters(int Offset, void *Buffer, int Size);
 // RF control
 void EnableRF();
 

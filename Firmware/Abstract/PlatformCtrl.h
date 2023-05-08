@@ -17,17 +17,21 @@ extern "C" {
 
 typedef void (*ThreadFunction)(void *Param);
 
-// interrupt control
-void EnableInt();
-void DisableInt();
 // thread control
-void CreateThread(ThreadFunction Thread);
+void CreateThread(ThreadFunction Thread, int Priority, void *Param);
 // IPC functions
-#define ENTER_CRITICAL DisableInt
-#define EXIT_CRITICAL EnableInt
+void ENTER_CRITICAL();
+void EXIT_CRITICAL();
+U32 EventCreate();
+void EventSet(U32 Event);
+void EventWait(U32 Event);
 
 int __builtin_popcount(unsigned int data);
 int __builtin_clz(unsigned int data);
+
+// saved parameter read/write
+int LoadParameters(int Offset, void *Buffer, int Size);
+void SaveParameters(int Offset, void *Buffer, int Size);
 
 #ifdef __cplusplus
 }

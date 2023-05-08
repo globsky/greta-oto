@@ -29,13 +29,14 @@ typedef struct
 	int BufferSize;
 	int ReadPosition;
 	int WritePosition;
+	U32 Event;
 	PTASK_ITEM AvailableQueue;	// pointer to available queue list
 	PTASK_ITEM WaitQueue;		// pointer to wait queue list
 	PTASK_ITEM QueueTail;		// pointer to last item in wait list
 } TASK_QUEUE, *PTASK_QUEUE;
 
-void InitTaskQueue(PTASK_QUEUE TaskQueue, TASK_ITEM ItemArray[], int ItemNumber, U32 *ParamBuffer, int BufferSize);
-int AddTaskToQueue(PTASK_QUEUE TaskQueue, TaskFunction TaskFunction, void *Param, int ParamSize);
+void InitTaskQueue(PTASK_QUEUE TaskQueue, TASK_ITEM ItemArray[], int ItemNumber, U32 *ParamBuffer, int BufferSize, U32 Event);
+int AddTaskToQueue(PTASK_QUEUE TaskQueue, TaskFunction TaskFunc, void *Param, int ParamSize);
 int DoTaskQueue(PTASK_QUEUE TaskQueue);
 
 #endif	// __TASK_QUEUE_H__

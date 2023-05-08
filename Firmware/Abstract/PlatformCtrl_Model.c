@@ -7,9 +7,15 @@
 //----------------------------------------------------------------------
 
 #include <stdio.h>
+#include <string.h>
+#include "PlatformCtrl.h"
 
-void EnableInt() {}
-void DisableInt() {}
+void CreateThread(ThreadFunction Thread, int Priority, void *Param) {}
+void ENTER_CRITICAL() {}
+void EXIT_CRITICAL() {}
+U32 EventCreate() { return 0; }
+void EventSet(U32 Event) {}
+void EventWait(U32 Event) {}
 
 #if defined _MSC_VER	// implementation of __builtin_xxx in Visual Studio
 
@@ -36,3 +42,41 @@ int __builtin_clz(unsigned int data)
 }
 
 #endif
+
+//*************** Load parameter (ephemeris/almanac, receiver position etc.) ****************
+//* in PC platform, this is a file read
+//* in real system, read from flash or host
+// Parameters:
+//   Buffer: address to store load parameters
+int LoadParameters(int Offset, void *Buffer, int Size)
+{
+	FILE *fp;
+	int ReturnValue;
+
+	if ((fp = fopen("ParamFile.bin", "rb")) == NULL)
+	{
+		memset(Buffer, 0, Size);
+		return 0;
+	}
+	fseek(fp, Offset, SEEK_SET);
+	ReturnValue = fread(Buffer, 1, Size, fp);
+	fclose(fp);
+
+	return ReturnValue;
+}
+
+//*************** Save parameter (ephemeris/almanac, receiver position etc.) ****************
+//* in PC platform, this is a file write
+//* in real system, write to flash or host
+// Parameters:
+//   Buffer: address to store load parameters
+void SaveParameters(int Offset, void *Buffer, int Size)
+{
+	FILE *fp;
+
+	if ((fp = fopen("ParamFile.bin", "rb+")) == NULL)
+		return;
+	fseek(fp, Offset, SEEK_SET);
+	fwrite(Buffer, 1, Size, fp);
+	fclose(fp);
+}

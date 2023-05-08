@@ -12,7 +12,8 @@
 #include "RegAddress.h"
 #include "BBDefines.h"
 #include "HWCtrl.h"
-#include "TaskQueue.h"
+#include "PlatformCtrl.h"
+#include "TaskManager.h"
 #include "AEManager.h"
 #include "TEManager.h"
 #include "ChannelManager.h"
@@ -29,19 +30,6 @@
 #define PARAM_OFFSET_GPSEPH		1024*24
 #define PARAM_OFFSET_BDSEPH		1024*32
 #define PARAM_OFFSET_GALEPH		1024*48
-
-TASK_QUEUE RequestTask;
-TASK_ITEM RequestItems[32];
-U32 RequestBuffer[1024];
-TASK_QUEUE BasebandTask;
-TASK_ITEM BasebandItems[32];
-U32 BasebandBuffer[1024];
-TASK_QUEUE PostMeasTask;
-TASK_ITEM PostMeasItems[32];
-U32 PostMeasBuffer[1024];
-TASK_QUEUE InputOutputTask;
-TASK_ITEM InputOutputItems[8];
-U32 InputOutputBuffer[1024];
 
 void LoadAllParameters();
 
@@ -60,14 +48,12 @@ void InterruptService()
 	if (IntFlag & (1 << 9))		// measurement interrupt
 		MeasurementProc();
 	if (IntFlag & (1 << 10))	// request interrupt
-		DoTaskQueue(&RequestTask);
+		DoRequestTask();
 	if (IntFlag & (1 << 11))	// AE interrupt
 	{
 		SetRegValue(ADDR_TE_FIFO_CONFIG, 0);			// FIFO config, disable dummy write
 		// call ProcessAcqResult on request interrupt, so it will sync with TE interrupt
-		AddTaskToQueue(&RequestTask, ProcessAcqResult, &AcqConfig, sizeof(AcqConfig));
-		if (!GetRegValue(ADDR_REQUEST_COUNT))	// request count is zero, set a new request, otherwise use exist request event
-			SetRegValue(ADDR_REQUEST_COUNT, 1);
+		AddToTask(TASK_REQUEST, ProcessAcqResult, &AcqConfig, sizeof(AcqConfig));
 	}
 	// clear interrupt
 	SetRegValue(ADDR_INTERRUPT_FLAG, IntFlag);
@@ -112,7 +98,7 @@ void FirmwareInitialize(StartType Start, PSYSTEM_TIME CurTime, LLH *CurPosition)
 	SetRegValue(ADDR_FIFO_CLEAR, 0x00000100);		// clear FIFO
 	SetRegValue(ADDR_MEAS_NUMBER, MeasurementInterval);	// measurement number
 	SetRegValue(ADDR_MEAS_COUNT, 0);				// measurement count
-	SetRegValue(ADDR_REQUEST_COUNT, 8);				// request count
+//	SetRegValue(ADDR_REQUEST_COUNT, 8);				// request count
 	SetRegValue(ADDR_INTERRUPT_MASK, 0x00000f00);	// enable all interrupts
 	SetRegValue(ADDR_TE_FIFO_CONFIG, 1);			// FIFO config, enable dummy write
 	SetRegValue(ADDR_TE_FIFO_BLOCK_SIZE, 4113);		// FIFO block size
@@ -123,10 +109,11 @@ void FirmwareInitialize(StartType Start, PSYSTEM_TIME CurTime, LLH *CurPosition)
 	SetRegValue(ADDR_TE_NOISE_FLOOR, 784 >> PRE_SHIFT_BITS);	// set initial noise floor
 	SetRegValue(ADDR_AE_CARRIER_FREQ, CARRIER_FREQ(0));
 	SetRegValue(ADDR_AE_CODE_RATIO, (int)(2.046e6 / SAMPLE_FREQ * 16777216. + 0.5));
-	SetRegValue(ADDR_AE_THRESHOLD, 37);
+	SetRegValue(ADDR_AE_THRESHOLD, 8);
 	SetRegValue(ADDR_AE_BUFFER_CONTROL, 0x300 + 5);	// start fill AE buffer
 
-	// initialize TE manager
+	// initialize firmware modules
+	TaskInitialize();
 	TEInitialize();
 	BdsDecodeInit();
 	MsrProcInit();
@@ -149,12 +136,6 @@ void FirmwareInitialize(StartType Start, PSYSTEM_TIME CurTime, LLH *CurPosition)
 		sv_list[i] = 0;
 	}
 	g_PvtConfig.PvtConfigFlags |= PVT_CONFIG_USE_KF;
-	// initial request task queue
-	InitTaskQueue(&RequestTask, RequestItems, 32, RequestBuffer, sizeof(RequestBuffer));
-	InitTaskQueue(&BasebandTask, BasebandItems, 32, BasebandBuffer, sizeof(BasebandBuffer));
-	InitTaskQueue(&PostMeasTask, PostMeasItems, 32, PostMeasBuffer, sizeof(PostMeasBuffer));
-	InitTaskQueue(&InputOutputTask, InputOutputItems, 8, InputOutputBuffer, sizeof(InputOutputBuffer));
-
 
 	// start acquisition
 	for (i = 0; i < 32; i ++)
@@ -176,7 +157,7 @@ void FirmwareInitialize(StartType Start, PSYSTEM_TIME CurTime, LLH *CurPosition)
 	AcqConfig.NoncohNumber = 1;
 	AcqConfig.StrideNumber = (Start == ColdStart) ? 19 : (Start == WarmStart) ? 3 : 1;
 	AcqConfig.StrideInterval = 500;
-	AddTaskToQueue(&RequestTask, AcquisitionTask, &AcqConfig, sizeof(AcqConfig));
+	AddWaitRequest(WAIT_TASK_AE, 8);	// wait 8ms to start AE
 }
 
 void LoadAllParameters()

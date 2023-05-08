@@ -28,8 +28,9 @@ typedef struct
 	ACQ_SAT_CONFIG SatConfig[TOTAL_CHANNEL_NUMBER];
 } ACQ_CONFIG, *PACQ_CONFIG;
 
-ACQ_CONFIG AcqConfig;
-int AcquisitionTask(void *Param);
+extern ACQ_CONFIG AcqConfig;
+void StartAcquisition(void);
+int AcqBufferReachTh(void);
 int ProcessAcqResult(void *Param);
 
 #endif // __AE_MANAGER_H__

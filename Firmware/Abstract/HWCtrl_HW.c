@@ -1,6 +1,6 @@
 //----------------------------------------------------------------------
-// HWCtrl_Model.cpp:
-//   Implementation for hardware access using C model
+// HWCtrl_HW.cpp:
+//   Implementation for hardware access on hardware platform
 //
 //          Copyright (C) 2020-2029 by Jun Mo, All rights reserved.
 //
@@ -8,33 +8,21 @@
 
 #include <stdio.h>
 #include <memory.h>
-#include "GnssTop.h"
 #include "HWCtrl.h"
-extern "C" {
-#include "TaskQueue.h"
-#include "FirmwarePortal.h"
-}
+#include "PlatformCtrl.h"
 
-#define BLOCK_SIZE (SAMPLE_FREQ / 1000)		// one data block has 1ms length
-
-static CGnssTop Baseband;
-static DebugFunction DebugFunc = 0;
-
-SYSTEM_TIME InitTime;
-LLH InitPosition;
+#define GNSS_BASE_ADDR 0xc8000000	// base address to map the GNSS on bus
+#define GNSS_INT_NUMBER 4	// GNSS interupt number
 
 //*************** Attach ISR to baseband interrupt ****************
 // Parameters:
 //   ISR: baseband interrupt service routine
 void AttachBasebandISR(InterruptFunction ISR)
 {
-	Baseband.InterruptService = ISR;
+//	xPortInstallInterruptHandler(GNSS_INT_NUMBER, ISR, NULL);	// call corresponding OS function
 }
 
-//*************** Attach a debug function to simulation model ****************
-// Parameters:
-//   Function: debug function to output tracking status
-void AttachDebugFunc(DebugFunction Function)
+void AttachDebugFunc(DebugFunction Function) {};
 {
 	DebugFunc = Function;
 }
@@ -46,7 +34,7 @@ void AttachDebugFunc(DebugFunction Function)
 //   data read from baseband
 U32 GetRegValue(int Address)
 {
-	return Baseband.GetRegValue(Address);
+	return *(U32*)(GNSS_BASE_ADDR + Address);
 }
 
 //*************** Host write to baseband ****************
@@ -55,7 +43,7 @@ U32 GetRegValue(int Address)
 //   Value: data written to baseband
 void SetRegValue(int Address, U32 Value)
 {
-	Baseband.SetRegValue(Address, Value);
+	*(U32*)(GNSS_BASE_ADDR + Address) = Value;
 }
 
 //*************** Copy baseband memory out to system memory ****************
@@ -66,8 +54,8 @@ void SetRegValue(int Address, U32 Value)
 void LoadMemory(U32 *DestAddr, U32 *BasebandAddr, int Size)
 {
 	int i;
-	for (i = 0; i < Size / 4; i ++)
-		DestAddr[i] = GetRegValue((int)(BasebandAddr + i));
+	for (i = 0; i < Size; i += 4)
+		DestAddr[i] = *(U32*)(GNSS_BASE_ADDR + BasebandAddr + i);
 }
 
 //*************** Copy baseband memory out to system memory ****************
@@ -78,8 +66,8 @@ void LoadMemory(U32 *DestAddr, U32 *BasebandAddr, int Size)
 void SaveMemory(U32 *BasebandAddr, U32 *SrcAddr, int Size)
 {
 	int i;
-	for (i = 0; i < Size / 4; i ++)
-		SetRegValue((int)(BasebandAddr + i), SrcAddr[i]);
+	for (i = 0; i < Size; i += 4)
+		*(U32*)(GNSS_BASE_ADDR + BasebandAddr + i) = SrcAddr[i];
 }
 
 //*************** Set input file of the scenario ****************
@@ -88,40 +76,12 @@ void SaveMemory(U32 *BasebandAddr, U32 *SrcAddr, int Size)
 //* in real system, this function has no effect
 // Parameters:
 //   FileName: file name
-void SetInputFile(char *FileName)
-{
-	Baseband.SetInputFile(FileName);
-	InitTime.Year = Baseband.UtcTime.Year;
-	InitTime.Month = Baseband.UtcTime.Month;
-	InitTime.Day = Baseband.UtcTime.Day;
-	InitTime.Hour = Baseband.UtcTime.Hour;
-	InitTime.Minute = Baseband.UtcTime.Minute;
-	InitTime.Second = (int)Baseband.UtcTime.Second;
-	InitTime.Millisecond = (int)((Baseband.UtcTime.Second - InitTime.Second) * 1000);
-	InitPosition.lon = Baseband.StartPos.lon;
-	InitPosition.lat = Baseband.StartPos.lat;
-	InitPosition.hae = Baseband.StartPos.alt;
-}
+void SetInputFile(char *FileName) {}
 
 //*************** enable RF clock ****************
 //* in PC platform, this will run baseband process until end of scenario
 //* in real system, this will enable RF and its ADC clock
 void EnableRF()
 {
-	static int ProcessCount = 0;
-
-	while (Baseband.Process(BLOCK_SIZE) >= 0)
-	{
-//		printf("ProcessCount=%d\n", ProcessCount);
-		if (ProcessCount == 1003)
-			ProcessCount = ProcessCount;
-		DoTaskQueue(&BasebandTask);
-		DoTaskQueue(&PostMeasTask);
-		DoTaskQueue(&InputOutputTask);
-		if (DebugFunc)
-			DebugFunc((void *)(&Baseband), ProcessCount);
-		ProcessCount ++;
-		if (ProcessCount == 40000)
-			break;
-	}
+	// call corresponding device driver functions to enable RF and ADC clock
 }

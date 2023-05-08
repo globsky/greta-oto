@@ -14,7 +14,7 @@
 #include "HWCtrl.h"
 #include "InitSet.h"
 #include "FirmwarePortal.h"
-#include "TaskQueue.h"
+#include "TaskManager.h"
 #include "ChannelManager.h"
 #include "BBCommonFunc.h"
 #include "PvtEntry.h"
@@ -366,7 +366,7 @@ int ComposeMeasurement(int ChannelID, PBB_MEASUREMENT Measurement, U32 *DataBuff
 		ChannelState->DataStream.ChannelState = ChannelState;
 		ChannelState->DataStream.PrevSymbol = ChannelState->LogicChannel;	// use PrevSymbol to store logic channel ID to BDS data decode
 		if ((ChannelState->State & DATA_STREAM_PRN2) && ChannelState->DataStream.DataCount > 0)
-			AddTaskToQueue(&PostMeasTask, BdsDecodeTask, &(ChannelState->DataStream), sizeof(DATA_STREAM) - 32 + WordNumber);
+			AddToTask(TASK_POSTMEAS, BdsDecodeTask, &(ChannelState->DataStream), sizeof(DATA_STREAM) - 32 + WordNumber);
 	}
 	ChannelState->DataStream.DataCount= 0;
 	ChannelState->DataStream.StartIndex = ChannelState->FrameCounter;
@@ -391,7 +391,7 @@ void CollectBitSyncData(PCHANNEL_STATE ChannelState)
 	if (++BitSyncData->CorDataCount == 20)	// 20 correlation result, send to bit sync task
 	{
 		BitSyncData->TimeTag = ChannelState->TrackingTime;
-		AddTaskToQueue(&BasebandTask, BitSyncTask, BitSyncData, sizeof(BIT_SYNC_DATA));
+		AddToTask(TASK_BASEBAND, BitSyncTask, BitSyncData, sizeof(BIT_SYNC_DATA));
 		BitSyncData->CorDataCount = 0;
 		BitSyncData->PrevCorData = BitSyncData->CorData[19];	// copy last one to PrevCorData for next 20 result
 	}
@@ -486,7 +486,7 @@ void DecodeDataStream(PCHANNEL_STATE ChannelState)
 				{
 					BitSyncData->TimeTag = ChannelState->TrackingTime;
 					BitSyncData->PrevCorData = ChannelState->BitSyncResult;	// stage of frame sync
-					AddTaskToQueue(&BasebandTask, DataSyncTask, BitSyncData, sizeof(BIT_SYNC_DATA));
+					AddToTask(TASK_BASEBAND, DataSyncTask, BitSyncData, sizeof(BIT_SYNC_DATA));
 					BitSyncData->CorDataCount = 0;
 				}
 			}

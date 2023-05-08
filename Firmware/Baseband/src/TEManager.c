@@ -11,7 +11,7 @@
 #include "BBDefines.h"
 #include "HWCtrl.h"
 #include "FirmwarePortal.h"
-#include "TaskQueue.h"
+#include "TaskManager.h"
 #include "ChannelManager.h"
 #include "TEManager.h"
 #include "PvtEntry.h"
@@ -154,7 +154,7 @@ void MeasurementProc()
 	MeasurementParam.MeasMask = ChannelOccupation;
 	MeasurementParam.MeasInterval = MeasurementInterval;
 	MeasurementParam.Measurements = BasebandMeasurement;
-	AddTaskToQueue(&PostMeasTask, MeasProcTask, &MeasurementParam, sizeof(BB_MEAS_PARAM));
+	AddToTask(TASK_POSTMEAS, MeasProcTask, &MeasurementParam, sizeof(BB_MEAS_PARAM));
 //	printf("MSR %d\n", MeasurementParam.RunTimeAcc);
 }
 
@@ -171,7 +171,7 @@ int MeasProcTask(void *Param)
 	PBB_MEASUREMENT Msr = MeasParam->Measurements;
 
 	if (OutputBasebandMeas)
-		AddTaskToQueue(&InputOutputTask, MeasPrintTask, Param, sizeof(BB_MEAS_PARAM));
+		AddToTask(TASK_INOUT, MeasPrintTask, Param, sizeof(BB_MEAS_PARAM));
 
 	MsrProc(Msr, MeasParam->MeasMask, MeasParam->MeasInterval, MeasurementInterval);
 	PvtProc(MeasParam->MeasInterval);
