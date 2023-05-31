@@ -139,9 +139,10 @@ int AddTaskToQueue(PTASK_QUEUE TaskQueue, TaskFunction TaskFunc, void *Param, in
 	// fill content of new task item
 	NewTask->CallbackFunction = TaskFunc;
 	NewTask->ParamAddr = (void *)ParamPointer;
-	NewTask->ParamSize = ParamSize;
+	NewTask->ParamSize = ParamSpace;
 	NewTask->pNextItem = 0;
-	memcpy(ParamPointer, Param, ParamSize);
+	if (ParamSize)
+		memcpy(ParamPointer, Param, ParamSize);
 
 	EXIT_CRITICAL();
 	return 1;	
@@ -171,7 +172,7 @@ void ReleaseWaitItem(PTASK_QUEUE TaskQueue)
 	Task->pNextItem = TaskQueue->AvailableQueue;
 	TaskQueue->AvailableQueue = Task;
 	// release parameter space
-	ParamAddrEnd = (U32 *)Task->ParamAddr + (Task->ParamSize) / 4;
+	ParamAddrEnd = (U32 *)Task->ParamAddr + Task->ParamSize;
 	TaskQueue->ReadPosition = ParamAddrEnd - TaskQueue->ParamBuffer;
 	if (TaskQueue->ReadPosition >= TaskQueue->BufferSize)
 		TaskQueue->ReadPosition = 0;

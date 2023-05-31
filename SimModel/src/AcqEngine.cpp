@@ -114,7 +114,7 @@ U32 CAcqEngine::GetRegValue(int Address)
 	case ADDR_OFFSET_AE_BUFFER_CONTROL:
 		return BufferThreshold;
 	case ADDR_OFFSET_AE_STATUS:
-		return 	0;
+		return 	0xe0000;	// set finish, full and reach threshold flag
 	case ADDR_OFFSET_AE_CARRIER_FREQ:
 		return 	RateCarrierFreq;
 	case ADDR_OFFSET_AE_CODE_RATIO:
@@ -198,7 +198,7 @@ void CAcqEngine::DoNonCoherentSum(AeBufferSatParam *pSatParam)
 		for (j = StartIndex; j <= EndIndex; j ++)
 		{
 			OffsetIndex = (int)(fabs(CodeOffset - j) * 64 + 0.5);
-			PeakAmplitude[j-StartIndex] = Bpsk2PeakValues[OffsetIndex] * pSatParam->Amplitude;
+			PeakAmplitude[j-StartIndex] = PeakValues[OffsetIndex] * pSatParam->Amplitude;
 		}
 	}
 	else	// no correlation peak
@@ -479,7 +479,7 @@ void CAcqEngine::AssignChannelParam(PSATELLITE_PARAM pSatelliteParam, GNSS_TIME 
 		Time2CodeEnd += (BitLength - MilliSeconds);
 	pSatAcqParam->Time2CodeEnd = (Time2CodeEnd + 2.5 / SAMPLES_1MS) * 2046;	// convert to unit of 1/2 code chip with compensation of filter delay (2.5 samples)
 	pSatAcqParam->Doppler = GetDoppler(pSatelliteParam, 0);
-	pSatAcqParam->Amplitude = 2 * pow(10, (pSatelliteParam->CN0 - 3000) / 2000.) * NOISE_AMP_SQRT2;
+	pSatAcqParam->Amplitude = 1.4142135 * pow(10, (pSatelliteParam->CN0 - 3000) / 2000.) * NOISE_AMP_SQRT2;
 	// generate bits
 	BitCount = 0;
 	while (BitCount < TotalBits)

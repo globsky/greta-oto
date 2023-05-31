@@ -20,8 +20,6 @@
 #define INOUT_STACK_SIZE 4096
 #define HIGHEST_PRIORITY 10	// highest priority for GNSS
 
-void EnableInt() {}	// will not call this function directly
-void DisableInt() {}	// will not call this function directly
 void ENTER_CRITICAL() { taskENTER_CRITICAL(); }
 void EXIT_CRITICAL() { taskEXIT_CRITICAL(); }
 

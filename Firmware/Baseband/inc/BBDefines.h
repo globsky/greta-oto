@@ -47,7 +47,7 @@ typedef struct
 #define STATE_BUF_SET_DUMP_LENGTH(pStateBuffer, Length) ((pStateBuffer)->DumpLength = (Length))
 
 // configuration for individual field
-#define STATE_BUF_SET_FRE_SHIFT(pStateBuffer, PreShift)         SET_FIELD((pStateBuffer)->CorrConfig, 0, 2, PreShift)
+#define STATE_BUF_SET_PRE_SHIFT(pStateBuffer, PreShift)         SET_FIELD((pStateBuffer)->CorrConfig, 0, 2, PreShift)
 #define STATE_BUF_SET_POST_SHIFT(pStateBuffer, PostShift)       SET_FIELD((pStateBuffer)->CorrConfig, 2, 2, PostShift)
 #define STATE_BUF_DATA_IN_I(pStateBuffer)                       CLEAR_BIT32((pStateBuffer)->CorrConfig, 5)
 #define STATE_BUF_DATA_IN_Q(pStateBuffer)                       SET_BIT32((pStateBuffer)->CorrConfig, 5)

@@ -519,7 +519,7 @@ void CalcCN0(PCHANNEL_STATE ChannelState)
 	int CN0Gap, ResetPower;
 
 	// calculate noise power 2(sigma^2) = 4 * (NF^2) / pi
-	NoiseFloor = (NoiseFloor * NoiseFloor * 163) >> 7;
+	NoiseFloor = (NoiseFloor * NoiseFloor * 163) >> 8;
 	// calculate adjusted noise power (2 * sigma^2 * Nc * Nn / 2^Shift)
 	NoiseFloor = (NoiseFloor * CohRatio * NoncohRatio) >> Shift;
 	// remove adjusted noise power from total power

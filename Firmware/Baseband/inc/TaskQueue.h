@@ -17,7 +17,7 @@ typedef struct tag_TASK_ITEM
 {
 	TaskFunction CallbackFunction;
 	void *ParamAddr;	// address of parameter in buffer (align to DWORD)
-	int ParamSize;	// size of parameter
+	int ParamSize;	// size of parameter (in DWORD)
 	struct tag_TASK_ITEM *pNextItem;	// pointer to next item in link list
 } TASK_ITEM, *PTASK_ITEM;
 

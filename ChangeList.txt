@@ -143,3 +143,10 @@
 	Function and feature added
 		Add TaskManager to help manage task queues and task threads
 		Add demo code of hardware and platform abstracted functions on FreeRTOS
+5/30/2023
+	Function and feature change
+		Task can accept parameter with 0 size
+		CN0 to Amplitude convert corrected in SimModel
+		CN0 calculation correction in firmware
+	Function and feature added
+		Add fast AE model in SimModel implemented in AcqEngineFase.h and AcqEngineFast.cpp

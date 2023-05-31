@@ -18,7 +18,7 @@
 #include "XmlInterpreter.h"
 #include "SatelliteParam.h"
 #include "TeFifoSim.h"
-#include "AcqEngine.h"
+#include "AcqEngineFast.h"
 #include "TrackingEngine.h"
 
 typedef void (*InterruptFunction)();
