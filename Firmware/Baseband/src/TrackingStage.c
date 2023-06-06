@@ -48,6 +48,8 @@ void SetNHConfig(PCHANNEL_STATE ChannelState, int NHPos, const unsigned int *NHC
 void SwitchTrackingStage(PCHANNEL_STATE ChannelState, unsigned int TrackingStage)
 {
 	PTRACKING_CONFIG CurTrackingConfig = TrackingConfig[STAGE_CONFIG_INDEX(TrackingStage)][ChannelState->FreqID];
+	unsigned int PrevStage = (ChannelState->State & STAGE_MASK);
+	int CohCount;
 
 //	printf("SV%02d switch to %d\n", ChannelState->Svid, TrackingStage);
 	ChannelState->TrackingTime = 0;		// reset tracking time
@@ -86,6 +88,13 @@ void SwitchTrackingStage(PCHANNEL_STATE ChannelState, unsigned int TrackingStage
 		ChannelState->DataStream.PrevReal = ChannelState->DataStream.PrevImag = ChannelState->DataStream.PrevSymbol = 0;
 		ChannelState->DataStream.CurReal = ChannelState->DataStream.CurImag = 0;
 		ChannelState->DataStream.DataCount = ChannelState->DataStream.CurrentAccTime = 0;
+		if (PrevStage == STAGE_BIT_SYNC)	// switch from bit sync, need to align to bit edge
+		{
+			CohCount = ChannelState->BitSyncResult % CurTrackingConfig->CoherentNumber;
+			ChannelState->TrackingTime = ChannelState->BitSyncResult - CohCount;		// reset tracking time from previous bit edge
+			STATE_BUF_SET_COH_COUNT(&(ChannelState->StateBufferCache), CohCount);
+			ChannelState->State |= STATE_CACHE_STATE_DIRTY;
+		}
 	}
 	// set coherent/FFT/non-coherent number
 	STATE_BUF_SET_COH_NUMBER(&(ChannelState->StateBufferCache), CurTrackingConfig->CoherentNumber);
@@ -106,34 +115,12 @@ void SwitchTrackingStage(PCHANNEL_STATE ChannelState, unsigned int TrackingStage
 //   0 for no tracking stage change, 1 for tracking stage change
 int StageDetermination(PCHANNEL_STATE ChannelState)
 {
-	int TrackingStage = ChannelState->State & STAGE_MASK;
+	int CurStage = ChannelState->State & STAGE_MASK;
 	int Time, Jump;
 	unsigned int StateValue;
+	int StageChange = 0;
 
-	// determine stage switch cases before timeout
-	if (TrackingStage == STAGE_BIT_SYNC && ChannelState->BitSyncResult)	// bit sync finished
-	{
-		if (ChannelState->BitSyncResult < 0)	// bit sync fail
-			SwitchTrackingStage(ChannelState, STAGE_RELEASE);
-		else if (ChannelState->BitSyncResult <= 20)	// bit sync success, adjust 
-		{
-			Time = (ChannelState->TrackingTime) % 20;	// remainder of TrackTime divided by 20 (0~19)
-			Time = ChannelState->BitSyncResult + 20 - Time;	// gap to next bit edge
-			ChannelState->SkipCount = Time % 20;	// modulo 20ms
-			ChannelState->BitSyncResult = 21;	// ready to switch to tracking
-			if (ChannelState->SkipCount > 0)	// if need to skip to align bit edge
-			{
-				ChannelState->SkipCount --;	// minus 1 because skip counting from NEXT coherent result
-				return 0;
-			}
-		}
-		if (ChannelState->BitSyncResult == 21 && ChannelState->SkipCount == 0)	// switch from bit sync to tracking
-		{
-			SwitchTrackingStage(ChannelState, STAGE_TRACK);
-			return 1;
-		}
-	}
-
+	// B1C and L1C set pilot channel NH after data sync
 	if (FREQ_ID_IS_B1C_L1C(ChannelState->FreqID) && ChannelState->BitSyncResult &0x1800 && (ChannelState->TrackingTime % 20) == 0)	// data sync finished and at 20ms boundary
 	{
 		// switch to decode data channel
@@ -165,55 +152,84 @@ int StageDetermination(PCHANNEL_STATE ChannelState)
 		ChannelState->DataStream.StartIndex = ChannelState->FrameCounter;
 	}
 
-	// switch out from hold
-	if (TrackingStage == STAGE_HOLD3 && ChannelState->FftCount == 0 && ChannelState->NonCohCount == 0)
-	{
-		if (ChannelState->FastCN0 > 2800)
-		{
-			SwitchTrackingStage(ChannelState, STAGE_PULL_IN);
-			ChannelState->LoseLockCounter = 0;
-			return 1;
-		}
-		else	// scan code phases within code search range
-		{
-			if (++ChannelState->CodeSearchCount == 5)
-				Jump = ChannelState->CodeSearchCount / 2;
-			else
-				Jump = ChannelState->CodeSearchCount;
-			if ((ChannelState->CodeSearchCount & 1) == 0)
-				Jump = -Jump;
-			if (ChannelState->CodeSearchCount == 5)
-				ChannelState->CodeSearchCount = 0;
-			Jump *= 7;
-			StateValue = GetRegValue((U32)(&(ChannelState->StateBufferHW->DumpCount)));
-			StateValue |= (Jump & 0xff) << 8;
-			SetRegValue((U32)(&(ChannelState->StateBufferHW->DumpCount)),  StateValue);
-		}
-	}
-
 	// lose lock, switch to hold
-	if (TrackingStage >= STAGE_PULL_IN && ChannelState->LoseLockCounter > 100 && ChannelState->NonCohCount == 0)
+	if (CurStage >= STAGE_PULL_IN && ChannelState->LoseLockCounter > 100 && ChannelState->NonCohCount == 0)
 	{
 		SwitchTrackingStage(ChannelState, STAGE_HOLD3);
 		return 1;
 	}
 
-	// CN0 change
-	if (TrackingStage == STAGE_TRACK + 1 && ChannelState->CNOLowCount > 500)	// CN0 low, switch to track 2
+	// determine stage switch cases before timeout
+	switch (CurStage)
 	{
-		SwitchTrackingStage(ChannelState, STAGE_TRACK + 2);
-		return 1;
-	}
-	if (TrackingStage == STAGE_TRACK + 2 && ChannelState->CN0HighCount > 500)	// CN0 high, switch to track 0
-	{
-		SwitchTrackingStage(ChannelState, STAGE_TRACK);
-		return 1;
+	case STAGE_HOLD3:	// holding when signal lost
+		if (ChannelState->FftCount == 0 && ChannelState->NonCohCount == 0)
+		{
+			if (ChannelState->FastCN0 > 2800)	// signal recovered
+			{
+				SwitchTrackingStage(ChannelState, STAGE_PULL_IN);
+				ChannelState->LoseLockCounter = 0;
+				StageChange = 1;
+			}
+			else	// scan code phases within code search range
+			{
+				if (++ChannelState->CodeSearchCount == 5)
+					Jump = ChannelState->CodeSearchCount / 2;
+				else
+					Jump = ChannelState->CodeSearchCount;
+				if ((ChannelState->CodeSearchCount & 1) == 0)
+					Jump = -Jump;
+				if (ChannelState->CodeSearchCount == 5)
+					ChannelState->CodeSearchCount = 0;
+				Jump *= 7;
+				StateValue = GetRegValue((U32)(&(ChannelState->StateBufferHW->DumpCount)));
+				StateValue |= (Jump & 0xff) << 8;
+				SetRegValue((U32)(&(ChannelState->StateBufferHW->DumpCount)),  StateValue);
+			}
+		}
+		break;
+	case STAGE_BIT_SYNC:
+		if (ChannelState->BitSyncResult)
+		{
+			if (ChannelState->BitSyncResult < 0)	// bit sync fail
+				SwitchTrackingStage(ChannelState, STAGE_RELEASE);
+			else
+			{
+				ChannelState->BitSyncResult = (ChannelState->TrackingTime- ChannelState->BitSyncResult) % 20;	// ms number passed bit edge
+				SwitchTrackingStage(ChannelState, STAGE_TRACK);
+			}
+			StageChange = 1;
+		}
+		break;
+	case STAGE_TRACK + 1:
+		if (ChannelState->CNOLowCount > 500)	// CN0 low, switch to track 2
+		{
+			SwitchTrackingStage(ChannelState, STAGE_TRACK + 2);
+			StageChange = 1;
+		}
+		break;
+	case STAGE_TRACK + 2:
+		if (ChannelState->CN0HighCount > 500)	// CN0 high, switch to track 0
+		{
+			SwitchTrackingStage(ChannelState, STAGE_TRACK);
+			StageChange = 1;
+		}
+		break;
 	}
 
-	if (ChannelState->TrackingTimeout < 0 || ChannelState->TrackingTime < ChannelState->TrackingTimeout)	// not timeout, do not switch stage
+	// timeout determineation
+	if (StageChange)
+		return 1;
+	else if (ChannelState->TrackingTimeout < 0 || ChannelState->TrackingTime < ChannelState->TrackingTimeout)	// not timeout, do not switch stage
 		return 0;
-	if (TrackingStage == STAGE_PULL_IN)
+
+	// switch after timeout
+	switch (CurStage)
 	{
+	case STAGE_HOLD3:
+		SwitchTrackingStage(ChannelState, STAGE_RELEASE);
+		break;
+	case STAGE_PULL_IN:
 		// reset data for bit/frame sync
 		ChannelState->BitSyncData.CorDataCount = 0;
 		ChannelState->BitSyncData.ChannelState = ChannelState;
@@ -224,13 +240,8 @@ int StageDetermination(PCHANNEL_STATE ChannelState)
 			SwitchTrackingStage(ChannelState, STAGE_BIT_SYNC);
 		else	// other signal switch to track 0
 			SwitchTrackingStage(ChannelState, STAGE_TRACK);
-	}
-	else if (TrackingStage == STAGE_HOLD3)
-	{
-		SwitchTrackingStage(ChannelState, STAGE_RELEASE);
-	}
-	else if (TrackingStage >= STAGE_TRACK)
-	{
+		break;
+	case STAGE_TRACK:
 		if (ChannelState->CN0 > 2500)	// strong signal switch to track 1
 		{
 			SwitchTrackingStage(ChannelState,  STAGE_TRACK + 1);
@@ -245,6 +256,8 @@ int StageDetermination(PCHANNEL_STATE ChannelState)
 		}
 		else	// weak signal switch to track 2
 			SwitchTrackingStage(ChannelState,  STAGE_TRACK + 2);
+		break;
 	}
+
 	return 1;
 }

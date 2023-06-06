@@ -131,8 +131,8 @@ do \
 #define STATE_CACHE_FREQ_DIRTY   0x100000	// carrier and code frequency (8/9) need to sync to HW
 #define STATE_CACHE_CONFIG_DIRTY 0x200000	// CorrConfig, NHConfig and CohConfig (2/3/4) need to sync to HW
 #define STATE_CACHE_CODE_DIRTY   0x400000	// PrnCount, CodePhase, DumpCount and CorrState (7/10/11/12) need to sync to HW
-#define STATE_CACHE_STATUS_DIRTY 0x800000	// CorrState (12) need to be sync to HW
-#define STATE_CACHE_DIRTY (STATE_CACHE_FREQ_DIRTY | STATE_CACHE_CONFIG_DIRTY | STATE_CACHE_CODE_DIRTY | STATE_CACHE_STATUS_DIRTY)
+#define STATE_CACHE_STATE_DIRTY  0x800000	// CorrState (12) need to be sync to HW
+#define STATE_CACHE_DIRTY (STATE_CACHE_FREQ_DIRTY | STATE_CACHE_CONFIG_DIRTY | STATE_CACHE_CODE_DIRTY | STATE_CACHE_STATE_DIRTY)
 
 #define SYNC_CACHE_READ_DATA   1
 #define SYNC_CACHE_READ_STATUS 2

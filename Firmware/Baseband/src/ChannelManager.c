@@ -172,6 +172,8 @@ void SyncCacheWrite(PCHANNEL_STATE ChannelState)
 			SetRegValue((U32)(&(ChannelState->StateBufferHW->DumpCount)), ChannelState->StateBufferCache.DumpCount);
 			SetRegValue((U32)(&(ChannelState->StateBufferHW->CorrState)), ChannelState->StateBufferCache.CorrState);
 		}
+		if (ChannelState->State & STATE_CACHE_STATE_DIRTY)	// update CorrState
+			SetRegValue((U32)(&(ChannelState->StateBufferHW->CorrState)), ChannelState->StateBufferCache.CorrState);
 	}
 	ChannelState->State &= ~STATE_CACHE_DIRTY;	// clear cache dirty flags
 }

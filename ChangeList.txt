@@ -150,3 +150,7 @@
 		CN0 calculation correction in firmware
 	Function and feature added
 		Add fast AE model in SimModel implemented in AcqEngineFase.h and AcqEngineFast.cpp
+6/6/2023
+	Function and feature change
+		Do not wait to bit edge when switching from BIT_SYNC to TRACK
+		Other minor optimization and changes in tracking stage switch

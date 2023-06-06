@@ -18,6 +18,7 @@ void main()
 {
 	DebugFile = fopen("TrackState.txt", "w");
 	SetInputFile("test_obs2.xml");
+	fprintf(DebugFile, "SV# SatPhase SatDoppler SatCode LocalPhase LocalFre LocalCode PhaseDiff FreqDiff  PsrDiff\n");
 
 	AttachDebugFunc(DebugOutput);
 	FirmwareInitialize(HotStart, &InitTime, &InitPosition);
@@ -39,7 +40,8 @@ void DebugOutput(void *DebugParam, int DebugValue)
 	double LocalPhase, LocalDoppler, CodePhase;
 	double PhaseDiff, DopplerDiff, CodeDiff;
 	GNSS_TIME TransmitTime;
-	CTrackingChannel *TrackingChannel; 
+	CTrackingChannel *TrackingChannel;
+	double CodeLength = 299792458 / 1.023e6;
 
 	if (!DebugFile)
 		return;
@@ -80,7 +82,7 @@ void DebugOutput(void *DebugParam, int DebugValue)
 			DopplerDiff = LocalDoppler - Doppler;
 			CodeDiff = CodePhase - PeakPosition;
 			fprintf(DebugFile, "%c%02d %8.6f %9.3f %9.3f %8.6f %9.3f %9.3f %9.6f %8.3f %8.3f\n", (pSatParam->system == GpsSystem) ? 'G' : (pSatParam->system == BdsSystem) ? 'C' : 'E',
-				pSatParam->svid, CarrierPhase, Doppler, PeakPosition, LocalPhase, LocalDoppler, CodePhase, PhaseDiff, DopplerDiff, CodeDiff);
+				pSatParam->svid, CarrierPhase, Doppler, PeakPosition, LocalPhase, LocalDoppler, CodePhase, PhaseDiff, DopplerDiff, CodeDiff * CodeLength / 2);
 		}
 	}
 }
