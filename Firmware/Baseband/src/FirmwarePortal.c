@@ -42,7 +42,12 @@ void LoadAllParameters();
 void InterruptService()
 {
 	unsigned int IntFlag = GetRegValue(ADDR_INTERRUPT_FLAG);
+	unsigned int MeasCount = GetRegValue(ADDR_MEAS_COUNT);
 	
+	if (IntFlag & (1 << 9))
+		MeasIntCounter++;
+	BasebandTickCount = MeasIntCounter * MeasurementInterval + MeasCount;
+
 	if (IntFlag & (1 << 8))		// coherent sum interrupt
 		CohSumInterruptProc();
 	if (IntFlag & (1 << 9))		// measurement interrupt
@@ -50,11 +55,7 @@ void InterruptService()
 	if (IntFlag & (1 << 10))	// request interrupt
 		DoRequestTask();
 	if (IntFlag & (1 << 11))	// AE interrupt
-	{
-		SetRegValue(ADDR_TE_FIFO_CONFIG, 0);			// FIFO config, disable dummy write
-		// call ProcessAcqResult on request interrupt, so it will sync with TE interrupt
-		AddToTask(TASK_REQUEST, ProcessAcqResult, &AcqConfig, sizeof(AcqConfig));
-	}
+		AeInterruptProc();
 	// clear interrupt
 	SetRegValue(ADDR_INTERRUPT_FLAG, IntFlag);
 	// if it is TE interrupt, resume TE
@@ -88,6 +89,7 @@ void FirmwareInitialize(StartType Start, PSYSTEM_TIME CurTime, LLH *CurPosition)
 	0 };	// for debug use only
 	int SatNumber;
 	SAT_PREDICT_PARAM SatList[32];
+	PACQ_CONFIG pAcqConfig;
 
 	MeasurementInterval = 100;
 
@@ -107,14 +109,11 @@ void FirmwareInitialize(StartType Start, PSYSTEM_TIME CurTime, LLH *CurPosition)
 	SetRegValue(ADDR_TE_CODE_LENGTH, 0x00ffc000);	// set L1CA code length
 	SetRegValue(ADDR_TE_NOISE_CONFIG, 1);			// set noise smooth factor
 	SetRegValue(ADDR_TE_NOISE_FLOOR, 784 >> PRE_SHIFT_BITS);	// set initial noise floor
-	SetRegValue(ADDR_AE_CARRIER_FREQ, CARRIER_FREQ(0));
-	SetRegValue(ADDR_AE_CODE_RATIO, (int)(2.046e6 / SAMPLE_FREQ * 16777216. + 0.5));
-	SetRegValue(ADDR_AE_THRESHOLD, 8);
-	SetRegValue(ADDR_AE_BUFFER_CONTROL, 0x300 + 5);	// start fill AE buffer
 
 	// initialize firmware modules
 	TaskInitialize();
 	TEInitialize();
+	AEInitialize();
 	BdsDecodeInit();
 	MsrProcInit();
 	PvtProcInit((PRECEIVER_INFO)0);
@@ -138,26 +137,64 @@ void FirmwareInitialize(StartType Start, PSYSTEM_TIME CurTime, LLH *CurPosition)
 	g_PvtConfig.PvtConfigFlags |= PVT_CONFIG_USE_KF;
 
 	// start acquisition
-	for (i = 0; i < 32; i ++)
+	// first task search L1C/A signal
+	SatNumber = 0;
+	if ((pAcqConfig = GetFreeAcqTask()) != NULL)
 	{
-		if (sv_list[i] == 0)
-			break;
-		AcqConfig.SatConfig[i].FreqSvid = (U8)sv_list[i];
-		switch (GET_FREQ_ID(sv_list[i]))
+		for (i = 0; i < 32; i ++)
 		{
-		case FREQ_L1CA:	AcqConfig.SatConfig[i].CodeSpan = 3; break;
-		case FREQ_E1:	AcqConfig.SatConfig[i].CodeSpan = 12; break;
-		case FREQ_B1C:
-		case FREQ_L1C:	AcqConfig.SatConfig[i].CodeSpan = 30; break;
+			if (sv_list[i] == 0)
+				break;
+			if (GET_FREQ_ID(sv_list[i]) != FREQ_L1CA)
+				continue;
+			pAcqConfig->SatConfig[SatNumber].FreqSvid = (U8)sv_list[i];
+			switch (GET_FREQ_ID(sv_list[i]))
+			{
+			case FREQ_L1CA:	pAcqConfig->SatConfig[SatNumber].CodeSpan = 3; break;
+			case FREQ_E1:	pAcqConfig->SatConfig[SatNumber].CodeSpan = 12; break;
+			case FREQ_B1C:
+			case FREQ_L1C:	pAcqConfig->SatConfig[SatNumber].CodeSpan = 30; break;
+			}
+			pAcqConfig->SatConfig[SatNumber].CenterFreq = (Start == ColdStart) ? 0 : (int)SatList[i].Doppler;
+			SatNumber ++;
 		}
-		AcqConfig.SatConfig[i].CenterFreq = (Start == ColdStart) ? 0 : (int)SatList[i].Doppler;
+		pAcqConfig->SignalType = 0;	// for BPSK acquisition
+		pAcqConfig->AcqChNumber = SatNumber;
+		pAcqConfig->CohNumber = 4;
+		pAcqConfig->NoncohNumber = 1;
+		pAcqConfig->StrideNumber = (Start == ColdStart) ? 19 : (Start == WarmStart) ? 3 : 1;
+		pAcqConfig->StrideInterval = 500;
+		AddAcqTask(pAcqConfig);
 	}
-	AcqConfig.AcqChNumber = i;
-	AcqConfig.CohNumber = 4;
-	AcqConfig.NoncohNumber = 1;
-	AcqConfig.StrideNumber = (Start == ColdStart) ? 19 : (Start == WarmStart) ? 3 : 1;
-	AcqConfig.StrideInterval = 500;
-	AddWaitRequest(WAIT_TASK_AE, 8);	// wait 8ms to start AE
+	// second task search BOC signal
+	SatNumber = 0;
+	if ((pAcqConfig = GetFreeAcqTask()) != NULL)
+	{
+		for (i = 0; i < 32; i ++)
+		{
+			if (sv_list[i] == 0)
+				break;
+			if (GET_FREQ_ID(sv_list[i]) == FREQ_L1CA)
+				continue;
+			pAcqConfig->SatConfig[SatNumber].FreqSvid = (U8)sv_list[i];
+			switch (GET_FREQ_ID(sv_list[i]))
+			{
+			case FREQ_L1CA:	pAcqConfig->SatConfig[SatNumber].CodeSpan = 3; break;
+			case FREQ_E1:	pAcqConfig->SatConfig[SatNumber].CodeSpan = 12; break;
+			case FREQ_B1C:
+			case FREQ_L1C:	pAcqConfig->SatConfig[SatNumber].CodeSpan = 30; break;
+			}
+			pAcqConfig->SatConfig[SatNumber].CenterFreq = (Start == ColdStart) ? 0 : (int)SatList[i].Doppler;
+			SatNumber ++;
+		}
+		pAcqConfig->SignalType = 1;	// for BOC acquisition
+		pAcqConfig->AcqChNumber = SatNumber;
+		pAcqConfig->CohNumber = 4;
+		pAcqConfig->NoncohNumber = 1;
+		pAcqConfig->StrideNumber = (Start == ColdStart) ? 19 : (Start == WarmStart) ? 3 : 1;
+		pAcqConfig->StrideInterval = 500;
+		AddAcqTask(pAcqConfig);
+	}
 }
 
 void LoadAllParameters()

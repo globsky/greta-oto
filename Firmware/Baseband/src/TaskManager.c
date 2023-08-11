@@ -121,7 +121,6 @@ void DoRequestTask()
 	int i;
 	int SetNewRequest = 0;
 
-	DoTaskQueue(&RequestTask);	// first process immediate request
 	if (ReqPendingFlag)	// scan wait requests
 	{
 		for (i = 0; i < MAX_REQ_WAIT_TASK; i ++)
@@ -141,6 +140,7 @@ void DoRequestTask()
 	}
 	if (SetNewRequest)
 		SetRegValue(ADDR_REQUEST_COUNT, REQUEST_SCAN_INTERVAL);
+	DoTaskQueue(&RequestTask);	// process immediate request
 }
 
 //*************** Task process thread ****************

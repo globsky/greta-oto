@@ -20,6 +20,7 @@ typedef struct
 
 typedef struct
 {
+	int SignalType;	// 0: acquire BPSK signal, 1: acquire BOC signal
 	int AcqChNumber;
 	int CohNumber;
 	int NoncohNumber;
@@ -28,7 +29,10 @@ typedef struct
 	ACQ_SAT_CONFIG SatConfig[TOTAL_CHANNEL_NUMBER];
 } ACQ_CONFIG, *PACQ_CONFIG;
 
-extern ACQ_CONFIG AcqConfig;
+void AEInitialize(void);
+PACQ_CONFIG GetFreeAcqTask(void);
+int AddAcqTask(PACQ_CONFIG pAcqConfig);
+void AeInterruptProc();
 void StartAcquisition(void);
 int AcqBufferReachTh(void);
 int ProcessAcqResult(void *Param);

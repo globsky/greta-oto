@@ -259,6 +259,7 @@ void CAcqEngine::GetNoisePeaks(double NoisePeaks[3])
 double CAcqEngine::GetSignalPeak(AeBufferSatParam *pSatParam, int &FreqBin, int &Cor)
 {
 	int PhaseStart, PhaseEnd, PhasePeak, OffsetIndex;
+	int StrideCount, StrideOffset;
 	double Time2CodeEnd;
 	double FreqDiff, FreqDiffMin = 1e5, CarrierFreqMin = CenterFreq;
 	double DftTwiddleFreq = DftTwiddlePhase * 500 / PI;
@@ -276,7 +277,7 @@ double CAcqEngine::GetSignalPeak(AeBufferSatParam *pSatParam, int &FreqBin, int 
 		return 0.0;
 
 	// determine phase search range from PhaseStart to PhaseEnd
-	PhaseStart = ((ReadAddress + CodeRoundCount) * MF_DEPTH) % PhaseCount;
+	PhaseStart = (ReadAddress * MF_DEPTH) % PhaseCount;
 	PhaseEnd = PhaseStart + MF_DEPTH * CodeSpan;
 	// code phase number to PRN code boundary (if less than start search range, set to next boundary)
 	Time2CodeEnd = pSatParam->Time2CodeEnd;
@@ -347,7 +348,6 @@ double CAcqEngine::GetSignalPeak(AeBufferSatParam *pSatParam, int &FreqBin, int 
 
 			DopplerPhase += 2 * PI * (CarrierFreq - pSatParam->Doppler) / 1000;
 			DftTwiddleFactor += DftTwiddlePhase;
-//			printf("DopplerPhase=%.5f %DftPhase=%.5f\n", DopplerPhase/2/PI, DftTwiddleFactor/2/PI);
 			// increase CurMsCount and determine bit position
 			if (pSatParam && ++CurMsCount == pSatParam->BitLength)
 			{
@@ -383,7 +383,7 @@ void CAcqEngine::SearchOneChannel(AeBufferSatParam *pSatParam, int Channel)
 	// initialize CurMsCount and CurBitIndex
 	if (pSatParam)
 	{
-		CurMsCount = pSatParam->MsCount + (CodeRoundCount + ReadAddress) / 3;
+		CurMsCount = pSatParam->MsCount + ReadAddress / 3;
 		CurBitIndex = CurMsCount / pSatParam->BitLength;
 		CurMsCount %= pSatParam->BitLength;
 	}
@@ -430,6 +430,7 @@ void CAcqEngine::SearchOneChannel(AeBufferSatParam *pSatParam, int Channel)
 	// early terminate acquisition if amplitude of maximum peak larger than threshold
 	Success = (NoisePeaks[0] >= PeakThreshold) ? 1 : 0;
 
+	// assign result in channel config buffer
 	ChannelConfig[Channel][4] = (Success << 31) | (GlobalExp << 24) | (NoiseFloorInt & 0x7ffff);
 	for (i = 0; i < 3; i ++)
 	{
@@ -444,6 +445,8 @@ void CAcqEngine::SearchOneChannel(AeBufferSatParam *pSatParam, int Channel)
 			PeakAmp = ((int)NoisePeaks[i]) >> GlobalExp;
 			// random FreqBin
 			PeakFreqBin = (rand() % (8 * StrideNumber)) - (StrideNumber - 1) / 2 * 8;
+			if (CoherentNumber == 1)
+				PeakFreqBin &= ~7;	// no DFT, DFT bin field always 0
 			PeakCor = rand() % MaxCor;
 		}
 		ChannelConfig[Channel][5+i] = (PeakAmp << 24) | ((PeakFreqBin & 0x1ff) << 15) | PeakCor;

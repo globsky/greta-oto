@@ -12,8 +12,95 @@
 #include "AEManager.h"
 #include "TEManager.h"
 #include "ChannelManager.h"
+#include "TaskManager.h"
 
-ACQ_CONFIG AcqConfig;
+#define ACQ_TASK_NUMBER 2
+
+static PACQ_CONFIG CurAcqTask;
+static unsigned int AcqTaskPending;
+static int CurSignalType;
+static unsigned int AcqBufferTimeTag;
+static ACQ_CONFIG AcqConfig[ACQ_TASK_NUMBER];
+
+static void DoAcqTask();
+static void FillAeBuffer(PACQ_CONFIG pAcqConfig);
+
+void AEInitialize(void)
+{
+	CurSignalType = -1;
+	CurAcqTask= (PACQ_CONFIG)0;
+	AcqTaskPending = 0;
+	AcqBufferTimeTag = 0;
+}
+
+PACQ_CONFIG GetFreeAcqTask(void)
+{
+	int i;
+
+	for (i = 0; i < ACQ_TASK_NUMBER; i ++)
+		if ((AcqTaskPending & (1 << i)) == 0)
+			return &AcqConfig[i];
+	return (PACQ_CONFIG)0;
+}
+
+int AddAcqTask(PACQ_CONFIG pAcqConfig)
+{
+	int TaskIndex = pAcqConfig - AcqConfig;
+	AcqTaskPending |= (1 << TaskIndex);
+	if (CurAcqTask == NULL)	// no AE task is undergoing
+		DoAcqTask();
+	return 0;
+}
+
+void DoAcqTask()
+{
+	int i;
+
+	for (i = 0; i < ACQ_TASK_NUMBER; i ++)
+		if ((AcqTaskPending & (1 << i)) != 0)
+			break;
+	if (i == ACQ_TASK_NUMBER)	// no task pending
+		return;
+
+	CurAcqTask = &AcqConfig[i];
+	if (CurSignalType != CurAcqTask->SignalType || (BasebandTickCount - AcqBufferTimeTag) > 10000)	// AE buffer not filled desired signal or too old
+		FillAeBuffer(CurAcqTask);
+	else
+		StartAcquisition();
+}
+
+void FillAeBuffer(PACQ_CONFIG pAcqConfig)
+{
+	int i, PhaseRange = 0;
+	int CorrelationRange = pAcqConfig->CohNumber * pAcqConfig->NoncohNumber;	// number of 1ms samples used for acquisition
+
+	CurSignalType = pAcqConfig->SignalType;
+	AcqBufferTimeTag = BasebandTickCount;
+
+	// calculate lagest CodeSpan that will use extra signal
+	for (i = 0; i < pAcqConfig->AcqChNumber; i ++)
+		if (PhaseRange < (pAcqConfig->SatConfig[i].CodeSpan + 2) / 3)
+			PhaseRange = (pAcqConfig->SatConfig[i].CodeSpan + 2) / 3;
+	CorrelationRange += PhaseRange;
+
+	SetRegValue(ADDR_AE_CARRIER_FREQ, CARRIER_FREQ(0));
+	SetRegValue(ADDR_AE_CODE_RATIO, (int)(2.046e6 / SAMPLE_FREQ * 16777216. + 0.5));
+	SetRegValue(ADDR_AE_THRESHOLD, 8);
+	SetRegValue(ADDR_AE_BUFFER_CONTROL, 0x300 + CorrelationRange);	// start fill AE buffer
+
+	AddWaitRequest(WAIT_TASK_AE, CorrelationRange + 1);	// wait extra 1ms to make sure AE buffer fill complete
+}
+
+void AeInterruptProc()
+{
+	PACQ_CONFIG pAcqConfig = CurAcqTask;
+	int TaskIndex = pAcqConfig - AcqConfig;
+
+	AcqTaskPending &= ~(1 << TaskIndex);
+	SetRegValue(ADDR_TE_FIFO_CONFIG, 0);			// FIFO config, disable dummy write
+	// call ProcessAcqResult on request interrupt, so it will sync with TE interrupt
+	AddToTask(TASK_REQUEST, ProcessAcqResult, &pAcqConfig, sizeof(PACQ_CONFIG));
+}
 
 //*************** Start acquisition with given configuration ****************
 //* this function is a task function
@@ -24,15 +111,15 @@ ACQ_CONFIG AcqConfig;
 void StartAcquisition(void)
 {
 	int i;
-	int DftFreq = (AcqConfig.StrideInterval << 10) / 1000;
+	int DftFreq = (CurAcqTask->StrideInterval << 10) / 1000;
 	unsigned int ConfigData[4];
 
-	ConfigData[0] = 0x04000000 | (AcqConfig.NoncohNumber << 16) | (AcqConfig.CohNumber << 8) | AcqConfig.StrideNumber;	// threshold: 3'b100
-	ConfigData[3]= AE_STRIDE_INTERVAL(AcqConfig.StrideInterval);
-	for (i = 0; i < AcqConfig.AcqChNumber; i ++)
+	ConfigData[0] = 0x04000000 | (CurAcqTask->NoncohNumber << 16) | (CurAcqTask->CohNumber << 8) | CurAcqTask->StrideNumber;	// threshold: 3'b100
+	ConfigData[3]= AE_STRIDE_INTERVAL(CurAcqTask->StrideInterval);
+	for (i = 0; i < CurAcqTask->AcqChNumber; i ++)
 	{
-		ConfigData[1] = (AcqConfig.SatConfig[i].FreqSvid << 24) | (AE_CENTER_FREQ(AcqConfig.SatConfig[i].CenterFreq) & 0xfffff);
-		ConfigData[2] = (DftFreq << 20) | AcqConfig.SatConfig[i].CodeSpan;
+		ConfigData[1] = (CurAcqTask->SatConfig[i].FreqSvid << 24) | (AE_CENTER_FREQ(CurAcqTask->SatConfig[i].CenterFreq) & 0xfffff);
+		ConfigData[2] = (DftFreq << 20) | CurAcqTask->SatConfig[i].CodeSpan;
 		SetRegValue(ADDR_BASE_AE_BUFFER+i*32+ 0, ConfigData[0]);
 		SetRegValue(ADDR_BASE_AE_BUFFER+i*32+ 4, ConfigData[1]);
 		SetRegValue(ADDR_BASE_AE_BUFFER+i*32+ 8, ConfigData[2]);
@@ -50,7 +137,7 @@ void StartAcquisition(void)
 	SetRegValue(ADDR_BASE_AE_BUFFER+0x110, 0x850087b2); SetRegValue(ADDR_BASE_AE_BUFFER+0x114, 0x971486ae); SetRegValue(ADDR_BASE_AE_BUFFER+0x118, 0x481386ae); SetRegValue(ADDR_BASE_AE_BUFFER+0x11c, 0x36f403d5);
 	SetRegValue(ADDR_AE_CONTROL, 0x100);
 #else	// start AE
-	SetRegValue(ADDR_AE_CONTROL, 0x100+AcqConfig.AcqChNumber);
+	SetRegValue(ADDR_AE_CONTROL, 0x100+CurAcqTask->AcqChNumber);
 #endif
 }
 
@@ -73,7 +160,7 @@ int AcqBufferReachTh(void)
 //   0
 int ProcessAcqResult(void *Param)
 {
-	PACQ_CONFIG AcqConfig = (PACQ_CONFIG)Param;
+	PACQ_CONFIG pAcqConfig = *((PACQ_CONFIG *)Param);
 	int AddressGap, PhaseGap;
 	U32 RegValue;
 	int CodePhase, Doppler;
@@ -83,10 +170,12 @@ int ProcessAcqResult(void *Param)
 	U32 AcqResult[4];
 	PCHANNEL_STATE NewChannel;
 
+	CurAcqTask = (PACQ_CONFIG)0;
+
 	// get AE latch address
 	RegValue = GetRegValue(ADDR_TE_FIFO_LWADDR_AE);
 	LatchRound = (RegValue >> 20);
-	LatchAddress = (RegValue >> 6) & 0x3fff + LatchRound * 10240;
+	LatchAddress = ((RegValue >> 6) & 0x3fff) + LatchRound * 10240;
 	// get write address and round
 	RegValue = GetRegValue(ADDR_TE_FIFO_WRITE_ADDR);
 	ReadRound = (RegValue >> 20);
@@ -103,7 +192,7 @@ int ProcessAcqResult(void *Param)
 	AddressGap %= (SAMPLES_1MS * 20);	// remnant of 20ms
 	PhaseGap = (AddressGap * 1023 * 16) / SAMPLES_1MS;	// convert to code phase with 16x scale
 
-	for (i = 0; i < AcqConfig->AcqChNumber; i ++)
+	for (i = 0; i < pAcqConfig->AcqChNumber; i ++)
 	{
 		LoadMemory(AcqResult, (U32 *)(ADDR_BASE_AE_BUFFER + i * 32 + 16), 16);
 		CodePhase = AcqResult[1] & 0x3fff;	// acquired code position, 2x chip scale
@@ -111,17 +200,19 @@ int ProcessAcqResult(void *Param)
 		if (CodePhase < 0)
 			CodePhase += 20 * 1023 * 16;	// 20ms code phase round
 		Doppler = ((int)(AcqResult[1] << 8)) >> 23;
-		Doppler = AcqConfig->SatConfig[i].CenterFreq + (Doppler * 2 - 7) * AcqConfig->StrideInterval / 16;
+		Doppler = pAcqConfig->SatConfig[i].CenterFreq + (Doppler * 2 - 7) * pAcqConfig->StrideInterval / 16;
 		if ((NewChannel = GetAvailableChannel()) != NULL)
 		{
-			NewChannel->FreqID = GET_FREQ_ID(AcqConfig->SatConfig[i].FreqSvid);
-			NewChannel->Svid = GET_SVID(AcqConfig->SatConfig[i].FreqSvid);
+			NewChannel->FreqID = GET_FREQ_ID(pAcqConfig->SatConfig[i].FreqSvid);
+			NewChannel->Svid = GET_SVID(pAcqConfig->SatConfig[i].FreqSvid);
 			InitChannel(NewChannel);
 			ConfigChannel(NewChannel, Doppler, CodePhase);
 		}
 	}
 	UpdateChannels();
 	SetRegValue(ADDR_TE_CHANNEL_ENABLE, GetChannelEnable());
+
+	DoAcqTask();
 
 	return 0;
 }

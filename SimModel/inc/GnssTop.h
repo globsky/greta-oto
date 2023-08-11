@@ -9,14 +9,7 @@
 #if !defined __SIM_TOP_H__
 #define __SIM_TOP_H__
 
-#include "BasicTypes.h"
-#include "Trajectory.h"
-#include "GnssTime.h"
-#include "NavData.h"
-#include "LNavBit.h"
-#include "BCNavBit.h"
-#include "XmlInterpreter.h"
-#include "SatelliteParam.h"
+#include "SignalSim.h"
 #include "TeFifoSim.h"
 #include "AcqEngineFast.h"
 #include "TrackingEngine.h"

@@ -335,7 +335,7 @@ int CGnssTop::StepToNextTime()
 //   S*R*(682+4096*C*N)
 //   fill sample needs about 2048 clock cycles
 //   match filter needs about 8192 clock cycles for each round
-//   S is tride number
+//   S is stride number
 //   C is coherent number
 //   N is non-coherent number
 //   R is code span

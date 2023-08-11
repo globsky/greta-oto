@@ -54,6 +54,21 @@ void complex_number::operator *= (complex_number data)
 	this->imag = temp.real * data.imag + temp.imag * data.real;
 }
 
+complex_number complex_number::operator * (double data)
+{
+	complex_number result = *this;
+	result *= data;
+	return result;
+}
+
+void complex_number::operator *= (double data)
+{
+	complex_number temp = *this;
+
+	this->real = temp.real * data;
+	this->imag = temp.imag * data;
+}
+
 double complex_number::abs()
 {
 	return sqrt(this->real * this->real + this->imag * this->imag);

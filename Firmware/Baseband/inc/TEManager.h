@@ -13,6 +13,8 @@
 #include "ChannelManager.h"
 
 extern int MeasurementInterval;
+extern unsigned int MeasIntCounter;
+extern unsigned int BasebandTickCount;
 extern BB_MEASUREMENT BasebandMeasurement[TOTAL_CHANNEL_NUMBER];
 
 void TEInitialize();

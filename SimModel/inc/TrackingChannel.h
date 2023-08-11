@@ -10,9 +10,10 @@
 #define __TRACKING_CHANNEL_SIM_H__
 
 #include "CommonDefines.h"
-#include "LNavBit.h"
-#include "SatelliteParam.h"
+#include "SignalSim.h"
+#include "ComplexNumber.h"
 #include "GaussNoise.h"
+#include "SatelliteSignal.h"
 
 #define COR_NUMBER 8
 #define NOISE_AMP 625.
@@ -64,7 +65,7 @@ public:
 	int NHLength;
 	int DumpLength;
 	// translate from PRN config
-	SignalSystem SystemSel;	// 0: GPS L1C/A, 1: Galileo E1, 2: BDS B1C, 3: GPS L1C
+	SignalSystem SystemSel;
 	int Svid;
 	int PrnCount;
 	// state parameters
@@ -82,17 +83,12 @@ public:
 	int CoherentCount;
 	int NHCount;
 	unsigned int DecodeData;
+	int CurrentNHCode;		// latest NH bit for pilot channel
 	// store Gauss noise
 	complex_number GaussNoise[8];
-	// variable to get modulation bit
-	NavBit *NavData;
-	int CurrentFrame;	// frame number of data stream filling in Bits
-	int CurrentBitIndex;	// bit index used for current ms correlation result
-	int CurrentDataBit;		// modulation bit for current outputing correlation result (if not all correlator finished)
-	int CurrentPilotBit;	// modulation bit for current outputing correlation result (if not all correlator finished)
-	int CurrentNHCode;		// latest NH bit for pilot channel
-	int DataBits[1800];
-	int PilotBits[1800];
+	// variable to get modulated data/pilot signal
+	CSatelliteSignal SatelliteSignal;
+	complex_number DataSignal, PilotSignal;
 	// for carrier difference calculation
 	CarrierState CarrierParam;
 

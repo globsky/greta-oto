@@ -10,11 +10,7 @@
 #define __ACQ_ENGINE_SIM_H__
 
 #include "CommonDefines.h"
-#include "BasicTypes.h"
-#include "LNavBit.h"
-#include "XmlInterpreter.h"
-#include "SatelliteParam.h"
-#include "ComplexNumber.h"
+#include "SignalSim.h"
 
 #define MF_DEPTH 682
 #define MAX_CHANNEL 32
@@ -88,10 +84,6 @@ public:
 	// internal variables and functions
 	double CarrierFreq;
 	int Success;				// 1bit
-	int CodeRoundCount;			// 5bit, counter for CodeSpan
-	int StrideCount;	// 6bit unsigned
-	int StrideOffset;			// 6bit signed
-	unsigned int NoiseFloor;	// 18bit
 	int CurMsCount, CurBitIndex;
 	int PhaseCount;
 	AeBufferSatParam SatParam[32];

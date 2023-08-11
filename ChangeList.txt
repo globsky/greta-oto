@@ -154,3 +154,8 @@
 	Function and feature change
 		Do not wait to bit edge when switching from BIT_SYNC to TRACK
 		Other minor optimization and changes in tracking stage switch
+8/11/2023
+	Function and feature change
+		BPSK (L1C/A) signal search and BOC signal search separately (different center frequency)
+		AEManager has maximum 2 batched search tasks
+		Modify SimModel using new introduced CSatelliteSignal class provided by SignalSim

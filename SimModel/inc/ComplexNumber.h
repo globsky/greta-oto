@@ -15,7 +15,7 @@ public:
 	double real;
 	double imag;
 
-	complex_number::complex_number() {};
+	complex_number() {};
 	complex_number(double real_part, double imag_part);
 	complex_number operator + (complex_number data);
 	void operator += (complex_number data);
@@ -23,6 +23,8 @@ public:
 	void operator -= (complex_number data);
 	complex_number operator * (complex_number data);
 	void operator *= (complex_number data);
+	complex_number operator * (double data);
+	void operator *= (double data);
 	double abs();
 };
 

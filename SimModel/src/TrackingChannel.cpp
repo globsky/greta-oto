@@ -95,14 +95,9 @@ void CTrackingChannel::Initial(GNSS_TIME CurTime, PSATELLITE_PARAM pSatParam, Na
 	// initial modulation bit and counter
 	TransmitTime = GetTransmitTime(CurTime, GetTravelTime(pSatParam, 0));
 	TransmitTime.MilliSeconds ++;	// correlation result will be calculated from next millisecond
-	CurrentFrame = TransmitTime.MilliSeconds / FrameLength;	// frame number
-	CurrentDataBit = CurrentPilotBit = 0;
-	NavData = pNavData;
-	NavData->GetFrameData(TransmitTime, Svid, 0, PilotBits);
-	if (SystemSel == SignalL1CA)
-		memcpy(DataBits, PilotBits, sizeof(int) * 300);	// GPS L1 uses same bit stream for data and pilot
-	else
-		NavData->GetFrameData(TransmitTime, Svid, 1, DataBits);
+	if (!SatelliteSignal.SetSignalAttribute(pSatParam->system, 0, pNavData, pSatParam->svid))
+		SatelliteSignal.NavData = (NavBit *)0;	// if system/frequency and navigation data not match, set pointer to NULL
+	DataSignal = PilotSignal = complex_number(0, 0);
 }
 
 // on set value of channel state buffer, interprete channel configuration parameters
@@ -255,7 +250,7 @@ void CTrackingChannel::GetCorrelationResult(GNSS_TIME CurTime, SATELLITE_PARAM *
 	double Amplitude, PeakPosition, NcoPhase, CorPosition, AmpRatio;
 	GNSS_TIME TransmitTime;
 	int CodeDiffIndex, CodeLength, FrameLength, BitLength;
-	int FrameNumber, BitNumber, Milliseconds, DataBit, PilotBit;
+	int Milliseconds;
 	const double *PeakValues;
 
 	// calculate half of 128x code length
@@ -299,18 +294,7 @@ void CTrackingChannel::GetCorrelationResult(GNSS_TIME CurTime, SATELLITE_PARAM *
 		Amplitude = 1.4142135 * pow(10, (pSatParam->CN0 - 3000) / 2000.) * NOISE_AMP;
 		Amplitude *= (fabs(FreqDiff) > 1e-3) ? (sin(FreqDiff) / FreqDiff) : 1.0;
 		TransmitTime = GetTransmitTime(CurTime, GetTravelTime(pSatParam, 0) + 0.001);	// add one extra millisecond to get previous finished millisecond
-		FrameNumber = TransmitTime.MilliSeconds / FrameLength;
-		BitNumber = (TransmitTime.MilliSeconds % FrameLength) / BitLength;
 		Milliseconds = TransmitTime.MilliSeconds % BitLength;
-		if (FrameNumber != CurrentFrame)
-		{
-			NavData->GetFrameData(TransmitTime, Svid, 0, PilotBits);
-			if (SystemSel == SignalL1CA)
-				memcpy(DataBits, PilotBits, sizeof(int) * 300);	// GPS L1 uses same bit stream for data and pilot
-			else
-				NavData->GetFrameData(TransmitTime, Svid, 1, DataBits);
-			CurrentFrame = FrameNumber;
-		}
 		PeakPosition = (((SystemSel == SignalL1CA) ? 0 : Milliseconds) + TransmitTime.SubMilliSeconds) * 2046;
 		NcoPhase = (double)CodePhase / 4294967296.;
 		// calculate code difference for each correlator and add narrow correlator compensation (with unit of 1/64 correlator interval or 1/128 chip)
@@ -321,32 +305,30 @@ void CTrackingChannel::GetCorrelationResult(GNSS_TIME CurTime, SATELLITE_PARAM *
 				CorPosition += NarrowCompensation(CorIndex[i] >> 2, NarrowFactor);
 			CodeDiff[i] = fabs(CorPosition - PeakPosition) * 64;
 		}
+
 		// calculate 1ms correlation value
-		DataBit = CurrentDataBit;	// if current correlator dump not finished, use CurrentDataBit
-		PilotBit = CurrentPilotBit;	// if current correlator dump not finished, use CurrentPilotBit
 		for (i = 0; i < DataLength; i ++)
 		{
-			if ((CorIndex[i] >> 2) == 0)	// new correlator dump uses new bit
-			{
-				CurrentDataBit  = DataBit  = DataBits[BitNumber];
-				CurrentPilotBit = PilotBit = PilotBits[BitNumber];
-				BitNumber += (Milliseconds + 1) / BitLength;	// if there will be next Cor0, check whether next milliseconds move to next bit
-			}
+			if ((CorIndex[i] >> 2) == 0)	// new correlator dump, recalculate data/pilot signal
+				SatelliteSignal.GetSatelliteSignal(TransmitTime, DataSignal, PilotSignal);
+
 			if (CodeDiff[i] > CodeLength)	// CodeDiff may be one whole code round difference
 				CodeDiff[i] = fabs(CodeDiff[i] - (CodeLength * 2));
 			CodeDiffIndex = (int)CodeDiff[i];	// integer part of code difference
 			CodeDiff[i] -= CodeDiffIndex;	// factional part of code difference
 			if (CodeDiffIndex < 159)
 			{
+				// interpolation on peak value shape
 				AmpRatio = PeakValues[CodeDiffIndex];
 				AmpRatio += (PeakValues[CodeDiffIndex+1] - PeakValues[CodeDiffIndex]) * CodeDiff[i];
-				if (((CorIndex[i] >> 2) == 0) && EnableSecondPrn)
-					Signal = DataChannelSignal(SystemSel, DataBit ? -AmpRatio : AmpRatio, Amplitude);
+				AmpRatio *= Amplitude;
+				if ((((CorIndex[i] >> 2) == 0) && EnableSecondPrn) || (SystemSel == SignalL1CA))
+					Signal = DataSignal * AmpRatio;
 				else
-					Signal = PilotChannelSignal(SystemSel, (PilotBit ^ NHCode[i]) ? -AmpRatio : AmpRatio, Amplitude);
+					Signal = PilotSignal * (NHCode[i] ? -AmpRatio : AmpRatio);
 				CorResult[i] += Signal * Rotate;
 //				if ((CorIndex[i] >> 2) == 4)
-//					printf("Cor=%f %f %f\n", Amplitude * AmpRatio, CorResult[i].real, CorResult[i].imag);
+//					printf("Cor=%f %f %f\n", AmpRatio, CorResult[i].real, CorResult[i].imag);
 			}
 		}
 	}

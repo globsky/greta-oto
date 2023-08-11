@@ -18,6 +18,8 @@
 #include "ComposeOutput.h"
 
 int MeasurementInterval;
+unsigned int MeasIntCounter;
+unsigned int BasebandTickCount;
 U32 ChannelOccupation;
 BB_MEASUREMENT BasebandMeasurement[TOTAL_CHANNEL_NUMBER];
 U32 DataStreamBuffer[100/4*TOTAL_CHANNEL_NUMBER];		// 100 8bit symbols x 32 channels
@@ -35,6 +37,7 @@ void TEInitialize()
 {
 	int i;
 
+	MeasIntCounter = BasebandTickCount = 0;
 	ChannelOccupation = 0;
 	MeasurementParam.RunTimeAcc = 0;
 	memset(ChannelStateArray, 0, sizeof(ChannelStateArray));

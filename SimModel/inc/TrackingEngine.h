@@ -10,9 +10,7 @@
 #define __TRACKING_ENGINE_SIM_H__
 
 #include "CommonDefines.h"
-#include "LNavBit.h"
-#include "SatelliteParam.h"
-#include "GaussNoise.h"
+#include "SignalSim.h"
 #include "TrackingChannel.h"
 
 #define LOGICAL_CHANNEL_NUMBER 32
