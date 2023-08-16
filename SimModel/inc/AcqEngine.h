@@ -10,12 +10,7 @@
 #define __ACQ_ENGINE_SIM_H__
 
 #include "CommonDefines.h"
-#include "BasicTypes.h"
-#include "LNavBit.h"
-#include "XmlInterpreter.h"
-#include "SatelliteParam.h"
-#include "ComplexNumber.h"
-#include "PeakSorter.h"
+#include "SignalSim.h"
 
 #define MF_DEPTH 682
 #define MAX_CHANNEL 32

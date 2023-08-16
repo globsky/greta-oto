@@ -346,7 +346,7 @@ double CAcqEngine::GetSignalPeak(AeBufferSatParam *pSatParam, int &FreqBin, int 
 				}
 			}
 
-			DopplerPhase += 2 * PI * (CarrierFreq - pSatParam->Doppler) / 1000;
+			DopplerPhase += 2 * PI * (CarrierFreqMin - pSatParam->Doppler) / 1000;
 			DftTwiddleFactor += DftTwiddlePhase;
 			// increase CurMsCount and determine bit position
 			if (pSatParam && ++CurMsCount == pSatParam->BitLength)
@@ -385,7 +385,7 @@ void CAcqEngine::SearchOneChannel(AeBufferSatParam *pSatParam, int Channel)
 	{
 		CurMsCount = pSatParam->MsCount + ReadAddress / 3;
 		CurBitIndex = CurMsCount / pSatParam->BitLength;
-		CurMsCount %= pSatParam->BitLength;
+		CurMsCount = (PrnSelect == FREQ_L1CA) ? (CurMsCount % pSatParam->BitLength) : 0;
 	}
 	else
 	{
@@ -524,10 +524,12 @@ void CAcqEngine::SetBufferParam(PSATELLITE_PARAM SatelliteParam[], int SatVisibl
 void CAcqEngine::AssignChannelParam(PSATELLITE_PARAM pSatelliteParam, GNSS_TIME Time, NavBit *NavData, int PrnSelect, AeBufferSatParam *pSatAcqParam)
 {
 	int i;
-	int FrameLength, BitLength, FrameBits;
+	int FrameLength, BitLength, SecondaryLength;
 	int FrameNumber, BitNumber, MilliSeconds;
-	int TotalBits, BitCount, Start, End;
-	int Bits[1800];
+	int TotalBits, BitCount;
+	GnssSystem System;
+	const unsigned int *SecondaryCode;
+	int Bits[300];
 	GNSS_TIME TransmitTime;
 	double Time2CodeEnd;
 
@@ -536,27 +538,27 @@ void CAcqEngine::AssignChannelParam(PSATELLITE_PARAM pSatelliteParam, GNSS_TIME 
 	case 0:	// GPS L1C/A
 		FrameLength = 6000;
 		BitLength = 20;
-		FrameBits = 300;
 		TotalBits = 8;	// maximum 8 bits within 128ms for GPS
+		System = GpsSystem;
 		break;
 	case 1:	// Galileo E1C
 		FrameLength = 100;
 		BitLength = 4;
-		FrameBits = 25;
 		TotalBits = 32;
+		System = GalileoSystem;
 		break;
 	case 2:	// BDS B1C
 		FrameLength = 18000;
 		BitLength = 10;
-		FrameBits = 1800;
 		TotalBits = 14;
+		System = BdsSystem;
 		Time.MilliSeconds -= 14000;	// compensate BDS leap second difference
 		break;
 	case 3:	// GPS L1C
 		FrameLength = 18000;
 		BitLength = 10;
-		FrameBits = 1800;
 		TotalBits = 14;
+		System = GpsSystem;
 		break;
 	}
 	// calculate TransmitTimeMs, TransmitTime as Time - TravelTime
@@ -582,19 +584,19 @@ void CAcqEngine::AssignChannelParam(PSATELLITE_PARAM pSatelliteParam, GNSS_TIME 
 	pSatAcqParam->Doppler = GetDoppler(pSatelliteParam, 0);
 	pSatAcqParam->Amplitude = pow(10, (pSatelliteParam->CN0 - 3000) / 2000.) * SIGMA0;
 	// generate bits
-	BitCount = 0;
-	while (BitCount < TotalBits)
+	if (PrnSelect == 0)	// L1C/A, get one subframe data, to simplify, if bit passed end of subframe, round back to beginning
 	{
-		Start = BitNumber;	// start from current bit
-		End = FrameBits;	// to end of generated bit stream
-		if ((End - Start) > (TotalBits - BitCount))	// if generated bit stream is longer, truncate the end
-			End = Start + (TotalBits - BitCount);
-		// get navigation bits and copy to BitArray
 		NavData->GetFrameData(TransmitTime, pSatelliteParam->svid, 0, Bits);
-		for (i = Start; i < End; i ++)
-			pSatAcqParam->BitArray[BitCount++] = Bits[i];
-		// move to next subframe
-		BitNumber = 0;
-		TransmitTime.MilliSeconds += FrameLength;
+		for (i = 0; i < TotalBits; i ++)
+			pSatAcqParam->BitArray[i] = Bits[(i + BitNumber) % 300];
+	}
+	else	// get pilot bits
+	{
+		SecondaryCode = GetPilotBits(System, 0, pSatelliteParam->svid, SecondaryLength);
+		for (i = 0; i < TotalBits; i ++)
+		{
+			BitCount = (i + BitNumber) % SecondaryLength;
+			pSatAcqParam->BitArray[i] = (SecondaryCode[BitCount/32] & (1 << (BitCount&0x1f))) ? 1 : 0;
+		}
 	}
 }

@@ -159,3 +159,9 @@
 		BPSK (L1C/A) signal search and BOC signal search separately (different center frequency)
 		AEManager has maximum 2 batched search tasks
 		Modify SimModel using new introduced CSatelliteSignal class provided by SignalSim
+8/15/2023
+	Function and feature change
+		Change AE model (both traditional and fast model) using new SignalSim pilot bit generation interface
+		Add carrier Doppler to code compensation in A2T prediction
+	Bug fix
+		Fix a bug of incorrect Doppler difference calculation in AE fast model

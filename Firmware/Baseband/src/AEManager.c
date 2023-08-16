@@ -161,7 +161,7 @@ int AcqBufferReachTh(void)
 int ProcessAcqResult(void *Param)
 {
 	PACQ_CONFIG pAcqConfig = *((PACQ_CONFIG *)Param);
-	int AddressGap, PhaseGap;
+	int AddressGap, PhaseGap, TimeGap;
 	U32 RegValue;
 	int CodePhase, Doppler;
 	int ReadRound, ReadAddress, WriteAddress;
@@ -189,18 +189,20 @@ int ProcessAcqResult(void *Param)
 	if (AddressGap < 0)
 		AddressGap += 41943040;	// 2^12 * 10240
 	// get remnant of address gap
+	TimeGap = AddressGap / SAMPLES_1MS;	// time elapsed in ms
 	AddressGap %= (SAMPLES_1MS * 20);	// remnant of 20ms
 	PhaseGap = (AddressGap * 1023 * 16) / SAMPLES_1MS;	// convert to code phase with 16x scale
 
 	for (i = 0; i < pAcqConfig->AcqChNumber; i ++)
 	{
 		LoadMemory(AcqResult, (U32 *)(ADDR_BASE_AE_BUFFER + i * 32 + 16), 16);
-		CodePhase = AcqResult[1] & 0x3fff;	// acquired code position, 2x chip scale
-		CodePhase = PhaseGap - (CodePhase - 5) * 8;	// additional 5 correlator interval (interval at 1/2 chip) to set peak at Cor4
-		if (CodePhase < 0)
-			CodePhase += 20 * 1023 * 16;	// 20ms code phase round
 		Doppler = ((int)(AcqResult[1] << 8)) >> 23;
 		Doppler = pAcqConfig->SatConfig[i].CenterFreq + (Doppler * 2 - 7) * pAcqConfig->StrideInterval / 16;
+		CodePhase = AcqResult[1] & 0x7fff;	// acquired code position, 2x chip scale
+		CodePhase = PhaseGap - (CodePhase - 5) * 8;	// additional 5 correlator interval (interval at 1/2 chip) to set peak at Cor4
+		CodePhase += TimeGap * Doppler / 96250;	// 16 x Doppler x dt / 1540 (dt = TimeGap / 1000)
+		if (CodePhase < 0)
+			CodePhase += 20 * 1023 * 16;	// 20ms code phase round
 		if ((NewChannel = GetAvailableChannel()) != NULL)
 		{
 			NewChannel->FreqID = GET_FREQ_ID(pAcqConfig->SatConfig[i].FreqSvid);
