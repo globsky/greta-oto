@@ -86,6 +86,12 @@ void FirmwareInitialize(StartType Start, PSYSTEM_TIME CurTime, LLH *CurPosition)
 		FREQ_SVID(FREQ_B1C, 21),
 		FREQ_SVID(FREQ_B1C, 22),
 		FREQ_SVID(FREQ_B1C, 26),
+/*		FREQ_SVID(FREQ_E1, 1),
+		FREQ_SVID(FREQ_E1, 4),
+		FREQ_SVID(FREQ_E1, 19),
+		FREQ_SVID(FREQ_E1, 21),
+		FREQ_SVID(FREQ_E1, 27),
+		FREQ_SVID(FREQ_E1, 27),*/
 	0 };	// for debug use only
 	int SatNumber;
 	SAT_PREDICT_PARAM SatList[32];
@@ -164,7 +170,8 @@ void FirmwareInitialize(StartType Start, PSYSTEM_TIME CurTime, LLH *CurPosition)
 		pAcqConfig->NoncohNumber = 1;
 		pAcqConfig->StrideNumber = (Start == ColdStart) ? 19 : (Start == WarmStart) ? 3 : 1;
 		pAcqConfig->StrideInterval = 500;
-		AddAcqTask(pAcqConfig);
+		if (pAcqConfig->AcqChNumber > 0)
+			AddAcqTask(pAcqConfig);
 	}
 	// second task search BOC signal
 	SatNumber = 0;
@@ -190,10 +197,11 @@ void FirmwareInitialize(StartType Start, PSYSTEM_TIME CurTime, LLH *CurPosition)
 		pAcqConfig->SignalType = 1;	// for BOC acquisition
 		pAcqConfig->AcqChNumber = SatNumber;
 		pAcqConfig->CohNumber = 4;
-		pAcqConfig->NoncohNumber = 1;
+		pAcqConfig->NoncohNumber = 2;
 		pAcqConfig->StrideNumber = (Start == ColdStart) ? 19 : (Start == WarmStart) ? 3 : 1;
 		pAcqConfig->StrideInterval = 500;
-		AddAcqTask(pAcqConfig);
+		if (pAcqConfig->AcqChNumber > 0)
+			AddAcqTask(pAcqConfig);
 	}
 }
 

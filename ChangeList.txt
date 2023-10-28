@@ -165,3 +165,6 @@
 		Add carrier Doppler to code compensation in A2T prediction
 	Bug fix
 		Fix a bug of incorrect Doppler difference calculation in AE fast model
+10/28/2023
+	Function and feature change
+		Pull-in and Bit-sync use different tracking config (for future E1 NH sync)

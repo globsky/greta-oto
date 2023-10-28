@@ -20,20 +20,25 @@
 static TRACKING_CONFIG TrackingConfigTable[] = {
 // Coh FFT NonCoh Narrow Post  BnPLL   BnFLL   BnDLL  Timeout
  {  1,  5,   2,      0,    1,      0,  80|C2,  80|C2,   200,},	// 0 for pull-in
- {  4,  5,   4,      0,    2,      0,      0,      0, 30000,},	// 1 for GPS L1 tracking hold
- {  5,  1,   4,      0,    2, 320|C2,   0|C2,  80|C2,  5000,},	// 2 for GPS L1 track 0
- { 20,  1,   4,      0,    3, 240|C2,   0|C2,  40|C2,    -1,},	// 3 for GPS L1 track 1
- {  4,  5,  16,      0,    3,   0|C2,  80|C2,  40|C2,    -1,},	// 4 for GPS L1 track 2
- {  5,  1,   4,      0,    2, 320|C2,   0|C2,  80|C2,    -1,},	// 5 for BDS B1C track 0
- { 10,  1,   4,      0,    3, 240|C2,   0|C2,  40|C2,    -1,},	// 6 for BDS B1C track 1
+ {  1,  5,   2,      0,    1,      0,  80|C2,  80|C2,  1500,},	// 1 for bit_sync
+ {  4,  5,   4,      0,    2,      0,      0,      0, 30000,},	// 2 for GPS L1 tracking hold
+ {  5,  1,   4,      0,    2, 320|C2,   0|C2,  80|C2,  5000,},	// 3 for GPS L1 track 0
+ { 20,  1,   4,      0,    3, 240|C2,   0|C2,  40|C2,    -1,},	// 4 for GPS L1 track 1
+ {  4,  5,  16,      0,    3,   0|C2,  80|C2,  40|C2,    -1,},	// 5 for GPS L1 track 2
+ {  5,  1,   4,      0,    2, 320|C2,   0|C2,  80|C2,    -1,},	// 6 for BDS B1C track 0
+ { 10,  1,   4,      0,    3, 240|C2,   0|C2,  40|C2,    -1,},	// 7 for BDS B1C track 1
+ {  1,  4,   2,      0,    1,      0,  80|C2,  80|C2,   200,},	// 8 for GAL E1 pull-in
+ {  4,  1,   5,      0,    2, 320|C2,   0|C2,  80|C2,  1500,},	// 9 for GAL E1 bit_sync
+ {  4,  1,   5,      0,    2, 320|C2,   0|C2,  80|C2,  5000,},	//10 for GAL E1 track 0
 };
 
 PTRACKING_CONFIG TrackingConfig[][4] = {	// pointer to TrackingConfigTable for different stage and different signal
-	&TrackingConfigTable[0], &TrackingConfigTable[0], &TrackingConfigTable[0], &TrackingConfigTable[0],	// pull-in
-	&TrackingConfigTable[1], &TrackingConfigTable[1], &TrackingConfigTable[1], &TrackingConfigTable[1],	// tracking hold
-	&TrackingConfigTable[2], &TrackingConfigTable[2], &TrackingConfigTable[5], &TrackingConfigTable[2],	// track 0
-	&TrackingConfigTable[3], &TrackingConfigTable[3], &TrackingConfigTable[6], &TrackingConfigTable[3],	// track 1
-	&TrackingConfigTable[4], &TrackingConfigTable[4], &TrackingConfigTable[4], &TrackingConfigTable[4],	// track 2
+	&TrackingConfigTable[2], &TrackingConfigTable[1], &TrackingConfigTable[2], &TrackingConfigTable[2],	// tracking hold
+	&TrackingConfigTable[0], &TrackingConfigTable[8], &TrackingConfigTable[0], &TrackingConfigTable[0],	// pull-in
+	&TrackingConfigTable[1], &TrackingConfigTable[9], &TrackingConfigTable[1], &TrackingConfigTable[1],	// bit_sync
+	&TrackingConfigTable[3], &TrackingConfigTable[10],&TrackingConfigTable[6], &TrackingConfigTable[3],	// track 0
+	&TrackingConfigTable[4], &TrackingConfigTable[4], &TrackingConfigTable[7], &TrackingConfigTable[4],	// track 1
+	&TrackingConfigTable[5], &TrackingConfigTable[5], &TrackingConfigTable[5], &TrackingConfigTable[5],	// track 2
 };
 
 void CalculateLoopCoefficients(PCHANNEL_STATE ChannelState, PTRACKING_CONFIG CurTrackingConfig);
@@ -121,7 +126,7 @@ int StageDetermination(PCHANNEL_STATE ChannelState)
 	int StageChange = 0;
 
 	// B1C and L1C set pilot channel NH after data sync
-	if (FREQ_ID_IS_B1C_L1C(ChannelState->FreqID) && ChannelState->BitSyncResult &0x1800 && (ChannelState->TrackingTime % 20) == 0)	// data sync finished and at 20ms boundary
+	if (FREQ_ID_IS_B1C_L1C(ChannelState->FreqID) && (ChannelState->BitSyncResult & 0x1800) && (ChannelState->TrackingTime % 20) == 0)	// data sync finished and at 20ms boundary
 	{
 		// switch to decode data channel
 		STATE_BUF_ENABLE_PRN2(&(ChannelState->StateBufferCache));

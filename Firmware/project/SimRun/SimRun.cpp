@@ -21,7 +21,7 @@ void main()
 	fprintf(DebugFile, "SV# SatPhase SatDoppler SatCode LocalPhase LocalFre LocalCode PhaseDiff FreqDiff  PsrDiff\n");
 
 	AttachDebugFunc(DebugOutput);
-	FirmwareInitialize(HotStart, &InitTime, &InitPosition);
+	FirmwareInitialize(ColdStart, &InitTime, &InitPosition);
 	EnableRF();
 	if (DebugFile)
 		fclose(DebugFile);

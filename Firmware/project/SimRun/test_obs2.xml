@@ -114,7 +114,7 @@
         </ConfigParam>
         <SystemSelect system="GPS">true</SystemSelect>
         <SystemSelect system="BDS">true</SystemSelect>
-        <SystemSelect system="Galileo">false</SystemSelect>
+        <SystemSelect system="Galileo">true</SystemSelect>
     </Output>
     <PowerControl>
         <PowerParam>

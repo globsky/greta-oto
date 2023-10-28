@@ -96,7 +96,7 @@ do \
 #define STAGE_BIT_SYNC 0x5
 #define STAGE_TRACK    0x8		// bit3 set as normal tracking, 3LSB for track stage
 
-#define STAGE_CONFIG_INDEX(stage) (((stage) & 0x8) ? ((stage)-6) : (((stage) == STAGE_HOLD3) ? 1 : 0))
+#define STAGE_CONFIG_INDEX(stage) (((stage) & 0x8) ? ((stage)-5) : ((stage)-3))
 
 #define STAGE_MASK          0xf
 
