@@ -6,9 +6,11 @@
 //
 //----------------------------------------------------------------------
 
+#include <stdio.h>
 #include "RegAddress.h"
 #include "BBDefines.h"
 #include "HWCtrl.h"
+#include "PlatformCtrl.h"
 #include "AEManager.h"
 #include "TEManager.h"
 #include "ChannelManager.h"
@@ -199,6 +201,8 @@ int ProcessAcqResult(void *Param)
 		Doppler = ((int)(AcqResult[1] << 8)) >> 23;
 		Doppler = pAcqConfig->SatConfig[i].CenterFreq + (Doppler * 2 - 7) * pAcqConfig->StrideInterval / 16;
 		CodePhase = AcqResult[1] & 0x7fff;	// acquired code position, 2x chip scale
+		DEBUG_OUTPUT(OUTPUT_CONTROL(ACQUISITION, INFO), "Ch%02d %08x %08x %08x %08x ", i, AcqResult[0], AcqResult[1], AcqResult[2], AcqResult[3]);
+		DEBUG_OUTPUT(OUTPUT_CONTROL(ACQUISITION, INFO), "Svid%2d Amp=%3d Cor=%5d Freq=%d\n",  GET_SVID(pAcqConfig->SatConfig[i].FreqSvid), AcqResult[1] >> 24, CodePhase, Doppler);
 		CodePhase = PhaseGap - (CodePhase - 5) * 8;	// additional 5 correlator interval (interval at 1/2 chip) to set peak at Cor4
 		CodePhase += TimeGap * Doppler / 96250;	// 16 x Doppler x dt / 1540 (dt = TimeGap / 1000)
 		if (CodePhase < 0)

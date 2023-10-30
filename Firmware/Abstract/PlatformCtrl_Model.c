@@ -10,6 +10,8 @@
 #include <string.h>
 #include "PlatformCtrl.h"
 
+FILE *fp_debug = (FILE *)0;
+
 void CreateThread(ThreadFunction Thread, int Priority, void *Param) {}
 void ENTER_CRITICAL() {}
 void EXIT_CRITICAL() {}

@@ -7,6 +7,7 @@
 //----------------------------------------------------------------------
 
 #include <stdio.h>
+#include "PlatformCtrl.h"
 #include "BBDefines.h"
 
 //*************** Task to output baseband measurements ****************
@@ -36,17 +37,17 @@ int MeasPrintTask(void *Param)
 			WordNumber = (Msr[i].DataNumber + 3) / 4;
 		else
 			WordNumber = 0;
-		printf("$PBMSR,%2d,%2d,%2d,%10u,%10u,%10u,%5d,%10u,%10u,%5d,%8x,%3d,%4d,%8u\n",
+		DEBUG_OUTPUT(OUTPUT_CONTROL(OUTPUT, INFO), "$PBMSR,%2d,%2d,%2d,%10u,%10u,%10u,%5d,%10u,%10u,%5d,%8x,%3d,%4d,%8u\n",
 			Msr[i].LogicChannel, Msr[i].Svid, Msr[i].FreqID, Msr[i].CarrierFreq, Msr[i].CarrierNCO, Msr[i].CarrierCount,
 			Msr[i].CodeFreq, Msr[i].CodeCount, Msr[i].CodeNCO, 2046, Msr[i].State, Msr[i].LockIndicator, Msr[i].CN0, Msr[i].TrackingTime);
 		if (WordNumber > 0)
 		{
-			printf("$PDATA,%d,%d", Msr[i].DataNumber, Msr[i].FrameIndex);
+			DEBUG_OUTPUT(OUTPUT_CONTROL(OUTPUT, INFO), "$PDATA,%d,%d", Msr[i].DataNumber, Msr[i].FrameIndex);
 			for (j = 0; j < WordNumber; j ++)
-				printf(",%08x", Msr[i].DataStreamAddr[j]);
-			printf("\n");
+				DEBUG_OUTPUT(OUTPUT_CONTROL(OUTPUT, INFO), ",%08x", Msr[i].DataStreamAddr[j]);
+			DEBUG_OUTPUT(OUTPUT_CONTROL(OUTPUT, INFO), "\n");
 		}
 	}
-	printf("$PMSRP,%3d,%d\n", MeasParam->MeasInterval, MeasParam->RunTimeAcc);
+	DEBUG_OUTPUT(OUTPUT_CONTROL(OUTPUT, INFO), "$PMSRP,%3d,%d\n", MeasParam->MeasInterval, MeasParam->RunTimeAcc);
 	return 0;
 }

@@ -7,6 +7,7 @@
 //----------------------------------------------------------------------
 
 #include "CommonDefines.h"
+#include "PlatformCtrl.h"
 #include "PvtConst.h"
 #include "DataTypes.h"
 #include "GlobalVar.h"
@@ -102,7 +103,7 @@ void PvtProc(int CurMsInterval)
 	if (1 && PosFixResult >= 0)
 	{
 		GpsTimeToUtc(g_ReceiverInfo.WeekNumber, g_ReceiverInfo.GpsMsCount, &UtcTime, (PUTC_PARAM)0);
-		printf("%04d/%02d/%02d %02d:%02d:%02d.%03d %14.9f %14.9f %10.4f   5   9\n",
+		DEBUG_OUTPUT(OUTPUT_CONTROL(PVT, INFO), "%04d/%02d/%02d %02d:%02d:%02d.%03d %14.9f %14.9f %10.4f   5   9\n",
 			UtcTime.Year, UtcTime.Month, UtcTime.Day, UtcTime.Hour, UtcTime.Minute, UtcTime.Second, UtcTime.Millisecond,
 			g_ReceiverInfo.PosLLH.lat * 180 / PI, g_ReceiverInfo.PosLLH.lon * 180 / PI, g_ReceiverInfo.PosLLH.hae);
 	}

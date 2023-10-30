@@ -7,6 +7,7 @@
 //----------------------------------------------------------------------
 
 #include "CommonDefines.h"
+#include "PlatformCtrl.h"
 #include "PvtConst.h"
 #include "DataTypes.h"
 #include "GlobalVar.h"
@@ -154,12 +155,12 @@ void MsrProc(PBB_MEASUREMENT Measurements, unsigned int ActiveMask, int CurMsInt
 	if (0 && meas_num > 0)
 	{
 		GpsTimeToUtc(g_ReceiverInfo.WeekNumber, g_ReceiverInfo.GpsMsCount, &ReceiverTime, (PUTC_PARAM)0);
-		printf("> %04d %02d %02d %02d %02d %02d.%03d0000 0 %d 0.0000000\n",
+		DEBUG_OUTPUT(OUTPUT_CONTROL(MEASUREMENT, INFO), "> %04d %02d %02d %02d %02d %02d.%03d0000 0 %d 0.0000000\n",
 			ReceiverTime.Year, ReceiverTime.Month, ReceiverTime.Day, ReceiverTime.Hour, ReceiverTime.Minute, ReceiverTime.Second, ReceiverTime.Millisecond, meas_num);
 		for (ch_num = 0; ch_num < TOTAL_CHANNEL_NUMBER; ch_num ++)
 		{
 			if (g_ChannelStatus[ch_num].ChannelFlag & MEASUREMENT_VALID)
-				printf("%c%02d %13.3f 8 %13.3f 8 %13.3f          %6.3f\n", FREQ_ID_IS_B1C(g_ChannelStatus[ch_num].FreqID) ? 'C' : FREQ_ID_IS_E1(g_ChannelStatus[ch_num].FreqID) ? 'E' : 'G',
+				DEBUG_OUTPUT(OUTPUT_CONTROL(MEASUREMENT, INFO), "%c%02d %13.3f 8 %13.3f 8 %13.3f          %6.3f\n", FREQ_ID_IS_B1C(g_ChannelStatus[ch_num].FreqID) ? 'C' : FREQ_ID_IS_E1(g_ChannelStatus[ch_num].FreqID) ? 'E' : 'G',
 					g_ChannelStatus[ch_num].svid, g_ChannelStatus[ch_num].PseudoRangeOrigin, g_ChannelStatus[ch_num].CarrierPhase, g_ChannelStatus[ch_num].DopplerHz, g_ChannelStatus[ch_num].cn0 / 100.);
 		}
 	}

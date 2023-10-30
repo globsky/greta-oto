@@ -10,6 +10,7 @@
 #include <string.h>
 #include "ConstTable.h"
 #include "HWCtrl.h"
+#include "PlatformCtrl.h"
 #include "ChannelManager.h"
 
 #define C1 (1<<16)
@@ -56,7 +57,7 @@ void SwitchTrackingStage(PCHANNEL_STATE ChannelState, unsigned int TrackingStage
 	unsigned int PrevStage = (ChannelState->State & STAGE_MASK);
 	int CohCount;
 
-//	printf("SV%02d switch to %d\n", ChannelState->Svid, TrackingStage);
+	DEBUG_OUTPUT(OUTPUT_CONTROL(TRACKING_SWITCH, INFO), "SV%02d switch to %d\n", ChannelState->Svid, TrackingStage);
 	ChannelState->TrackingTime = 0;		// reset tracking time
 	ChannelState->State &= ~STAGE_MASK;
 	ChannelState->State |= TrackingStage;

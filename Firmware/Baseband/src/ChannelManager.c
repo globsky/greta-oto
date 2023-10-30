@@ -12,6 +12,7 @@
 #include "ConstTable.h"
 #include "BBDefines.h"
 #include "HWCtrl.h"
+#include "PlatformCtrl.h"
 #include "InitSet.h"
 #include "FirmwarePortal.h"
 #include "TaskManager.h"
@@ -247,7 +248,7 @@ void ProcessCohSum(int ChannelID, unsigned int OverwriteProtect)
 void ProcessCohData(PCHANNEL_STATE ChannelState)
 {
 	ChannelState->TrackingTime += ChannelState->CoherentNumber;	// accumulate tracking time
-//	printf("track time %d\n", ChannelState->TrackingTime);
+	DEBUG_OUTPUT(OUTPUT_CONTROL(COH_PROC, NONE), "track time %d\n", ChannelState->TrackingTime);
 	if (ChannelState->SkipCount > 0)	// skip coherent result for following process
 	{
 		ChannelState->SkipCount --;
@@ -255,9 +256,9 @@ void ProcessCohData(PCHANNEL_STATE ChannelState)
 	}
 	
 //	if (ChannelState->Svid == 19)
-//	printf("SV%2d I/Q[4]=%6d %6d I/Q[0]=%6d %6d\n", ChannelState->Svid,
-//		(S16)(ChannelState->PendingCoh[4] >> 16), (S16)(ChannelState-PendingCoh[4] & 0xffff),
-//		(S16)(ChannelState->PendingCoh[0] >> 16), (S16)(ChannelState->PendingCoh[0] & 0xffff));
+	DEBUG_OUTPUT(OUTPUT_CONTROL(COH_PROC, NONE), "SV%2d I/Q[4]=%6d %6d I/Q[0]=%6d %6d\n", ChannelState->Svid, \
+		(S16)(ChannelState->PendingCoh[4] >> 16), (S16)(ChannelState->PendingCoh[4] & 0xffff), \
+		(S16)(ChannelState->PendingCoh[0] >> 16), (S16)(ChannelState->PendingCoh[0] & 0xffff));
 
 	// perform PLL
 	if (((ChannelState->State & STAGE_MASK) >= STAGE_TRACK) && (ChannelState->pll_k1 > 0))	// tracking stage uses PLL (change to more flexible condition in the future)
@@ -279,8 +280,7 @@ void ProcessCohData(PCHANNEL_STATE ChannelState)
 	if ((ChannelState->State & STAGE_MASK) >= STAGE_PULL_IN)
 		DoTrackingLoop(ChannelState);
 
-//	if ((ChannelState->State & STAGE_MASK) >= STAGE_TRACK)
-//		printf("T=%4d I/Q=%6d %6d\n", ChannelState->TrackingTime, (S16)(ChannelState->PendingCoh[4] >> 16), (S16)(ChannelState->PendingCoh[4] & 0xffff));
+	DEBUG_OUTPUT(OUTPUT_CONTROL(COH_PROC, NONE), "%d T=%4d I/Q=%6d %6d\n", (ChannelState->State & STAGE_MASK), ChannelState->TrackingTime, (S16)(ChannelState->PendingCoh[4] >> 16), (S16)(ChannelState->PendingCoh[4] & 0xffff));
 	
 	// collect correlation result for bit sync if in bit sync stage
 	if ((ChannelState->State & STAGE_MASK) == STAGE_BIT_SYNC)
@@ -298,15 +298,6 @@ void ProcessCohData(PCHANNEL_STATE ChannelState)
 
 	// determine whether tracking stage switch is needed
 	StageDetermination(ChannelState);
-
-/*	printf("SV%2d", ChannelState->Svid);
-	for (i = 0; i < 8; i ++)
-	{
-		CohResultI = (S16)(ChannelState->PendingCoh[i] >> 16);
-		CohResultQ = (S16)(ChannelState->PendingCoh[i] & 0xffff);
-		printf(" %5d %5d,", CohResultI, CohResultQ);
-	}
-	printf("\n");*/
 }
 
 //*************** Compose baseband measurement and data stream ****************
@@ -496,11 +487,7 @@ void DecodeDataStream(PCHANNEL_STATE ChannelState)
 		DataStream->DataCount ++;
 		DataStream->CurrentAccTime = 0;
 		DataStream->CurReal = DataStream->CurImag = 0;
-//		if (ChannelState->Svid == 3)
-//			printf(" %d", DataStream->DataCount);
 	}
-//	if (ChannelState->Svid == 3)
-//		printf("\n");
 }
 
 //*************** Calculate smoothed CN0 and instant CN0 ****************

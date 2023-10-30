@@ -97,6 +97,8 @@ void FirmwareInitialize(StartType Start, PSYSTEM_TIME CurTime, LLH *CurPosition)
 	SAT_PREDICT_PARAM SatList[32];
 	PACQ_CONFIG pAcqConfig;
 
+	fp_debug = stdout;
+
 	MeasurementInterval = 100;
 
 	AttachBasebandISR(InterruptService);
