@@ -52,6 +52,7 @@ public:
 	CPowerControl PowerControl;
 	LNavBit GpsBits;
 	BCNavBit BdsBits;
+	INavBit GalBits;
 	NavBit *NavBitArray[4];
 
 	PGPS_EPHEMERIS GpsEph[TOTAL_GPS_SAT], GpsEphVisible[TOTAL_GPS_SAT];

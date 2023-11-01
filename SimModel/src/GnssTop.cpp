@@ -22,7 +22,7 @@ CGnssTop::CGnssTop()
 {
 	InterruptService = (InterruptFunction)0;
 	NavBitArray[0] = &GpsBits;	// for GPS L1C/A
-	NavBitArray[1] = &GpsBits;	// for Galileo E1
+	NavBitArray[1] = &GalBits;	// for Galileo E1
 	NavBitArray[2] = &BdsBits;	// for BDS B1C
 	NavBitArray[3] = &GpsBits;	// for GPS L1C
 	// calculate relative matrix for noise generation
@@ -213,12 +213,16 @@ void CGnssTop::SetInputFile(char *FileName)
 		BdsBits.SetEphemeris(i, BdsEph[i-1]);
 	}
 	for (i = 1; i <= TOTAL_GAL_SAT; i ++)
+	{
 		GalEph[i-1] = NavData.FindEphemeris(GalileoSystem, CurTime, i);
+		GalBits.SetEphemeris(i, GalEph[i-1]);
+	}
 	GpsBits.SetIonoUtc(NavData.GetGpsIono(), NavData.GetGpsUtcParam());
+	GalBits.SetIonoUtc(NavData.GetGalileoIono(), NavData.GetGalileoUtcParam());
 	// calculate visible satellite at start time and calculate satellite parameters
-	GpsSatNumber = (OutputParam.SystemSelect & (1 << GpsSystem)) ? GetVisibleSatellite(CurPos, CurTime, OutputParam, GpsSystem, GpsEph, 32, GpsEphVisible) : 0;
-	BdsSatNumber = (OutputParam.SystemSelect & (1 << BdsSystem)) ? GetVisibleSatellite(CurPos, CurTime, OutputParam, BdsSystem, BdsEph, TOTAL_BDS_SAT, BdsEphVisible) : 0;
-	GalSatNumber = (OutputParam.SystemSelect & (1 << GalileoSystem)) ? GetVisibleSatellite(CurPos, CurTime, OutputParam, GalileoSystem, GalEph, TOTAL_GAL_SAT, GalEphVisible) : 0;
+	GpsSatNumber = (OutputParam.FreqSelect[GpsSystem]) ? GetVisibleSatellite(CurPos, CurTime, OutputParam, GpsSystem, GpsEph, 32, GpsEphVisible) : 0;
+	BdsSatNumber = (OutputParam.FreqSelect[BdsSystem]) ? GetVisibleSatellite(CurPos, CurTime, OutputParam, BdsSystem, BdsEph, TOTAL_BDS_SAT, BdsEphVisible) : 0;
+	GalSatNumber = (OutputParam.FreqSelect[GalileoSystem]) ? GetVisibleSatellite(CurPos, CurTime, OutputParam, GalileoSystem, GalEph, TOTAL_GAL_SAT, GalEphVisible) : 0;
 	TotalSatNumber = GpsSatNumber + BdsSatNumber + GalSatNumber;
 	ListCount = PowerControl.GetPowerControlList(0, PowerList);
 	TotalSatNumber = 0;
@@ -299,9 +303,9 @@ int CGnssTop::StepToNextTime()
 	}
 	if ((CurTime.MilliSeconds % 60000) == 0)	// recalculate visible satellite at minute boundary
 	{
-		GpsSatNumber = (OutputParam.SystemSelect & (1 << GpsSystem)) ? GetVisibleSatellite(CurPos, CurTime, OutputParam, GpsSystem, GpsEph, 32, GpsEphVisible) : 0;
-		BdsSatNumber = (OutputParam.SystemSelect & (1 << BdsSystem)) ? GetVisibleSatellite(CurPos, CurTime, OutputParam, BdsSystem, BdsEph, TOTAL_BDS_SAT, BdsEphVisible) : 0;
-		GalSatNumber = (OutputParam.SystemSelect & (1 << GalileoSystem)) ? GetVisibleSatellite(CurPos, CurTime, OutputParam, GalileoSystem, GalEph, TOTAL_GAL_SAT, GalEphVisible) : 0;
+		GpsSatNumber = (OutputParam.FreqSelect[GpsSystem]) ? GetVisibleSatellite(CurPos, CurTime, OutputParam, GpsSystem, GpsEph, 32, GpsEphVisible) : 0;
+		BdsSatNumber = (OutputParam.FreqSelect[BdsSystem]) ? GetVisibleSatellite(CurPos, CurTime, OutputParam, BdsSystem, BdsEph, TOTAL_BDS_SAT, BdsEphVisible) : 0;
+		GalSatNumber = (OutputParam.FreqSelect[GalileoSystem]) ? GetVisibleSatellite(CurPos, CurTime, OutputParam, GalileoSystem, GalEph, TOTAL_GAL_SAT, GalEphVisible) : 0;
 	}
 	TotalSatNumber = 0;
 	for (i = 0; i < GpsSatNumber; i ++)

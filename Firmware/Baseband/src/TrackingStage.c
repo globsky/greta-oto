@@ -62,13 +62,6 @@ void SwitchTrackingStage(PCHANNEL_STATE ChannelState, unsigned int TrackingStage
 	ChannelState->State &= ~STAGE_MASK;
 	ChannelState->State |= TrackingStage;
 
-	// switch to bit sync stage only change timeout and reset data for bit sync
-	if (TrackingStage == STAGE_BIT_SYNC)
-	{
-		ChannelState->TrackingTimeout = 1500;	// timeout for bit sync not success
-		return;
-	}
-
 	ChannelState->FftCount = 0;
 	ChannelState->NonCohCount = 0;
 	ChannelState->TrackingTimeout = CurTrackingConfig->TrackingTimeout;
@@ -125,14 +118,19 @@ int StageDetermination(PCHANNEL_STATE ChannelState)
 	int Time, Jump;
 	unsigned int StateValue;
 	int StageChange = 0;
+	PSTATE_BUFFER StateBuffer = &(ChannelState->StateBufferCache);
 
 	// B1C and L1C set pilot channel NH after data sync
 	if (FREQ_ID_IS_B1C_L1C(ChannelState->FreqID) && (ChannelState->BitSyncResult & 0x1800) && (ChannelState->TrackingTime % 20) == 0)	// data sync finished and at 20ms boundary
 	{
 		// switch to decode data channel
-		STATE_BUF_ENABLE_PRN2(&(ChannelState->StateBufferCache));
-		STATE_BUF_ENABLE_BOC(&(ChannelState->StateBufferCache));	// enable BOC
-		STATE_BUF_SET_NARROW_FACTOR(&(ChannelState->StateBufferCache), 2);	// set correlator interval to 1/8 chip
+		STATE_BUF_ENABLE_PRN2(StateBuffer);
+		STATE_BUF_ENABLE_BOC(StateBuffer);	// enable BOC
+		STATE_BUF_SET_NARROW_FACTOR(StateBuffer, 2);	// set correlator interval to 1/8 chip
+		// enable HW data decode
+		STATE_BUF_SET_BIT_LENGTH(StateBuffer, 10);
+		STATE_BUF_SET_DECODE_BIT(StateBuffer, 3);
+		STATE_BUF_DATA_IN_Q(StateBuffer);
 		// remove 1.023MHz carrier offset
 		ChannelState->StateBufferCache.CarrierFreq -= DIVIDE_ROUND(1023000LL << 32, SAMPLE_FREQ);
 		ChannelState->CarrierFreqBase -= DIVIDE_ROUND(1023000LL << 32, SAMPLE_FREQ);

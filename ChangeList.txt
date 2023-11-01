@@ -168,3 +168,11 @@
 10/28/2023
 	Function and feature change
 		Pull-in and Bit-sync use different tracking config (for future E1 NH sync)
+11/1/2023
+	Function and feature change
+		B1C (and future data channel) data decode uses hardware data decode method
+		Software data decode only uses 1bit symbol (for L1C/A and pilot secondary decode)
+		B1C secondary code sync uses 24bit search instead of 16bit search and 16bit confirm
+		Add I/NAV data modulation in SimModel (for future Galileo support)
+	Bug fix
+		DecodeData changed when write CORR_STATE in SimModel

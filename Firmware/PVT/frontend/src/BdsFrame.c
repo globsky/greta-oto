@@ -6,9 +6,12 @@
 //
 //----------------------------------------------------------------------
 
+#include <stdio.h>
 #include <string.h>
 #include <math.h>
 
+#include "PlatformCtrl.h"
+#include "ChannelManager.h"
 #include "DataTypes.h"
 #include "GlobalVar.h"
 #include "SupportPackage.h"
@@ -39,7 +42,7 @@ void BdsDecodeInit()
 int BdsDecodeTask(void *Param)
 {
 	PDATA_STREAM DataStream = (PDATA_STREAM)Param;
-	int ChannelIndex = DataStream->PrevSymbol;	// get logic channel ID
+	int ChannelIndex = DataStream->ChannelState->LogicChannel;	// get logic channel ID
 	PBDS_FRAME_INFO BdsFrameInfo = (PBDS_FRAME_INFO)g_ChannelStatus[ChannelIndex].FrameInfo;
 	U16 *FrameBuffer = DataFrame + ChannelIndex * BUFFER_LENGTH;
 	int StartPos = 0;	// position of symbol in data stream to decode
@@ -58,10 +61,12 @@ int BdsDecodeTask(void *Param)
 		else
 			return 0;
 	}
+	DEBUG_OUTPUT(OUTPUT_CONTROL(DATA_DECODE, INFO), "BDS stream:");
 	while (StartPos < DataStream->DataCount)
 	{
 		// extra data symbol from data buffer
 		Symbol = (S8)(DataStream->DataBuffer[StartPos/4] >> 24);
+		DEBUG_OUTPUT(OUTPUT_CONTROL(DATA_DECODE, INFO), " %02x", Symbol & 0xff);
 		DataStream->DataBuffer[StartPos/4] <<= 8;
 		// set corresponding bit
 		SetBit(FrameBuffer, ((Symbol & 0x80) ? 1 : 0), BdsFrameInfo->NavBitNumber);
@@ -75,6 +80,7 @@ int BdsDecodeTask(void *Param)
 			BdsFrameInfo->NavBitNumber = 0;
 		}
 	}
+	DEBUG_OUTPUT(OUTPUT_CONTROL(DATA_DECODE, INFO), "\n");
 
 	return 0;
 }

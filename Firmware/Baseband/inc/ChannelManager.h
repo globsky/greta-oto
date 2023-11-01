@@ -45,7 +45,7 @@ typedef struct tag_CHANNEL_STATE
 	int TrackingTimeout;	// millisecond for current stage timeout (-1 for final stage)
 	// state buffer cache and pointer to hardware buffer
 	STATE_BUFFER StateBufferCache;	// local image of state buffer
-	PSTATE_BUFFER StateBufferHW;	// pointer to hardware state buffer
+	volatile PSTATE_BUFFER StateBufferHW;	// pointer to hardware state buffer
 	// accumulation number and counter
 	int CoherentNumber;		// same as coherent number settings in CohConfig field of state buffer
 	int FftNumber;			// 1 for PLL only (no FLL), 2 for cross-dot (FLL), 3~8 for FFT

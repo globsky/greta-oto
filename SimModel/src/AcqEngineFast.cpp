@@ -451,8 +451,8 @@ void CAcqEngine::SearchOneChannel(AeBufferSatParam *pSatParam, int Channel)
 		}
 		ChannelConfig[Channel][5+i] = (PeakAmp << 24) | ((PeakFreqBin & 0x1ff) << 15) | PeakCor;
 	}
-	printf("Ch%02d %08x %08x %08x %08x ", Channel, ChannelConfig[Channel][4], ChannelConfig[Channel][5], ChannelConfig[Channel][6], ChannelConfig[Channel][7]);
-	printf("Svid%2d Amp=%f Cor=%4d Freq=%f\n", Svid, SignalPeak, Cor, (FreqBin - 3.5) * 62.5 + CenterFreq);
+//	printf("Ch%02d %08x %08x %08x %08x ", Channel, ChannelConfig[Channel][4], ChannelConfig[Channel][5], ChannelConfig[Channel][6], ChannelConfig[Channel][7]);
+//	printf("Svid%2d Amp=%f Cor=%4d Freq=%f\n", Svid, SignalPeak, Cor, (FreqBin - 3.5) * 62.5 + CenterFreq);
 }
 
 void CAcqEngine::DoAcquisition()

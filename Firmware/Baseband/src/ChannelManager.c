@@ -36,7 +36,7 @@ static void DecodeDataStream(PCHANNEL_STATE ChannelState);
 static void CalcCN0(PCHANNEL_STATE ChannelState);
 static int BitSyncTask(void *Param);
 static int DataSyncTask(void *Param);
-static int SyncPilotData(unsigned int DataWord, const unsigned int SecondCode[57]);
+static int SyncPilotData(unsigned int DataWord, const unsigned int SecondCode[57], int StartOffset);
 
 void SetNHConfig(PCHANNEL_STATE ChannelState, int NHPos, const unsigned int *NHCode);
 
@@ -219,7 +219,7 @@ void ProcessCohSum(int ChannelID, unsigned int OverwriteProtect)
 	if (CompleteData)
 	{
 		memcpy(ChannelState->PendingCoh + ChannelState->PendingCount, ChannelState->StateBufferCache.CoherentSum + ChannelState->PendingCount, sizeof(U32) * (8 - ChannelState->PendingCount));	// concatinate data
-//		printf("%6d %6d\n", (S16)(ChannelState->PendingCoh[0] >> 16), (S16)(ChannelState->PendingCoh[0] & 0xffff));
+		DEBUG_OUTPUT(OUTPUT_CONTROL(COH_PROC, NONE), "%6d %6d\n", (S16)(ChannelState->PendingCoh[0] >> 16), (S16)(ChannelState->PendingCoh[0] & 0xffff));
 		memcpy(CohBuffer, ChannelState->PendingCoh + 1, sizeof(U32) * CORRELATOR_NUM);	// copy coherent result (except Cor0) to coherent buffer
 		ChannelState->PendingCount = 0;
 	}
@@ -256,7 +256,8 @@ void ProcessCohData(PCHANNEL_STATE ChannelState)
 	}
 	
 //	if (ChannelState->Svid == 19)
-	DEBUG_OUTPUT(OUTPUT_CONTROL(COH_PROC, NONE), "SV%2d I/Q[4]=%6d %6d I/Q[0]=%6d %6d\n", ChannelState->Svid, \
+	DEBUG_OUTPUT(OUTPUT_CONTROL(COH_PROC, NONE), "SV%2d Stage%d T=%4d I/Q[4]=%6d %6d I/Q[0]=%6d %6d\n", \
+		ChannelState->Svid, (ChannelState->State & STAGE_MASK), ChannelState->TrackingTime, \
 		(S16)(ChannelState->PendingCoh[4] >> 16), (S16)(ChannelState->PendingCoh[4] & 0xffff), \
 		(S16)(ChannelState->PendingCoh[0] >> 16), (S16)(ChannelState->PendingCoh[0] & 0xffff));
 
@@ -279,8 +280,6 @@ void ProcessCohData(PCHANNEL_STATE ChannelState)
 	// do tracking loop
 	if ((ChannelState->State & STAGE_MASK) >= STAGE_PULL_IN)
 		DoTrackingLoop(ChannelState);
-
-	DEBUG_OUTPUT(OUTPUT_CONTROL(COH_PROC, NONE), "%d T=%4d I/Q=%6d %6d\n", (ChannelState->State & STAGE_MASK), ChannelState->TrackingTime, (S16)(ChannelState->PendingCoh[4] >> 16), (S16)(ChannelState->PendingCoh[4] & 0xffff));
 	
 	// collect correlation result for bit sync if in bit sync stage
 	if ((ChannelState->State & STAGE_MASK) == STAGE_BIT_SYNC)
@@ -357,11 +356,11 @@ int ComposeMeasurement(int ChannelID, PBB_MEASUREMENT Measurement, U32 *DataBuff
 		ChannelState->DataStream.DataBuffer[WordNumber-1] <<= (((~Measurement->DataNumber + 1) & 0x3) * 8);	// last word shift to MSB
 		memcpy(Measurement->DataStreamAddr, ChannelState->DataStream.DataBuffer, sizeof(U32) * WordNumber);
 		ChannelState->DataStream.ChannelState = ChannelState;
-		ChannelState->DataStream.PrevSymbol = ChannelState->LogicChannel;	// use PrevSymbol to store logic channel ID to BDS data decode
 		if ((ChannelState->State & DATA_STREAM_PRN2) && ChannelState->DataStream.DataCount > 0)
 			AddToTask(TASK_POSTMEAS, BdsDecodeTask, &(ChannelState->DataStream), sizeof(DATA_STREAM) - 32 + WordNumber);
 	}
-	ChannelState->DataStream.DataCount= 0;
+	if (FREQ_ID_IS_L1CA(ChannelState->FreqID) || (ChannelState->State & DATA_STREAM_PRN2))	// clear DataCount if decoding data channel
+		ChannelState->DataStream.DataCount= 0;
 	ChannelState->DataStream.StartIndex = ChannelState->FrameCounter;
 
 	Measurement->CN0 = ChannelState->CN0;
@@ -402,91 +401,99 @@ void DecodeDataStream(PCHANNEL_STATE ChannelState)
 	PBIT_SYNC_DATA BitSyncData = &(ChannelState->BitSyncData);
 	int DataSymbol;
 	int CurIndex;
-	int PostShift = STATE_BUF_GET_POST_SHIFT(&(ChannelState->StateBufferCache));
+	int i, SymbolCount;
+	unsigned int Data;
 
-	// accumulate time and coherent data
-	DataStream->CurrentAccTime += ChannelState->CoherentNumber;
-	if (ChannelState->State & DATA_STREAM_PRN2)
+	ChannelState->FrameCounter ++;
+	if (FREQ_ID_IS_L1CA(ChannelState->FreqID) && ChannelState->FrameCounter == 1500)	// 1500bit for each round of subframe 1-5
+		ChannelState->FrameCounter = 0;
+	else if (FREQ_ID_IS_E1(ChannelState->FreqID) && ChannelState->FrameCounter == 500)	// 500bit for each round of even/odd
+		ChannelState->FrameCounter = 0;
+	else if (ChannelState->FrameCounter == 1800)	// 1800bit for B1C or L1C
+		ChannelState->FrameCounter = 0;
+
+	if (ChannelState->State & DATA_STREAM_PRN2)	// tracking pilot channel and decode data channel, uses hardware data decode
 	{
-		DataStream->CurReal += (S16)(ChannelState->PendingCoh[0] >> 16);
-		DataStream->CurImag += (S16)(ChannelState->PendingCoh[0] & 0xffff);
+		// determine whether at least one symbol decoded
+		if (DataStream->TotalAccTime > ChannelState->CoherentNumber)	// symbol length longer than coherent length
+		{
+			DataStream->CurrentAccTime += ChannelState->CoherentNumber;
+			if (DataStream->CurrentAccTime < DataStream->TotalAccTime)
+				return;
+			DataStream->CurrentAccTime = 0;
+			SymbolCount = 1;
+		}
+		else
+			SymbolCount = ChannelState->CoherentNumber / DataStream->TotalAccTime;	// coherent length must be multiple of symbol length
+		Data = GetRegValue((U32)(&(ChannelState->StateBufferHW->DecodeData)));
+		if (FREQ_ID_IS_B1C(ChannelState->FreqID) || FREQ_ID_IS_E1(ChannelState->FreqID))	// B1C/E1 has negative data
+			Data ^= 0xffffffff;
+		for (i = 0; i < SymbolCount; i ++)
+		{
+			switch (ChannelState->State & DATA_STREAM_MASK)
+			{
+			case DATA_STREAM_1BIT:
+				DataSymbol = (Data >> (SymbolCount - i - 1)) & 1;
+				CurIndex = DataStream->DataCount / 32;
+				DataStream->DataBuffer[CurIndex] <<= 1;
+				break;
+			case DATA_STREAM_4BIT:
+				DataSymbol = (Data >> ((SymbolCount - i - 1) * 4)) & 0xf;
+				CurIndex = DataStream->DataCount / 8;
+				DataStream->DataBuffer[CurIndex] <<= 4;
+				break;
+			case DATA_STREAM_8BIT:
+				DataSymbol = (Data >> ((SymbolCount - i - 1) * 8)) & 0xff;
+				CurIndex = DataStream->DataCount / 4;
+				DataStream->DataBuffer[CurIndex] <<= 8;
+				break;
+			}
+			DataStream->DataBuffer[CurIndex] |= DataSymbol;
+			DataStream->DataCount ++;
+		}
 	}
-	else
+	else	// decode L1C/A or decode pilot channel NH code
 	{
+		DataStream->CurrentAccTime += ChannelState->CoherentNumber;
 		DataStream->CurReal += (S16)(ChannelState->PendingCoh[4] >> 16);
 		DataStream->CurImag += (S16)(ChannelState->PendingCoh[4] & 0xffff);
-	}
 
-//	if (ChannelState->Svid == 30)
-//		printf("DATA %d %d\n", DataStream->CurrentAccTime, DataStream->TotalAccTime);
-	// if accumulate time reaches symbol length, decode data symbol
-	if (DataStream->CurrentAccTime >= DataStream->TotalAccTime)
-	{
-		ChannelState->FrameCounter ++;
-		if (FREQ_ID_IS_L1CA(ChannelState->FreqID) && ChannelState->FrameCounter == 1500)	// 1500bit for each round of subframe 1-5
-			ChannelState->FrameCounter = 0;
-		else if (FREQ_ID_IS_E1(ChannelState->FreqID) && ChannelState->FrameCounter == 500)	// 500bit for each round of even/odd
-			ChannelState->FrameCounter = 0;
-		else if (ChannelState->FrameCounter == 1800)	// 1800bit for B1C or L1C
-			ChannelState->FrameCounter = 0;
+		if (DataStream->CurrentAccTime < DataStream->TotalAccTime)
+			return;
 
-		if ((ChannelState->State & DATA_STREAM_MASK) == DATA_STREAM_1BIT)
+		DEBUG_OUTPUT(OUTPUT_CONTROL(COH_PROC, INFO), "DATA %5d %5d at %d\n", DataStream->CurReal, DataStream->CurImag, DataStream->DataCount);
+
+		if ((ChannelState->State & STAGE_MASK) == (STAGE_TRACK + 1))	// PLL lock, determine by sign
+			DataSymbol = ((DataStream->CurReal < 0) ? 1 : 0);
+		else	// determine by data toggle
 		{
-			if ((ChannelState->State & STAGE_MASK) == (STAGE_TRACK + 1))	// determine by data toggle
-			{
-				DataSymbol = ((DataStream->CurReal < 0) ? 1 : 0);
-			}
-			else	// PLL lock, determine by sign
-			{
-				// determine symbol toggle
-				DataSymbol = DataStream->CurReal * DataStream->PrevReal + DataStream->CurImag * DataStream->PrevImag;
-				DataSymbol = ((DataSymbol < 0) ? 1 : 0) ^ (DataStream->PrevSymbol);
-				// store to previous values for next symbol
-				DataStream->PrevSymbol = DataSymbol;
-				DataStream->PrevReal = DataStream->CurReal;
-				DataStream->PrevImag = DataStream->CurImag;
-			}
-			// put into data stream buffer
-			CurIndex = DataStream->DataCount / 32;
-			DataStream->DataBuffer[CurIndex] <<= 1;
-			DataStream->DataBuffer[CurIndex] |= DataSymbol;
+			// determine symbol toggle
+			DataSymbol = DataStream->CurReal * DataStream->PrevReal + DataStream->CurImag * DataStream->PrevImag;
+			DataSymbol = ((DataSymbol < 0) ? 1 : 0) ^ (DataStream->PrevSymbol);
+			// store to previous values for next symbol
+			DataStream->PrevSymbol = DataSymbol;
+			DataStream->PrevReal = DataStream->CurReal;
+			DataStream->PrevImag = DataStream->CurImag;
 		}
-		else if ((ChannelState->State & DATA_STREAM_MASK) == DATA_STREAM_4BIT)
-		{
-		}
-		else if ((ChannelState->State & DATA_STREAM_MASK) == DATA_STREAM_8BIT)
-		{
-			if (FREQ_ID_IS_B1C(ChannelState->FreqID) && (ChannelState->State & DATA_STREAM_PRN2))	// negative of Q value
-				DataSymbol = (-DataStream->CurImag) >> (8 - PostShift - PRE_SHIFT_BITS + 1);
-			else	// L1C
-				DataSymbol = DataStream->CurReal >> (8 - PostShift - PRE_SHIFT_BITS + 1);
-			// clip to 8bit
-			if (DataSymbol > 127)
-				DataSymbol = 127;
-			else if (DataSymbol < -128)
-				DataSymbol = -128;
-			// put into data stream buffer
-			CurIndex = DataStream->DataCount / 4;
-			DataStream->DataBuffer[CurIndex] <<= 8;
-			DataStream->DataBuffer[CurIndex] |= (DataSymbol & 0xff);
-			// if decoding pilot channel, also put data into BIT_SYNC_DATA to do frame sync
-			if ((!(ChannelState->State & DATA_STREAM_PRN2)) && BitSyncData->CorDataCount < 16)
-			{
-				CurIndex = BitSyncData->CorDataCount / 4;
-				BitSyncData->CorData[CurIndex] <<= 8;
-				BitSyncData->CorData[CurIndex] |= (DataSymbol & 0xff);
-				if (++BitSyncData->CorDataCount == 16)
-				{
-					BitSyncData->TimeTag = ChannelState->TrackingTime;
-					BitSyncData->PrevCorData = ChannelState->BitSyncResult;	// stage of frame sync
-					AddToTask(TASK_BASEBAND, DataSyncTask, BitSyncData, sizeof(BIT_SYNC_DATA));
-					BitSyncData->CorDataCount = 0;
-				}
-			}
-		}
+		// put into data stream buffer
+		CurIndex = DataStream->DataCount / 32;
+		DataStream->DataBuffer[CurIndex] <<= 1;
+		DataStream->DataBuffer[CurIndex] |= DataSymbol;
+
 		DataStream->DataCount ++;
 		DataStream->CurrentAccTime = 0;
 		DataStream->CurReal = DataStream->CurImag = 0;
+
+		if (!(FREQ_ID_IS_L1CA(ChannelState->FreqID)) && DataStream->DataCount == 24)
+		{
+			BitSyncData->CorData[0] = DataStream->DataBuffer[0];
+			if (((DataStream->PrevReal >= 0) ? 0 : 1) ^ DataSymbol)	// data sign does not match data symbol, toggle stream
+				BitSyncData->CorData[0] ^= 0xffffffff;
+			BitSyncData->TimeTag = ChannelState->TrackingTime;
+//			BitSyncData->PrevCorData = ChannelState->BitSyncResult;	// stage of frame sync
+			AddToTask(TASK_BASEBAND, DataSyncTask, BitSyncData, sizeof(BIT_SYNC_DATA));
+			DataStream->DataCount = 0;
+		}
 	}
 }
 
@@ -530,7 +537,7 @@ void CalcCN0(PCHANNEL_STATE ChannelState)
 	ChannelState->CN0 = IntLog10(ChannelState->SmoothedPower) - NoiseFloor;
 	if (ChannelState->CN0 < 500)	// clip lowest CN0 at 5dBHz
 		ChannelState->CN0 = 500;
-//	printf("CN0=%4d fastCN0=%4d\n", ChannelState->CN0, ChannelState->FastCN0);
+	DEBUG_OUTPUT(OUTPUT_CONTROL(COH_PROC, NONE), "CN0=%4d fastCN0=%4d\n", ChannelState->CN0, ChannelState->FastCN0);
 
 	// detect CN0 jump
 	CN0Gap = ChannelState->CN0 - ChannelState->FastCN0;
@@ -630,7 +637,7 @@ int BitSyncTask(void *Param)
 	// determine whether bit sync success
 	if (MaxCount >= 5 && MaxCount >= TotalCount / 2)	// at least 5 toggles and max position toggle occupies at least 50%, SUCCESS
 	{
-//		printf("Bitsync found at %d with %d/%d\n", MaxTogglePos, MaxCount, TotalCount);
+		DEBUG_OUTPUT(OUTPUT_CONTROL(COH_PROC, NONE), "Bitsync found at %d with %d/%d\n", MaxTogglePos, MaxCount, TotalCount);
 		MaxTogglePos += BitSyncData->TimeTag;	// toggle position align to time tag
 		MaxTogglePos %= 20;		// remnant of 20ms
 		BitSyncData->ChannelState->BitSyncResult = MaxTogglePos ? MaxTogglePos : 20;	// set result, which means bit toggle when (TrackTime % 20 == BitSyncResult)
@@ -642,14 +649,19 @@ int BitSyncTask(void *Param)
 
 //*************** Task to do pilot data sync ****************
 //* This task is added to and called within baseband task queue
+//* Set ChannelState->BitSyncResult with following value
+//* 0: sync to secondary code fail
+//* 0x800+index: secondary code start from index with positive sign
+//* 0x1000+index: secondary code start from index with negative sign
+//* 0<=index<=24 for E1, 0<=index<=1799 for B1C/L1C
 // Parameters:
 //   Param: Pointer to bit sync data structure
 // Return value:
 //   0
 int DataSyncTask(void *Param)
 {
-	int i, code_index, bit_index;
-	unsigned int DataWord = 0, CodeWord;
+	int i;
+	unsigned int DataWord = 0;
 
 	PBIT_SYNC_DATA BitSyncData = (PBIT_SYNC_DATA)Param;
 	int FreqID = (int)(BitSyncData->ChannelState->FreqID);
@@ -659,36 +671,15 @@ int DataSyncTask(void *Param)
 		;
 	else if (FREQ_ID_IS_B1C(FreqID))
 	{
-		// put decoded data of CorData into 16LSB of DataWord
-		DataWord = 0;
-		for (i = 0; i < 16; i ++)
+		// revert data order to LSB first
+		for (i = 0; i < 24; i ++)
 		{
-			DataWord |= (BitSyncData->CorData[i/4] & 0x80000000) ? (1 << i) : 0;
-			BitSyncData->CorData[i/4] <<= 8;
+			DataWord <<= 1;
+			DataWord |= (BitSyncData->CorData[0] & 1) ? 1 : 0;
+			BitSyncData->CorData[0] >>= 1;
 		}
-		if (BitSyncData->ChannelState->BitSyncResult == 0)	// search
-			BitSyncData->ChannelState->BitSyncResult = SyncPilotData(DataWord, B1CSecondCode[Svid-1]);
-		else if (BitSyncData->ChannelState->BitSyncResult > 0 && BitSyncData->ChannelState->BitSyncResult <= 1800)	// confirm
-		{
-			i = BitSyncData->ChannelState->BitSyncResult + 15;	// index to confirm (+16 to next 16bit and -1 to compensate SyncPilotData() offset)
-			if (i >= 1800) i -= 1800;
-			code_index = i / 32;
-			bit_index = i & 0x1f;
-			CodeWord = B1CSecondCode[Svid-1][code_index] >> bit_index;
-			if (bit_index > 16)
-				CodeWord |= (B1CSecondCode[Svid-1][code_index+1] << (32 - bit_index));
-			CodeWord &= 0xffff;
-			// calculate bit count at TimeTag = 0, -16 to get time tag at start of current 16bit
-			i -= (BitSyncData->TimeTag / 10 - 16);
-			i %= 1800;
-			if (i < 0) i += 1800;
-			if (DataWord == CodeWord)	// match positive
-				BitSyncData->ChannelState->BitSyncResult = i + 0x800;	// bit11 for positive match result
-			else if (DataWord == (CodeWord ^ 0xffff))	// match negative
-				BitSyncData->ChannelState->BitSyncResult = i + 0x1000;	// bit12 for negative match result
-			else	// confirm fail, search again
-				BitSyncData->ChannelState->BitSyncResult = SyncPilotData(DataWord, B1CSecondCode[Svid-1]);
-		}
+		BitSyncData->ChannelState->BitSyncResult = SyncPilotData(DataWord, B1CSecondCode[Svid-1], BitSyncData->TimeTag / 10 - 24);
+		return 0;
 	}
 	else if (FREQ_ID_IS_L1C(FreqID))
 		;
@@ -699,26 +690,33 @@ int DataSyncTask(void *Param)
 // Parameters:
 //   CorData: Pointer to pilot data, 8bit for each data from MSB
 //   SecondCode: 1800 bit of pilot data
+//   StartOffset: first bit from TrackingTime==0
 // Return value:
-//   0 for match position not found or 1~1800 for match position
-int SyncPilotData(unsigned int DataWord, const unsigned int SecondCode[57])
+//   0 for match position not found
+//   0x800~0x800+1799 for match positive
+//   0x1000~0x1000+1799 for match negative
+int SyncPilotData(unsigned int DataWord, const unsigned int SecondCode[57], int StartOffset)
 {
 	int i;
 	unsigned int CodeWord;
+	unsigned int Match;
 
-
+	CodeWord = SecondCode[0];
 	for (i = 0; i < 1800; i ++)
 	{
-		// put code to match in 16LSB of CodeWord
-		CodeWord = SecondCode[i/32];
-		if (i & 0x10)
-			CodeWord = (CodeWord >> 16) | (SecondCode[i/32+1] << 16);
-		CodeWord >>= (i & 0xf);
-		CodeWord &= 0xffff;
+		Match = (DataWord ^(CodeWord & 0xffffff));
+		if (Match == 0 || Match == 0xffffff)
+			break;
 
-		if (DataWord == CodeWord || DataWord == (CodeWord ^ 0xffff))
-			return i + 1;
+		CodeWord >>= 1;
+		if ((i & 0x7) == 7)	// i = 7, 15, 23, 31...
+			CodeWord |= ((SecondCode[i/32+1] << ((i ^ 0x1f) & 0x18)) & 0xff000000);
 	}
 
-	return 0;
+	if (i == 1800)
+		return 0;
+	i -= StartOffset;
+	while (i < 0)
+		i += 1800;
+	return Match ? (0x1000 + i) : (0x800 + i);
 }

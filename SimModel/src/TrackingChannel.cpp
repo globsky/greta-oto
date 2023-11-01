@@ -187,6 +187,7 @@ void CTrackingChannel::SetChannelStates(unsigned int AddressOffset, U32 Value)
 		BitCount = EXTRACT_UINT(Value, 16, 5);
 		CoherentCount = EXTRACT_UINT(Value, 21, 6);
 		NHCount = EXTRACT_UINT(Value, 27, 5);
+		break;
 	case STATE_OFFSET_DECODE_DATA:
 		DecodeData = Value;
 		break;
