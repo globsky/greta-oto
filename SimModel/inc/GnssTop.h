@@ -51,7 +51,7 @@ public:
 	OUTPUT_PARAM OutputParam;
 	CPowerControl PowerControl;
 	LNavBit GpsBits;
-	BCNavBit BdsBits;
+	BCNav1Bit BdsBits;
 	INavBit GalBits;
 	NavBit *NavBitArray[4];
 
@@ -71,6 +71,7 @@ public:
 	int Process(int BlockSize);
 	void SetInputFile(char *FileName);
 	int StepToNextTime();
+	void UpdateSatParamList();
 	int GetAeProcessTime();
 
 	InterruptFunction InterruptService;

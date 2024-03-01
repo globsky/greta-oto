@@ -260,9 +260,6 @@ void CTrackingChannel::GetCorrelationResult(GNSS_TIME CurTime, SATELLITE_PARAM *
 	FrameLength = (SystemSel == SignalL1CA) ? 6000 : ((SystemSel == SignalE1) ? 2000 : 18000);
 	BitLength = (SystemSel == SignalL1CA) ? 20 : ((SystemSel == SignalE1) ? 4 : 10);
 
-	if (SystemSel == SignalB1C)
-		CurTime.MilliSeconds -= 14000;	// compensate BDS leap second difference
-
 	// first generate relative noise
 	while (CorCount < DataLength)
 	{

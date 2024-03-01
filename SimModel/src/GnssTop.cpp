@@ -167,11 +167,10 @@ U32 CGnssTop::GetRegValue(int Address)
 
 void CGnssTop::SetInputFile(char *FileName)
 {
-	int i = 0, index;
+	int i = 0;
 	CXmlElementTree XmlTree;
 	CXmlElement *RootElement, *Element;
-	int ListCount;
-	PSIGNAL_POWER PowerList;
+	GNSS_TIME BdsTime;
 
 	XmlTree.parse(FileName);
 	RootElement = XmlTree.getroot();
@@ -193,6 +192,7 @@ void CGnssTop::SetInputFile(char *FileName)
 	CurTime = UtcToGpsTime(UtcTime);
 	CurPos = LlaToEcef(StartPos);
 	SpeedLocalToEcef(StartPos, StartVel, CurPos);
+	BdsTime = UtcToBdsTime(UtcTime);
 
 	for (i = 0; i < TOTAL_GPS_SAT; i ++)
 		GpsSatParam[i].CN0 = (int)(PowerControl.InitCN0 * 100 + 0.5);
@@ -209,7 +209,7 @@ void CGnssTop::SetInputFile(char *FileName)
 	}
 	for (i = 1; i <= TOTAL_BDS_SAT; i ++)
 	{
-		BdsEph[i-1] = NavData.FindEphemeris(BdsSystem, CurTime, i);
+		BdsEph[i-1] = NavData.FindEphemeris(BdsSystem, BdsTime, i);
 		BdsBits.SetEphemeris(i, BdsEph[i-1]);
 	}
 	for (i = 1; i <= TOTAL_GAL_SAT; i ++)
@@ -223,30 +223,7 @@ void CGnssTop::SetInputFile(char *FileName)
 	GpsSatNumber = (OutputParam.FreqSelect[GpsSystem]) ? GetVisibleSatellite(CurPos, CurTime, OutputParam, GpsSystem, GpsEph, 32, GpsEphVisible) : 0;
 	BdsSatNumber = (OutputParam.FreqSelect[BdsSystem]) ? GetVisibleSatellite(CurPos, CurTime, OutputParam, BdsSystem, BdsEph, TOTAL_BDS_SAT, BdsEphVisible) : 0;
 	GalSatNumber = (OutputParam.FreqSelect[GalileoSystem]) ? GetVisibleSatellite(CurPos, CurTime, OutputParam, GalileoSystem, GalEph, TOTAL_GAL_SAT, GalEphVisible) : 0;
-	TotalSatNumber = GpsSatNumber + BdsSatNumber + GalSatNumber;
-	ListCount = PowerControl.GetPowerControlList(0, PowerList);
-	TotalSatNumber = 0;
-	for (i = 0; i < GpsSatNumber; i ++)
-	{
-		index = GpsEphVisible[i]->svid - 1;
-		GetSatelliteParam(CurPos, StartPos, CurTime, GpsSystem, GpsEphVisible[i], NavData.GetGpsIono(), &GpsSatParam[index]);
-		GetSatelliteCN0(ListCount, PowerList, PowerControl.InitCN0, PowerControl.Adjust, &GpsSatParam[index]);
-		SatParamList[TotalSatNumber ++] = &GpsSatParam[index];
-	}
-	for (i = 0; i < BdsSatNumber; i ++)
-	{
-		index = BdsEphVisible[i]->svid - 1;
-		GetSatelliteParam(CurPos, StartPos, CurTime, BdsSystem, BdsEphVisible[i], NavData.GetGpsIono(), &BdsSatParam[index]);
-		GetSatelliteCN0(ListCount, PowerList, PowerControl.InitCN0, PowerControl.Adjust, &BdsSatParam[index]);
-		SatParamList[TotalSatNumber ++] = &BdsSatParam[index];
-	}
-	for (i = 0; i < GalSatNumber; i ++)
-	{
-		index = GalEphVisible[i]->svid - 1;
-		GetSatelliteParam(CurPos, StartPos, CurTime, GalileoSystem, GalEphVisible[i], NavData.GetGpsIono(), &GalSatParam[index]);
-		GetSatelliteCN0(ListCount, PowerList, PowerControl.InitCN0, PowerControl.Adjust, &GalSatParam[index]);
-		SatParamList[TotalSatNumber ++] = &GalSatParam[index];
-	}
+	UpdateSatParamList();
 }
 
 int CGnssTop::Process(int BlockSize)
@@ -284,17 +261,10 @@ int CGnssTop::Process(int BlockSize)
 
 int CGnssTop::StepToNextTime()
 {
-	int i, index;
-	LLA_POSITION PosLLA;
-	int ListCount;
-	PSIGNAL_POWER PowerList;
-
 	if (!Trajectory.GetNextPosVelECEF(0.001, CurPos))
 		return -1;
 
-	ListCount = PowerControl.GetPowerControlList(1, PowerList);
 	// calculate new satellite parameter
-	PosLLA = EcefToLla(CurPos);
 	CurTime.MilliSeconds ++;
 	if (CurTime.MilliSeconds > 604800000)
 	{
@@ -307,6 +277,17 @@ int CGnssTop::StepToNextTime()
 		BdsSatNumber = (OutputParam.FreqSelect[BdsSystem]) ? GetVisibleSatellite(CurPos, CurTime, OutputParam, BdsSystem, BdsEph, TOTAL_BDS_SAT, BdsEphVisible) : 0;
 		GalSatNumber = (OutputParam.FreqSelect[GalileoSystem]) ? GetVisibleSatellite(CurPos, CurTime, OutputParam, GalileoSystem, GalEph, TOTAL_GAL_SAT, GalEphVisible) : 0;
 	}
+	UpdateSatParamList();
+	return 0;
+}
+
+void CGnssTop::UpdateSatParamList()
+{
+	int i, index;
+	LLA_POSITION PosLLA = EcefToLla(CurPos);
+	PSIGNAL_POWER PowerList;
+	int ListCount = PowerControl.GetPowerControlList(1, PowerList);;
+
 	TotalSatNumber = 0;
 	for (i = 0; i < GpsSatNumber; i ++)
 	{
@@ -329,7 +310,6 @@ int CGnssTop::StepToNextTime()
 		GetSatelliteCN0(ListCount, PowerList, PowerControl.InitCN0, PowerControl.Adjust, &GalSatParam[index]);
 		SatParamList[TotalSatNumber ++] = &GalSatParam[index];
 	}
-	return 0;
 }
 
 #define AE_CLK_FREQ_MHz 100		// clock frequency for AE module
