@@ -176,8 +176,13 @@
 		Add I/NAV data modulation in SimModel (for future Galileo support)
 	Bug fix
 		DecodeData changed when write CORR_STATE in SimModel
-3/1/2023
+3/1/2024
 	Function and feature change
 		Update SimModel to adapt new SignalSim interface
 	Bug fix
 		BDS/GPS leap second compensate twice in SimModel
+12/26/2024
+	Translate the following documents to English
+		Greta Oto Design Manual
+		Greta Oto Register and Control Interface
+		Greta Oto Firmware Design
