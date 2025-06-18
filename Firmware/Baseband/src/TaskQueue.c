@@ -79,7 +79,7 @@ int AddTaskToQueue(PTASK_QUEUE TaskQueue, TaskFunction TaskFunc, void *Param, in
 			return 0;
 		}
 	}
-	else if (TaskQueue->WritePosition > TaskQueue->ReadPosition)	// write position does not roll back
+	else if (TaskQueue->WritePosition >= TaskQueue->ReadPosition)	// write position does not roll back
 	{
 		if ((TaskQueue->BufferSize - TaskQueue->WritePosition) >= ParamSpace)	// space to end can hold parameters
 		{
@@ -98,23 +98,10 @@ int AddTaskToQueue(PTASK_QUEUE TaskQueue, TaskFunction TaskFunc, void *Param, in
 		}
 	}
 	// write position roll back or wait queue empty
-	else if (ParamSpace <= (TaskQueue->ReadPosition - TaskQueue->WritePosition))	// enough space between write position and read position
+	else if (ParamSpace < (TaskQueue->ReadPosition - TaskQueue->WritePosition))	// enough space between write position and read position
 	{
-		if ((TaskQueue->BufferSize - TaskQueue->WritePosition) >= ParamSpace)	// space to end can hold parameters
-		{
-			ParamPointer = TaskQueue->ParamBuffer + TaskQueue->WritePosition;
-			NewWritePosition = TaskQueue->WritePosition + ParamSpace;
-		}
-		else if (TaskQueue->BufferSize >= ParamSpace)	// space from beginning can hold parameters
-		{
-			ParamPointer = TaskQueue->ParamBuffer;
-			NewWritePosition = 0;
-		}
-		else
-		{
-			EXIT_CRITICAL();
-			return 0;
-		}
+		ParamPointer = TaskQueue->ParamBuffer + TaskQueue->WritePosition;
+		NewWritePosition = TaskQueue->WritePosition + ParamSpace;
 	}
 	else		
 	{

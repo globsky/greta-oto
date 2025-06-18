@@ -152,7 +152,7 @@ void MsrProc(PBB_MEASUREMENT Measurements, unsigned int ActiveMask, int CurMsInt
 				meas_num ++;
 		}
 	}
-	if (0 && meas_num > 0)
+	if (1 && meas_num > 0)
 	{
 		GpsTimeToUtc(g_ReceiverInfo.WeekNumber, g_ReceiverInfo.GpsMsCount, &ReceiverTime, (PUTC_PARAM)0);
 		DEBUG_OUTPUT(OUTPUT_CONTROL(MEASUREMENT, INFO), "> %04d %02d %02d %02d %02d %02d.%03d0000 0 %d 0.0000000\n",

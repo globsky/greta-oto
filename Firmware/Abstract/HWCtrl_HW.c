@@ -6,8 +6,6 @@
 //
 //----------------------------------------------------------------------
 
-#include <stdio.h>
-#include <memory.h>
 #include "HWCtrl.h"
 #include "PlatformCtrl.h"
 

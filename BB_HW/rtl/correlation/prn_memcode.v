@@ -72,6 +72,8 @@ always @(posedge clk or negedge rst_b)
 		current_code_r <= 0;
 	else if (code_load)
 		current_code_r <= current_code_i;
+	else if (load_init_data)
+		current_code_r <= memcode_data;
 	else if (code_reload)
 		current_code_r <= code_preload;
 
@@ -170,7 +172,7 @@ assign base_address = {start_index[8:0], 5'h0};
 
 always @(posedge clk or negedge rst_b)
 	if (!rst_b)
-		memcode_addr <= 10'd0;
+		memcode_addr <= 14'd0;
 	else if (phase_init)
 		memcode_addr <= base_address;
 	else if (code_reload_d || phase_load_d)
@@ -292,8 +294,6 @@ always @(*)
 		prn_code = current_code_r[ 1];
 	5'b11111:
 		prn_code = current_code_r[ 0];
-	default:
-		prn_code = 1'b0;
 	endcase
 
 assign current_code_o = current_code_r;

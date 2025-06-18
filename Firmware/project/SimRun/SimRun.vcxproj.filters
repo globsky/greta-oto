@@ -1,0 +1,430 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="SignalSim">
+      <UniqueIdentifier>{3ec367a5-858d-4f43-9531-06c0b8d77c09}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="SignalSim\inc">
+      <UniqueIdentifier>{33d41f0b-608c-443b-b679-9481c93949a2}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="SignalSim\src">
+      <UniqueIdentifier>{66582f56-ddce-4eaa-a8f9-d04c2e29bf97}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="SimModel">
+      <UniqueIdentifier>{6a2ca251-6517-42f9-a8b1-aaafb93c18fe}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="SimModel\inc">
+      <UniqueIdentifier>{e60b8c88-25bf-44b6-b512-fa7fe3706d7f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="SimModel\src">
+      <UniqueIdentifier>{c8bf8bee-376c-46fc-9c3e-238424c84163}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Abstract">
+      <UniqueIdentifier>{eaea2114-9e97-441e-abab-8318266a9b3d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Baseband">
+      <UniqueIdentifier>{dc6593a8-0e94-42dd-9d94-ca1e6f74bb5b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Baseband\inc">
+      <UniqueIdentifier>{13abdeea-bc8f-4ab6-a773-5813d25aa440}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Baseband\src">
+      <UniqueIdentifier>{ccf65016-3643-4d4b-a4fd-ac911a3ca260}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="common">
+      <UniqueIdentifier>{72995814-ef30-46e7-aa21-78bfd3554be9}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="PVT">
+      <UniqueIdentifier>{6e5041c7-3da2-4d8f-a6cf-52f29a56280a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="PVT\backend">
+      <UniqueIdentifier>{d6b6551d-b463-4f87-b6f6-cd262ebf9cde}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="PVT\backend\inc">
+      <UniqueIdentifier>{0cb4bf24-537d-400a-be03-4ba0cc609964}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="PVT\backend\src">
+      <UniqueIdentifier>{f153fa8c-0848-4a39-a22d-8ad4f2542869}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="PVT\frontend">
+      <UniqueIdentifier>{02438d64-c432-4804-9f61-40014292d435}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="PVT\frontend\inc">
+      <UniqueIdentifier>{db11c6df-f752-43b9-9a2f-1a17589f3ddf}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="PVT\frontend\src">
+      <UniqueIdentifier>{f0ce2f03-6042-4555-8163-4914be8391fc}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="PVT\inc">
+      <UniqueIdentifier>{f0b40a45-eedc-4f54-a1e3-e48147576fb9}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="PVT\src">
+      <UniqueIdentifier>{bcb6ace5-7ba1-4ca3-811e-729bdde29731}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="SignalSim\inc\INavBit.h">
+      <Filter>SignalSim\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="SignalSim\inc\JsonInterpreter.h">
+      <Filter>SignalSim\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="SignalSim\inc\JsonParser.h">
+      <Filter>SignalSim\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="SignalSim\inc\LNavBit.h">
+      <Filter>SignalSim\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="SignalSim\inc\NavBit.h">
+      <Filter>SignalSim\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="SignalSim\inc\NavData.h">
+      <Filter>SignalSim\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="SignalSim\inc\PilotBit.h">
+      <Filter>SignalSim\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="SignalSim\inc\PowerControl.h">
+      <Filter>SignalSim\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="SignalSim\inc\PrnGenerate.h">
+      <Filter>SignalSim\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="SignalSim\inc\Rinex.h">
+      <Filter>SignalSim\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="SignalSim\inc\SatelliteParam.h">
+      <Filter>SignalSim\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="SignalSim\inc\SatelliteSignal.h">
+      <Filter>SignalSim\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="SignalSim\inc\SignalSim.h">
+      <Filter>SignalSim\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="SignalSim\inc\Trajectory.h">
+      <Filter>SignalSim\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="SignalSim\inc\Almanac.h">
+      <Filter>SignalSim\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="SignalSim\inc\BasicTypes.h">
+      <Filter>SignalSim\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="SignalSim\inc\BCNav1Bit.h">
+      <Filter>SignalSim\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="SignalSim\inc\BCNav2Bit.h">
+      <Filter>SignalSim\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="SignalSim\inc\BCNav3Bit.h">
+      <Filter>SignalSim\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="SignalSim\inc\BCNavBit.h">
+      <Filter>SignalSim\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="SignalSim\inc\CNav2Bit.h">
+      <Filter>SignalSim\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="SignalSim\inc\CNavBit.h">
+      <Filter>SignalSim\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="SignalSim\inc\ComplexNumber.h">
+      <Filter>SignalSim\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="SignalSim\inc\ConstVal.h">
+      <Filter>SignalSim\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="SignalSim\inc\Coordinate.h">
+      <Filter>SignalSim\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="SignalSim\inc\D1D2NavBit.h">
+      <Filter>SignalSim\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="SignalSim\inc\FNavBit.h">
+      <Filter>SignalSim\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="SignalSim\inc\GNavBit.h">
+      <Filter>SignalSim\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="SignalSim\inc\GnssTime.h">
+      <Filter>SignalSim\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="SimModel\inc\ComplexNumber.h">
+      <Filter>SignalSim\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="SimModel\inc\GnssTop.h">
+      <Filter>SimModel\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="SimModel\inc\InitSet.h">
+      <Filter>SimModel\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="SimModel\inc\PeakSorter.h">
+      <Filter>SimModel\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="SimModel\inc\RegAddress.h">
+      <Filter>SimModel\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="SimModel\inc\TeFifoSim.h">
+      <Filter>SimModel\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="SimModel\inc\TrackingChannel.h">
+      <Filter>SimModel\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="SimModel\inc\TrackingEngine.h">
+      <Filter>SimModel\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="SimModel\inc\AcqEngineFast.h">
+      <Filter>SimModel\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="SimModel\inc\GaussNoise.h">
+      <Filter>SimModel\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Abstract\HWCtrl.h">
+      <Filter>Abstract</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Abstract\PlatformCtrl.h">
+      <Filter>Abstract</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Baseband\inc\FirmwarePortal.h">
+      <Filter>Baseband\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Baseband\inc\TaskManager.h">
+      <Filter>Baseband\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Baseband\inc\TaskQueue.h">
+      <Filter>Baseband\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Baseband\inc\TEManager.h">
+      <Filter>Baseband\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Baseband\inc\AEManager.h">
+      <Filter>Baseband\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Baseband\inc\BBCommonFunc.h">
+      <Filter>Baseband\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Baseband\inc\BBDefines.h">
+      <Filter>Baseband\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Baseband\inc\ChannelManager.h">
+      <Filter>Baseband\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Baseband\inc\ComposeOutput.h">
+      <Filter>Baseband\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\common\ConstTable.h">
+      <Filter>common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\common\CommonDefines.h">
+      <Filter>common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\PVT\inc\PvtConst.h">
+      <Filter>PVT\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\PVT\inc\PvtEntry.h">
+      <Filter>PVT\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\PVT\inc\SupportPackage.h">
+      <Filter>PVT\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\PVT\inc\DataTypes.h">
+      <Filter>PVT\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\PVT\inc\GlobalVar.h">
+      <Filter>PVT\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\PVT\backend\inc\SatManage.h">
+      <Filter>PVT\backend\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\PVT\frontend\inc\GpsFrame.h">
+      <Filter>PVT\frontend\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\PVT\frontend\inc\BdsFrame.h">
+      <Filter>PVT\frontend\inc</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="SignalSim\src\FNavBit.cpp">
+      <Filter>SignalSim\src</Filter>
+    </ClCompile>
+    <ClCompile Include="SignalSim\src\GNavBit.cpp">
+      <Filter>SignalSim\src</Filter>
+    </ClCompile>
+    <ClCompile Include="SignalSim\src\GnssTime.cpp">
+      <Filter>SignalSim\src</Filter>
+    </ClCompile>
+    <ClCompile Include="SignalSim\src\INavBit.cpp">
+      <Filter>SignalSim\src</Filter>
+    </ClCompile>
+    <ClCompile Include="SignalSim\src\JsonInterpreter.cpp">
+      <Filter>SignalSim\src</Filter>
+    </ClCompile>
+    <ClCompile Include="SignalSim\src\JsonParser.cpp">
+      <Filter>SignalSim\src</Filter>
+    </ClCompile>
+    <ClCompile Include="SignalSim\src\LNavBit.cpp">
+      <Filter>SignalSim\src</Filter>
+    </ClCompile>
+    <ClCompile Include="SignalSim\src\NavBit.cpp">
+      <Filter>SignalSim\src</Filter>
+    </ClCompile>
+    <ClCompile Include="SignalSim\src\NavData.cpp">
+      <Filter>SignalSim\src</Filter>
+    </ClCompile>
+    <ClCompile Include="SignalSim\src\PilotBit.cpp">
+      <Filter>SignalSim\src</Filter>
+    </ClCompile>
+    <ClCompile Include="SignalSim\src\PowerControl.cpp">
+      <Filter>SignalSim\src</Filter>
+    </ClCompile>
+    <ClCompile Include="SignalSim\src\PrnGenerate.cpp">
+      <Filter>SignalSim\src</Filter>
+    </ClCompile>
+    <ClCompile Include="SignalSim\src\Rinex.cpp">
+      <Filter>SignalSim\src</Filter>
+    </ClCompile>
+    <ClCompile Include="SignalSim\src\SatelliteParam.cpp">
+      <Filter>SignalSim\src</Filter>
+    </ClCompile>
+    <ClCompile Include="SignalSim\src\SatelliteSignal.cpp">
+      <Filter>SignalSim\src</Filter>
+    </ClCompile>
+    <ClCompile Include="SignalSim\src\Trajectory.cpp">
+      <Filter>SignalSim\src</Filter>
+    </ClCompile>
+    <ClCompile Include="SignalSim\src\Almanac.cpp">
+      <Filter>SignalSim\src</Filter>
+    </ClCompile>
+    <ClCompile Include="SignalSim\src\BCNav1Bit.cpp">
+      <Filter>SignalSim\src</Filter>
+    </ClCompile>
+    <ClCompile Include="SignalSim\src\BCNav2Bit.cpp">
+      <Filter>SignalSim\src</Filter>
+    </ClCompile>
+    <ClCompile Include="SignalSim\src\BCNav3Bit.cpp">
+      <Filter>SignalSim\src</Filter>
+    </ClCompile>
+    <ClCompile Include="SignalSim\src\BCNavBit.cpp">
+      <Filter>SignalSim\src</Filter>
+    </ClCompile>
+    <ClCompile Include="SignalSim\src\CNav2Bit.cpp">
+      <Filter>SignalSim\src</Filter>
+    </ClCompile>
+    <ClCompile Include="SignalSim\src\CNavBit.cpp">
+      <Filter>SignalSim\src</Filter>
+    </ClCompile>
+    <ClCompile Include="SignalSim\src\ComplexNumber.cpp">
+      <Filter>SignalSim\src</Filter>
+    </ClCompile>
+    <ClCompile Include="SignalSim\src\Coordinate.cpp">
+      <Filter>SignalSim\src</Filter>
+    </ClCompile>
+    <ClCompile Include="SignalSim\src\D1D2NavBit.cpp">
+      <Filter>SignalSim\src</Filter>
+    </ClCompile>
+    <ClCompile Include="SimModel\src\PeakSorter.cpp">
+      <Filter>SimModel\src</Filter>
+    </ClCompile>
+    <ClCompile Include="SimModel\src\TeFifoSim.cpp">
+      <Filter>SimModel\src</Filter>
+    </ClCompile>
+    <ClCompile Include="SimModel\src\TrackingChannel.cpp">
+      <Filter>SimModel\src</Filter>
+    </ClCompile>
+    <ClCompile Include="SimModel\src\TrackingEngine.cpp">
+      <Filter>SimModel\src</Filter>
+    </ClCompile>
+    <ClCompile Include="SimModel\src\AcqEngineFast.cpp">
+      <Filter>SimModel\src</Filter>
+    </ClCompile>
+    <ClCompile Include="SimModel\src\GaussNoise.cpp">
+      <Filter>SimModel\src</Filter>
+    </ClCompile>
+    <ClCompile Include="SimModel\src\GnssTop.cpp">
+      <Filter>SimModel\src</Filter>
+    </ClCompile>
+    <ClCompile Include="SimModel\src\InitSet.c">
+      <Filter>SimModel\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\Abstract\HWCtrl_Model.cpp">
+      <Filter>Abstract</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\Abstract\PlatformCtrl_Model.c">
+      <Filter>Abstract</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\Baseband\src\TEManager.c">
+      <Filter>Baseband\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\Baseband\src\TrackingLoop.c">
+      <Filter>Baseband\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\Baseband\src\TrackingStage.c">
+      <Filter>Baseband\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\Baseband\src\AEManager.c">
+      <Filter>Baseband\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\Baseband\src\BBCommonFunc.c">
+      <Filter>Baseband\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\Baseband\src\ChannelManager.c">
+      <Filter>Baseband\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\Baseband\src\ComposeOutput.c">
+      <Filter>Baseband\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\Baseband\src\FirmwarePortal.c">
+      <Filter>Baseband\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\Baseband\src\TaskManager.c">
+      <Filter>Baseband\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\Baseband\src\TaskQueue.c">
+      <Filter>Baseband\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\common\ConstTable.c">
+      <Filter>common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\PVT\src\PvtBasicFunc.c">
+      <Filter>PVT\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\PVT\src\GlobalVar.c">
+      <Filter>PVT\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\PVT\backend\src\PvtLsq.c">
+      <Filter>PVT\backend\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\PVT\backend\src\PvtProc.c">
+      <Filter>PVT\backend\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\PVT\backend\src\SatCoord.c">
+      <Filter>PVT\backend\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\PVT\backend\src\SatManage.c">
+      <Filter>PVT\backend\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\PVT\backend\src\Convert.c">
+      <Filter>PVT\backend\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\PVT\backend\src\Matrix.c">
+      <Filter>PVT\backend\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\PVT\backend\src\PvtAiding.c">
+      <Filter>PVT\backend\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\PVT\backend\src\PvtKF.c">
+      <Filter>PVT\backend\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\PVT\frontend\src\GpsFrame.c">
+      <Filter>PVT\frontend\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\PVT\frontend\src\MsrProc.c">
+      <Filter>PVT\frontend\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\PVT\frontend\src\BdsFrame.c">
+      <Filter>PVT\frontend\src</Filter>
+    </ClCompile>
+    <ClCompile Include="SimRun.cpp" />
+  </ItemGroup>
+</Project>

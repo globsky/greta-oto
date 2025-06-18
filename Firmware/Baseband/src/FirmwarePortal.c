@@ -6,8 +6,6 @@
 //
 //----------------------------------------------------------------------
 
-#include <memory.h>
-#include <stdio.h>
 #include "CommonDefines.h"
 #include "RegAddress.h"
 #include "BBDefines.h"

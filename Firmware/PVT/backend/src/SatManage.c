@@ -29,8 +29,8 @@ void CalcSatelliteInfo(PCHANNEL_STATUS ObservationList[], int ObsCount)
 	int sv_index;
 	int EphOK = 1;
 	double Time, Trel;
-	PGNSS_EPHEMERIS Ephemeris;
-	PSATELLITE_INFO SatelliteInfo;
+	PGNSS_EPHEMERIS Ephemeris = g_GpsEphemeris;
+	PSATELLITE_INFO SatelliteInfo = g_GpsSatelliteInfo;
 
 	// calculate satellite position and velocity
 	for (i = 0; i < ObsCount; i ++)

@@ -186,3 +186,10 @@
 		Greta Oto Design Manual
 		Greta Oto Register and Control Interface
 		Greta Oto Firmware Design
+6/18/2026
+	Bug fix
+		First several PRN code generation error in RTL for Weil and memory code when phase_init asserted
+		Fix bug of incorrect position to put parameters in TaskQueue when adding new task
+		Remove obsolete header file
+	Function and feature change
+		SimRun project uses JSON file instead of XML file and add VS2022 project file

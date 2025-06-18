@@ -8,13 +8,10 @@
 
 #include <stdio.h>
 #include <malloc.h>
-#include <memory.h>
 #include <string.h>
 #include "RegAddress.h"
 #include "GnssTop.h"
-#include "XmlElement.h"
-#include "XmlInterpreter.h"
-#include "Coordinate.h"
+#include "SignalSim.h"
 
 double CTrackingChannel::CovarMatrix[4][SUM_N(COR_NUMBER)];
 
@@ -168,26 +165,14 @@ U32 CGnssTop::GetRegValue(int Address)
 void CGnssTop::SetInputFile(char *FileName)
 {
 	int i = 0;
-	CXmlElementTree XmlTree;
-	CXmlElement *RootElement, *Element;
+	JsonStream JsonTree;
+	JsonObject *Object;
 	GNSS_TIME BdsTime;
 
-	XmlTree.parse(FileName);
-	RootElement = XmlTree.getroot();
+	JsonTree.ReadFile(FileName);
+	if ((Object = JsonTree.GetRootObject()) != NULL)
+		AssignParameters(Object, &UtcTime, &StartPos, &StartVel, &Trajectory, &NavData, &OutputParam, &PowerControl, (DELAY_CONFIG *)NULL);
 
-	while ((Element = RootElement->GetElement(i ++)) != NULL)
-	{
-		if (strcmp(Element->GetTag(), "Time") == 0)
-			AssignStartTime(Element, UtcTime);
-		else if (strcmp(Element->GetTag(), "Trajectory") == 0)
-			SetTrajectory(Element, StartPos, StartVel, Trajectory);
-		else if (strcmp(Element->GetTag(), "Ephemeris") == 0)
-			NavData.ReadNavFile(Element->GetText());
-		else if (strcmp(Element->GetTag(), "Output") == 0)
-			SetOutputParam(Element, OutputParam);
-		else if (strcmp(Element->GetTag(), "PowerControl") == 0)
-			SetPowerControl(Element, PowerControl);
-	}
 	Trajectory.ResetTrajectoryTime();
 	CurTime = UtcToGpsTime(UtcTime);
 	CurPos = LlaToEcef(StartPos);

@@ -65,7 +65,7 @@ wire insert_flag;
 
 wire [13:0] legendre_length;
 wire [9:0] rewind_addr;
-assign legendre_length = weil_type ? 10223 : 10243;
+assign legendre_length = weil_type ? 14'd10223 : 14'd10243;
 assign rewind_addr = weil_type ? 10'h27f : 10'h281;
 
 wire phase_reset;
@@ -99,7 +99,7 @@ always @(posedge clk or negedge rst_b)
 		legendre_code2_r <= 0;
 	else if (code_load)
 		legendre_code2_r <= legendre_code2_i;
-	else if (code2_reload || load_init_data)
+	else if (code2_reload || load_init_data_d)
 		legendre_code2_r <= legendre_code2_preload;
 
 //--------------------------------------------
@@ -320,8 +320,8 @@ always @(posedge clk or negedge rst_b)
 
 assign legendre_rd1 = ~preload_valid1;
 assign legendre_rd2 = ~preload_valid2;
-assign preempt1 = (code_index1_init[3:0] == 4'hf) ? 1 : 0;
-assign preempt2 = (code_index2_init[3:0] == 4'hf) ? 1 : 0;
+assign preempt1 = (code_index1_init[3:0] == 4'hf) ? 1'b1 : 1'b0;
+assign preempt2 = (code_index2_init[3:0] == 4'hf) ? 1'b1 : 1'b0;
 
 // indicator of preload value ready
 reg preload_value_ready1, preload_value_ready2;
@@ -406,8 +406,6 @@ always @(*)
 		code1_output = legendre_code1_r[ 1];
 	4'b1111:
 		code1_output = legendre_code1_r[ 0];
-	default:
-		code1_output = 1'b0;
 	endcase
 
 always @(*)
@@ -444,8 +442,6 @@ always @(*)
 		code2_output = legendre_code2_r[ 1];
 	4'b1111:
 		code2_output = legendre_code2_r[ 0];
-	default:
-		code2_output = 1'b0;
 	endcase
 
 /*reg insert_output;

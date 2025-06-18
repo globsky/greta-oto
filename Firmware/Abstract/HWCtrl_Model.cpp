@@ -6,8 +6,6 @@
 //
 //----------------------------------------------------------------------
 
-#include <stdio.h>
-#include <memory.h>
 #include "GnssTop.h"
 #include "HWCtrl.h"
 extern "C" {

@@ -14,10 +14,17 @@ void DebugOutput(void *DebugParam, int DebugValue);
 
 FILE *DebugFile = 0;
 
-void main()
+int main(int argc, char *argv[])
 {
+	char ScenarioFile[256];
+
+	if (argc > 1)
+		strcpy(ScenarioFile, argv[1]);
+	else
+		strcpy(ScenarioFile, "test_obs2.json");
+
 	DebugFile = fopen("TrackState.txt", "w");
-	SetInputFile("test_obs2.xml");
+	SetInputFile(ScenarioFile);
 	fprintf(DebugFile, "SV# SatPhase SatDoppler SatCode LocalPhase LocalFre LocalCode PhaseDiff FreqDiff  PsrDiff\n");
 
 	AttachDebugFunc(DebugOutput);

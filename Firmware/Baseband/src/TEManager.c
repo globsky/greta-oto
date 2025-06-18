@@ -5,8 +5,7 @@
 //          Copyright (C) 2020-2029 by Jun Mo, All rights reserved.
 //
 //----------------------------------------------------------------------
-#include <stdio.h>
-#include <memory.h>
+#include <string.h>
 #include "RegAddress.h"
 #include "BBDefines.h"
 #include "HWCtrl.h"

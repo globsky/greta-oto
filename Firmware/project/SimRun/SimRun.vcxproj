@@ -1,0 +1,259 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>16.0</VCProjectVersion>
+    <Keyword>Win32Proj</Keyword>
+    <ProjectGuid>{2d5faa25-6014-4acf-bd81-a984cd5d1dca}</ProjectGuid>
+    <RootNamespace>SimRun</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="Shared">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>WIN32;_CRT_SECURE_NO_WARNINGS;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <AdditionalIncludeDirectories>..\..\Abstract;..\..\common;..\..\Baseband\inc;..\..\PVT\inc;..\..\PVT\frontend\inc;..\..\PVT\backend\inc;SignalSim\inc;SimModel\inc</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>WIN32;_CRT_SECURE_NO_WARNINGS;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <AdditionalIncludeDirectories>..\..\Abstract;..\..\common;..\..\Baseband\inc;..\..\PVT\inc;..\..\PVT\frontend\inc;..\..\PVT\backend\inc;SignalSim\inc;SimModel\inc</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClInclude Include="..\..\Abstract\HWCtrl.h" />
+    <ClInclude Include="..\..\Abstract\PlatformCtrl.h" />
+    <ClInclude Include="..\..\Baseband\inc\AEManager.h" />
+    <ClInclude Include="..\..\Baseband\inc\BBCommonFunc.h" />
+    <ClInclude Include="..\..\Baseband\inc\BBDefines.h" />
+    <ClInclude Include="..\..\Baseband\inc\ChannelManager.h" />
+    <ClInclude Include="..\..\Baseband\inc\ComposeOutput.h" />
+    <ClInclude Include="..\..\Baseband\inc\FirmwarePortal.h" />
+    <ClInclude Include="..\..\Baseband\inc\TaskManager.h" />
+    <ClInclude Include="..\..\Baseband\inc\TaskQueue.h" />
+    <ClInclude Include="..\..\Baseband\inc\TEManager.h" />
+    <ClInclude Include="..\..\common\CommonDefines.h" />
+    <ClInclude Include="..\..\common\ConstTable.h" />
+    <ClInclude Include="..\..\PVT\backend\inc\SatManage.h" />
+    <ClInclude Include="..\..\PVT\frontend\inc\BdsFrame.h" />
+    <ClInclude Include="..\..\PVT\frontend\inc\GpsFrame.h" />
+    <ClInclude Include="..\..\PVT\inc\DataTypes.h" />
+    <ClInclude Include="..\..\PVT\inc\GlobalVar.h" />
+    <ClInclude Include="..\..\PVT\inc\PvtConst.h" />
+    <ClInclude Include="..\..\PVT\inc\PvtEntry.h" />
+    <ClInclude Include="..\..\PVT\inc\SupportPackage.h" />
+    <ClInclude Include="SignalSim\inc\Almanac.h" />
+    <ClInclude Include="SignalSim\inc\BasicTypes.h" />
+    <ClInclude Include="SignalSim\inc\BCNav1Bit.h" />
+    <ClInclude Include="SignalSim\inc\BCNav2Bit.h" />
+    <ClInclude Include="SignalSim\inc\BCNav3Bit.h" />
+    <ClInclude Include="SignalSim\inc\BCNavBit.h" />
+    <ClInclude Include="SignalSim\inc\CNav2Bit.h" />
+    <ClInclude Include="SignalSim\inc\CNavBit.h" />
+    <ClInclude Include="SignalSim\inc\ComplexNumber.h" />
+    <ClInclude Include="SignalSim\inc\ConstVal.h" />
+    <ClInclude Include="SignalSim\inc\Coordinate.h" />
+    <ClInclude Include="SignalSim\inc\D1D2NavBit.h" />
+    <ClInclude Include="SignalSim\inc\FNavBit.h" />
+    <ClInclude Include="SignalSim\inc\GNavBit.h" />
+    <ClInclude Include="SignalSim\inc\GnssTime.h" />
+    <ClInclude Include="SignalSim\inc\INavBit.h" />
+    <ClInclude Include="SignalSim\inc\JsonInterpreter.h" />
+    <ClInclude Include="SignalSim\inc\JsonParser.h" />
+    <ClInclude Include="SignalSim\inc\LNavBit.h" />
+    <ClInclude Include="SignalSim\inc\NavBit.h" />
+    <ClInclude Include="SignalSim\inc\NavData.h" />
+    <ClInclude Include="SignalSim\inc\PilotBit.h" />
+    <ClInclude Include="SignalSim\inc\PowerControl.h" />
+    <ClInclude Include="SignalSim\inc\PrnGenerate.h" />
+    <ClInclude Include="SignalSim\inc\Rinex.h" />
+    <ClInclude Include="SignalSim\inc\SatelliteParam.h" />
+    <ClInclude Include="SignalSim\inc\SatelliteSignal.h" />
+    <ClInclude Include="SignalSim\inc\SignalSim.h" />
+    <ClInclude Include="SignalSim\inc\Trajectory.h" />
+    <ClInclude Include="SimModel\inc\AcqEngineFast.h" />
+    <ClInclude Include="SimModel\inc\ComplexNumber.h" />
+    <ClInclude Include="SimModel\inc\GaussNoise.h" />
+    <ClInclude Include="SimModel\inc\GnssTop.h" />
+    <ClInclude Include="SimModel\inc\InitSet.h" />
+    <ClInclude Include="SimModel\inc\PeakSorter.h" />
+    <ClInclude Include="SimModel\inc\RegAddress.h" />
+    <ClInclude Include="SimModel\inc\TeFifoSim.h" />
+    <ClInclude Include="SimModel\inc\TrackingChannel.h" />
+    <ClInclude Include="SimModel\inc\TrackingEngine.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\..\Abstract\HWCtrl_Model.cpp" />
+    <ClCompile Include="..\..\Abstract\PlatformCtrl_Model.c" />
+    <ClCompile Include="..\..\Baseband\src\AEManager.c" />
+    <ClCompile Include="..\..\Baseband\src\BBCommonFunc.c" />
+    <ClCompile Include="..\..\Baseband\src\ChannelManager.c" />
+    <ClCompile Include="..\..\Baseband\src\ComposeOutput.c" />
+    <ClCompile Include="..\..\Baseband\src\FirmwarePortal.c" />
+    <ClCompile Include="..\..\Baseband\src\TaskManager.c" />
+    <ClCompile Include="..\..\Baseband\src\TaskQueue.c" />
+    <ClCompile Include="..\..\Baseband\src\TEManager.c" />
+    <ClCompile Include="..\..\Baseband\src\TrackingLoop.c" />
+    <ClCompile Include="..\..\Baseband\src\TrackingStage.c" />
+    <ClCompile Include="..\..\common\ConstTable.c" />
+    <ClCompile Include="..\..\PVT\backend\src\Convert.c" />
+    <ClCompile Include="..\..\PVT\backend\src\Matrix.c" />
+    <ClCompile Include="..\..\PVT\backend\src\PvtAiding.c" />
+    <ClCompile Include="..\..\PVT\backend\src\PvtKF.c" />
+    <ClCompile Include="..\..\PVT\backend\src\PvtLsq.c" />
+    <ClCompile Include="..\..\PVT\backend\src\PvtProc.c" />
+    <ClCompile Include="..\..\PVT\backend\src\SatCoord.c" />
+    <ClCompile Include="..\..\PVT\backend\src\SatManage.c" />
+    <ClCompile Include="..\..\PVT\frontend\src\BdsFrame.c" />
+    <ClCompile Include="..\..\PVT\frontend\src\GpsFrame.c" />
+    <ClCompile Include="..\..\PVT\frontend\src\MsrProc.c" />
+    <ClCompile Include="..\..\PVT\src\GlobalVar.c" />
+    <ClCompile Include="..\..\PVT\src\PvtBasicFunc.c" />
+    <ClCompile Include="SignalSim\src\Almanac.cpp" />
+    <ClCompile Include="SignalSim\src\BCNav1Bit.cpp" />
+    <ClCompile Include="SignalSim\src\BCNav2Bit.cpp" />
+    <ClCompile Include="SignalSim\src\BCNav3Bit.cpp" />
+    <ClCompile Include="SignalSim\src\BCNavBit.cpp" />
+    <ClCompile Include="SignalSim\src\CNav2Bit.cpp" />
+    <ClCompile Include="SignalSim\src\CNavBit.cpp" />
+    <ClCompile Include="SignalSim\src\ComplexNumber.cpp" />
+    <ClCompile Include="SignalSim\src\Coordinate.cpp" />
+    <ClCompile Include="SignalSim\src\D1D2NavBit.cpp" />
+    <ClCompile Include="SignalSim\src\FNavBit.cpp" />
+    <ClCompile Include="SignalSim\src\GNavBit.cpp" />
+    <ClCompile Include="SignalSim\src\GnssTime.cpp" />
+    <ClCompile Include="SignalSim\src\INavBit.cpp" />
+    <ClCompile Include="SignalSim\src\JsonInterpreter.cpp" />
+    <ClCompile Include="SignalSim\src\JsonParser.cpp" />
+    <ClCompile Include="SignalSim\src\LNavBit.cpp" />
+    <ClCompile Include="SignalSim\src\NavBit.cpp" />
+    <ClCompile Include="SignalSim\src\NavData.cpp" />
+    <ClCompile Include="SignalSim\src\PilotBit.cpp" />
+    <ClCompile Include="SignalSim\src\PowerControl.cpp" />
+    <ClCompile Include="SignalSim\src\PrnGenerate.cpp" />
+    <ClCompile Include="SignalSim\src\Rinex.cpp" />
+    <ClCompile Include="SignalSim\src\SatelliteParam.cpp" />
+    <ClCompile Include="SignalSim\src\SatelliteSignal.cpp" />
+    <ClCompile Include="SignalSim\src\Trajectory.cpp" />
+    <ClCompile Include="SimModel\src\AcqEngineFast.cpp" />
+    <ClCompile Include="SimModel\src\GaussNoise.cpp" />
+    <ClCompile Include="SimModel\src\GnssTop.cpp" />
+    <ClCompile Include="SimModel\src\InitSet.c" />
+    <ClCompile Include="SimModel\src\PeakSorter.cpp" />
+    <ClCompile Include="SimModel\src\TeFifoSim.cpp" />
+    <ClCompile Include="SimModel\src\TrackingChannel.cpp" />
+    <ClCompile Include="SimModel\src\TrackingEngine.cpp" />
+    <ClCompile Include="SimRun.cpp" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>
