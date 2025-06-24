@@ -219,7 +219,7 @@ void ProcessCohSum(int ChannelID, unsigned int OverwriteProtect)
 	if (CompleteData)
 	{
 		memcpy(ChannelState->PendingCoh + ChannelState->PendingCount, ChannelState->StateBufferCache.CoherentSum + ChannelState->PendingCount, sizeof(U32) * (8 - ChannelState->PendingCount));	// concatinate data
-		DEBUG_OUTPUT(OUTPUT_CONTROL(COH_PROC, NONE), "%6d %6d\n", (S16)(ChannelState->PendingCoh[0] >> 16), (S16)(ChannelState->PendingCoh[0] & 0xffff));
+		DEBUG_OUTPUT(OUTPUT_CONTROL(COH_PROC, OFF), "%6d %6d\n", (S16)(ChannelState->PendingCoh[0] >> 16), (S16)(ChannelState->PendingCoh[0] & 0xffff));
 		memcpy(CohBuffer, ChannelState->PendingCoh + 1, sizeof(U32) * CORRELATOR_NUM);	// copy coherent result (except Cor0) to coherent buffer
 		ChannelState->PendingCount = 0;
 	}
@@ -248,7 +248,22 @@ void ProcessCohSum(int ChannelID, unsigned int OverwriteProtect)
 void ProcessCohData(PCHANNEL_STATE ChannelState)
 {
 	ChannelState->TrackingTime += ChannelState->CoherentNumber;	// accumulate tracking time
-	DEBUG_OUTPUT(OUTPUT_CONTROL(COH_PROC, NONE), "track time %d\n", ChannelState->TrackingTime);
+	DEBUG_OUTPUT(OUTPUT_CONTROL(COH_PROC, OFF), "track time %d\n", ChannelState->TrackingTime);
+
+	// collect correlation result for bit sync if in bit sync stage
+	if ((ChannelState->State & STAGE_MASK) == STAGE_BIT_SYNC)
+		CollectBitSyncData(ChannelState);
+	// keep bit edge at tracking hold
+	else if ((ChannelState->State & STAGE_MASK) == STAGE_HOLD3)
+	{
+		ChannelState->DataStream.CurrentAccTime += ChannelState->CoherentNumber;
+		if (ChannelState->DataStream.CurrentAccTime >= ChannelState->DataStream.TotalAccTime)
+			ChannelState->DataStream.CurrentAccTime = 0;
+	}
+	// do data decode at tracking stage
+	else if (((ChannelState->State & STAGE_MASK) >= STAGE_TRACK) && ((ChannelState->State & DATA_STREAM_MASK) != 0))
+		DecodeDataStream(ChannelState);
+
 	if (ChannelState->SkipCount > 0)	// skip coherent result for following process
 	{
 		ChannelState->SkipCount --;
@@ -256,7 +271,7 @@ void ProcessCohData(PCHANNEL_STATE ChannelState)
 	}
 	
 //	if (ChannelState->Svid == 19)
-	DEBUG_OUTPUT(OUTPUT_CONTROL(COH_PROC, NONE), "SV%2d Stage%d T=%4d I/Q[4]=%6d %6d I/Q[0]=%6d %6d\n", \
+	DEBUG_OUTPUT(OUTPUT_CONTROL(COH_PROC, INFO), "SV%2d Stage%d T=%4d I/Q[4]=%6d %6d I/Q[0]=%6d %6d\n", \
 		ChannelState->Svid, (ChannelState->State & STAGE_MASK), ChannelState->TrackingTime, \
 		(S16)(ChannelState->PendingCoh[4] >> 16), (S16)(ChannelState->PendingCoh[4] & 0xffff), \
 		(S16)(ChannelState->PendingCoh[0] >> 16), (S16)(ChannelState->PendingCoh[0] & 0xffff));
@@ -281,20 +296,6 @@ void ProcessCohData(PCHANNEL_STATE ChannelState)
 	if ((ChannelState->State & STAGE_MASK) >= STAGE_PULL_IN)
 		DoTrackingLoop(ChannelState);
 	
-	// collect correlation result for bit sync if in bit sync stage
-	if ((ChannelState->State & STAGE_MASK) == STAGE_BIT_SYNC)
-		CollectBitSyncData(ChannelState);
-	// keep bit edge at tracking hold
-	else if ((ChannelState->State & STAGE_MASK) == STAGE_HOLD3)
-	{
-		ChannelState->DataStream.CurrentAccTime += ChannelState->CoherentNumber;
-		if (ChannelState->DataStream.CurrentAccTime >= ChannelState->DataStream.TotalAccTime)
-			ChannelState->DataStream.CurrentAccTime = 0;
-	}
-	// do data decode at tracking stage
-	else if (((ChannelState->State & STAGE_MASK) >= STAGE_TRACK) && ((ChannelState->State & DATA_STREAM_MASK) != 0))
-		DecodeDataStream(ChannelState);
-
 	// determine whether tracking stage switch is needed
 	StageDetermination(ChannelState);
 }
@@ -463,7 +464,7 @@ void DecodeDataStream(PCHANNEL_STATE ChannelState)
 
 		DEBUG_OUTPUT(OUTPUT_CONTROL(COH_PROC, INFO), "DATA %5d %5d at %d\n", DataStream->CurReal, DataStream->CurImag, DataStream->DataCount);
 
-		if ((ChannelState->State & STAGE_MASK) == (STAGE_TRACK + 1))	// PLL lock, determine by sign
+		if ((ChannelState->State & STAGE_MASK) == STAGE_TRACK1)	// PLL lock, determine by sign
 			DataSymbol = ((DataStream->CurReal < 0) ? 1 : 0);
 		else	// determine by data toggle
 		{
@@ -537,7 +538,7 @@ void CalcCN0(PCHANNEL_STATE ChannelState)
 	ChannelState->CN0 = IntLog10(ChannelState->SmoothedPower) - NoiseFloor;
 	if (ChannelState->CN0 < 500)	// clip lowest CN0 at 5dBHz
 		ChannelState->CN0 = 500;
-	DEBUG_OUTPUT(OUTPUT_CONTROL(COH_PROC, NONE), "CN0=%4d fastCN0=%4d\n", ChannelState->CN0, ChannelState->FastCN0);
+	DEBUG_OUTPUT(OUTPUT_CONTROL(COH_PROC, OFF), "CN0=%4d fastCN0=%4d\n", ChannelState->CN0, ChannelState->FastCN0);
 
 	// detect CN0 jump
 	CN0Gap = ChannelState->CN0 - ChannelState->FastCN0;
@@ -637,7 +638,7 @@ int BitSyncTask(void *Param)
 	// determine whether bit sync success
 	if (MaxCount >= 5 && MaxCount >= TotalCount / 2)	// at least 5 toggles and max position toggle occupies at least 50%, SUCCESS
 	{
-		DEBUG_OUTPUT(OUTPUT_CONTROL(COH_PROC, NONE), "Bitsync found at %d with %d/%d\n", MaxTogglePos, MaxCount, TotalCount);
+		DEBUG_OUTPUT(OUTPUT_CONTROL(COH_PROC, OFF), "Bitsync found at %d with %d/%d\n", MaxTogglePos, MaxCount, TotalCount);
 		MaxTogglePos += BitSyncData->TimeTag;	// toggle position align to time tag
 		MaxTogglePos %= 20;		// remnant of 20ms
 		BitSyncData->ChannelState->BitSyncResult = MaxTogglePos ? MaxTogglePos : 20;	// set result, which means bit toggle when (TrackTime % 20 == BitSyncResult)

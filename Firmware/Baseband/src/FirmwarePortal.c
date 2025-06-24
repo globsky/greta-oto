@@ -88,12 +88,11 @@ void FirmwareInitialize(StartType Start, PSYSTEM_TIME CurTime, LLH *CurPosition)
 		FREQ_SVID(FREQ_E1, 4),
 		FREQ_SVID(FREQ_E1, 19),
 		FREQ_SVID(FREQ_E1, 21),
-		FREQ_SVID(FREQ_E1, 27),
 		FREQ_SVID(FREQ_E1, 27),*/
 	0 };	// for debug use only
 	int SatNumber;
 	SAT_PREDICT_PARAM SatList[32];
-	PACQ_CONFIG pAcqConfig;
+	PACQ_CONFIG pAcqConfig = NULL;
 
 	fp_debug = stdout;
 
@@ -154,13 +153,7 @@ void FirmwareInitialize(StartType Start, PSYSTEM_TIME CurTime, LLH *CurPosition)
 			if (GET_FREQ_ID(sv_list[i]) != FREQ_L1CA)
 				continue;
 			pAcqConfig->SatConfig[SatNumber].FreqSvid = (U8)sv_list[i];
-			switch (GET_FREQ_ID(sv_list[i]))
-			{
-			case FREQ_L1CA:	pAcqConfig->SatConfig[SatNumber].CodeSpan = 3; break;
-			case FREQ_E1:	pAcqConfig->SatConfig[SatNumber].CodeSpan = 12; break;
-			case FREQ_B1C:
-			case FREQ_L1C:	pAcqConfig->SatConfig[SatNumber].CodeSpan = 30; break;
-			}
+			pAcqConfig->SatConfig[SatNumber].CodeSpan = 3;
 			pAcqConfig->SatConfig[SatNumber].CenterFreq = (Start == ColdStart) ? 0 : (int)SatList[i].Doppler;
 			SatNumber ++;
 		}
@@ -174,8 +167,10 @@ void FirmwareInitialize(StartType Start, PSYSTEM_TIME CurTime, LLH *CurPosition)
 			AddAcqTask(pAcqConfig);
 	}
 	// second task search BOC signal
+	if (SatNumber != 0)	// first AE task added, get a new task
+		pAcqConfig = GetFreeAcqTask();
 	SatNumber = 0;
-	if ((pAcqConfig = GetFreeAcqTask()) != NULL)
+	if (pAcqConfig != NULL)
 	{
 		for (i = 0; i < 32; i ++)
 		{
@@ -184,13 +179,7 @@ void FirmwareInitialize(StartType Start, PSYSTEM_TIME CurTime, LLH *CurPosition)
 			if (GET_FREQ_ID(sv_list[i]) == FREQ_L1CA)
 				continue;
 			pAcqConfig->SatConfig[SatNumber].FreqSvid = (U8)sv_list[i];
-			switch (GET_FREQ_ID(sv_list[i]))
-			{
-			case FREQ_L1CA:	pAcqConfig->SatConfig[SatNumber].CodeSpan = 3; break;
-			case FREQ_E1:	pAcqConfig->SatConfig[SatNumber].CodeSpan = 12; break;
-			case FREQ_B1C:
-			case FREQ_L1C:	pAcqConfig->SatConfig[SatNumber].CodeSpan = 30; break;
-			}
+			pAcqConfig->SatConfig[SatNumber].CodeSpan = (GET_FREQ_ID(sv_list[i]) == FREQ_E1) ? 12 : 30;
 			pAcqConfig->SatConfig[SatNumber].CenterFreq = (Start == ColdStart) ? 0 : (int)SatList[i].Doppler;
 			SatNumber ++;
 		}

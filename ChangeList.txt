@@ -193,3 +193,8 @@
 		Remove obsolete header file
 	Function and feature change
 		SimRun project uses JSON file instead of XML file and add VS2022 project file
+6/23/2026
+	Bug fix
+		Add adjustment of pi/2 carrier phase difference for BOC dual-band and side-band correlation
+	Function and feature change
+		Code improvement and change B1C PLL to 4 quadrant discrimination after secondary code sync

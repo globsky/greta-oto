@@ -9,6 +9,7 @@
 #include <string.h>
 #include "ChannelManager.h"
 #include "BBCommonFunc.h"
+#include "PlatformCtrl.h"
 
 static void FFT8(int InputReal[8], int InputImag[8], int OutputReal[8], int OutputImag[8]);
 static int CordicAtan(int x, int y, int mode);
@@ -87,11 +88,11 @@ void CalcDiscriminator(PCHANNEL_STATE ChannelState, unsigned int Method)
 	}
 	if ((Method & TRACKING_UPDATE_DLL) && ChannelState->dll_k1 > 0)
 	{
-//		printf("EPL = %5d %5d %5d\n", SearchResult.EarlyPower, SearchResult.PeakPower, SearchResult.LatePower);
+		DEBUG_OUTPUT(OUTPUT_CONTROL(TRACKING_LOOP, INFO), "EPL = %5d %5d %5d\n", SearchResult.EarlyPower, SearchResult.PeakPower, SearchResult.LatePower);
 		Denominator = 2 * SearchResult.PeakPower - SearchResult.EarlyPower - SearchResult.LatePower;
 		Numerator = SearchResult.EarlyPower - SearchResult.LatePower;
 		// (E-L)/(2P-E-L))
-		ChannelState->DelayDiff = Denominator ? -((Numerator << (13 - NarrowFactor)) / Denominator) : 0;
+		ChannelState->DelayDiff = Denominator ? ((Numerator << (13 - NarrowFactor)) / Denominator) : 0;
 		ChannelState->DelayDiff += (SearchResult.CorDiff << 14);
 		// lock indicator
 		AdjustLockIndicator(&(ChannelState->DLD), ChannelState->DelayDiff >> 11);
@@ -106,7 +107,7 @@ void CalcDiscriminator(PCHANNEL_STATE ChannelState, unsigned int Method)
 	{
 		CorResutReal = (S16)(ChannelState->PendingCoh[4] >> 16);
 		CorResultImag = (S16)(ChannelState->PendingCoh[4] & 0xffff);
-		ChannelState->PhaseDiff = CordicAtan(CorResutReal, CorResultImag, 0);
+		ChannelState->PhaseDiff = CordicAtan(CorResutReal, CorResultImag, (ChannelState->State & STATE_4QUAD_DISC) ? 1 : 0);
 		// lock indicator
 		AdjustLockIndicator(&(ChannelState->PLD), ChannelState->PhaseDiff >> 9);
 //		printf("PLD=%3d\n", ChannelState->PLD);
@@ -356,7 +357,7 @@ void SearchPeakCoh(int NoncohBuffer[], PSEARCH_PEAK_RESULT SearchResult)
 			MaxCorPos = i;
 		}
 	}
-	SearchResult->CorDiff = MaxCorPos - 3;
+	SearchResult->CorDiff = 3 - MaxCorPos;
 	SearchResult->PeakPower = MaxPower;
 	// if early/late at edge, use the power value at the other side
 	SearchResult->EarlyPower = (MaxCorPos > 0) ? NoncohBuffer[MaxCorPos-1] : NoncohBuffer[MaxCorPos+1];
@@ -391,7 +392,7 @@ void SearchPeakFft(int NoncohBuffer[], PSEARCH_PEAK_RESULT SearchResult)
 				MaxBinPos = j;
 			}
 	}
-	SearchResult->CorDiff = MaxCorPos - 3;	// after remove cor0, now peak position is 3
+	SearchResult->CorDiff = 3 - MaxCorPos;	// after remove cor0, now peak position is 3
 	SearchResult->FreqBinDiff = MAX_BIN_NUM / 2 - MaxBinPos;
 	SearchResult->PeakPower = MaxPower;
 	// if early/late/left/right at edge, use the power value at the other side
@@ -438,7 +439,8 @@ void DoTrackingLoop(PCHANNEL_STATE ChannelState)
 	{
 		k1 = ChannelState->dll_k1; k2 = ChannelState->dll_k2;
 		ChannelState->DelayAcc += ChannelState->DelayDiff;
-		CodeFreq = ChannelState->CodeFreqBase - ((k1 * ChannelState->DelayDiff + k2 * ChannelState->DelayAcc) >> 15);
+		CodeFreq = ChannelState->CodeFreqBase + ((k1 * ChannelState->DelayDiff + k2 * ChannelState->DelayAcc) >> 15);
+		DEBUG_OUTPUT(OUTPUT_CONTROL(TRACKING_LOOP, INFO), "DelayDiff = %6d Adjust = %8d CodeFreq = %8d\n", ChannelState->DelayDiff, ((k1 * ChannelState->DelayDiff + k2 * ChannelState->DelayAcc) >> 15), CodeFreq - 2136519107);
 		STATE_BUF_SET_CODE_FREQ(StateBuffer, CodeFreq);
 		if (ChannelState->DLD == 100 && ChannelState->LoseLockCounter == 0)
 			ChannelState->CodeFreqSave = CodeFreq;

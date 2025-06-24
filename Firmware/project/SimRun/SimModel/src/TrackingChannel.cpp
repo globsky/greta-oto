@@ -253,6 +253,7 @@ void CTrackingChannel::GetCorrelationResult(GNSS_TIME CurTime, SATELLITE_PARAM *
 	int CodeDiffIndex, CodeLength, FrameLength, BitLength;
 	int Milliseconds;
 	const double *PeakValues;
+	int Sideband = (!(SystemSel == SignalL1CA)) && (!EnableBOC);
 
 	// calculate half of 128x code length
 	CodeLength = (SystemSel == SignalL1CA) ? 1023 : ((SystemSel == SignalE1) ? 4092 : 10230);
@@ -276,7 +277,7 @@ void CTrackingChannel::GetCorrelationResult(GNSS_TIME CurTime, SATELLITE_PARAM *
 		Alpha = 1 - Alpha;
 
 		// calculate frequency difference
-		NominalIF = ((SystemSel == SignalL1CA) || EnableBOC) ? IF_FREQ : (IF_FREQ + 1023000);
+		NominalIF = Sideband ? (IF_FREQ + 1023000) : IF_FREQ;
 		FreqDiff = CarrierParam.GetFreqDiff(GetDoppler(pSatParam, 0), CarrierFreq - NominalIF, Alpha) / 1000. * PI;
 
 		// calculate carrier phase of source signal
@@ -285,8 +286,10 @@ void CTrackingChannel::GetCorrelationResult(GNSS_TIME CurTime, SATELLITE_PARAM *
 		SourceCarrierPhase = 1 - SourceCarrierPhase;	// carrier is fractional part of negative of travel time, equvalent to 1 minus positive fractional part
 		// calculate phase difference
 		PhaseDiff = CarrierParam.GetPhaseDiff(SourceCarrierPhase - CarrierPhase / 4294967296., Alpha);
+		if (Sideband)
+			PhaseDiff -= 0.25;
 		Rotate = complex_number(cos(PhaseDiff * PI2), sin(PhaseDiff * PI2));
-//		printf(" %.5f\n", PhaseDiff);
+//		printf("SrcPhase = %.5f LocalPhase = %.5f PhaseDiff = %.5f\n", SourceCarrierPhase, CarrierPhase / 4294967296., PhaseDiff);
 
 		// calculate signal amplitude
 		Amplitude = 1.4142135 * pow(10, (pSatParam->CN0 - 3000) / 2000.) * NOISE_AMP;
@@ -303,7 +306,7 @@ void CTrackingChannel::GetCorrelationResult(GNSS_TIME CurTime, SATELLITE_PARAM *
 				CorPosition += NarrowCompensation(CorIndex[i] >> 2, NarrowFactor);
 			CodeDiff[i] = fabs(CorPosition - PeakPosition) * 64;
 		}
-
+//		printf("CodeDiff = %5.1f %5.1f %5.1f %5.1f %5.1f\n", CodeDiff[2], CodeDiff[3], CodeDiff[4], CodeDiff[5], CodeDiff[6]);
 		// calculate 1ms correlation value
 		for (i = 0; i < DataLength; i ++)
 		{
@@ -335,6 +338,7 @@ void CTrackingChannel::GetCorrelationResult(GNSS_TIME CurTime, SATELLITE_PARAM *
 		DumpDataI[i] = ((int)CorResult[i].real) >> (PreShiftBits + PostShiftBits);
 		DumpDataQ[i] = ((int)CorResult[i].imag) >> (PreShiftBits + PostShiftBits);
 	}
+//	printf("DumpData = %5d %5d; %5d %5d; %5d %5d; %5d %5d; %5d %5d;\n", DumpDataI[2], DumpDataQ[2], DumpDataI[3], DumpDataQ[3], DumpDataI[4], DumpDataQ[4], DumpDataI[5], DumpDataQ[5], DumpDataI[6], DumpDataQ[6]);
 }
 
 int CTrackingChannel::CalculateCounter(int BlockSize, int CorIndex[], int CorPos[], int NHBit[], int &DataLength)

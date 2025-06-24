@@ -207,6 +207,8 @@ int ProcessAcqResult(void *Param)
 		CodePhase += TimeGap * Doppler / 96250;	// 16 x Doppler x dt / 1540 (dt = TimeGap / 1000)
 		if (CodePhase < 0)
 			CodePhase += 20 * 1023 * 16;	// 20ms code phase round
+//		if (GET_FREQ_ID(pAcqConfig->SatConfig[i].FreqSvid) != FREQ_B1C)
+//			continue;
 		if ((NewChannel = GetAvailableChannel()) != NULL)
 		{
 			NewChannel->FreqID = GET_FREQ_ID(pAcqConfig->SatConfig[i].FreqSvid);
@@ -214,6 +216,7 @@ int ProcessAcqResult(void *Param)
 			InitChannel(NewChannel);
 			ConfigChannel(NewChannel, Doppler, CodePhase);
 		}
+//		break;
 	}
 	UpdateChannels();
 	SetRegValue(ADDR_TE_CHANNEL_ENABLE, GetChannelEnable());

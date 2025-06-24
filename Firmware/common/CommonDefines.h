@@ -95,10 +95,17 @@ do \
 #define STAGE_PULL_IN  0x4
 #define STAGE_BIT_SYNC 0x5
 #define STAGE_TRACK    0x8		// bit3 set as normal tracking, 3LSB for track stage
-
-#define STAGE_CONFIG_INDEX(stage) (((stage) & 0x8) ? ((stage)-5) : ((stage)-3))
+#define STAGE_TRACK0   (STAGE_TRACK + 0)
+#define STAGE_TRACK1   (STAGE_TRACK + 1)
+#define STAGE_TRACK2   (STAGE_TRACK + 2)
 
 #define STAGE_MASK          0xf
+#define STAGE_CONFIG_INDEX(stage) (((stage) & 0x8) ? ((stage)-5) : ((stage)-3))
+
+// bit4~6 for tracking loop control
+#define STATE_CARR_AID_CODE  0x10	// code loop uses carrier aiding
+#define STATE_EXT_AID_CARR   0x20	// carrier loop uses external aiding
+#define STATE_4QUAD_DISC     0x40	// 4 quadrant phase discriminator
 
 // bit6~7 for tracking signal
 #define STATE_TRACK_I  0x40
