@@ -84,11 +84,11 @@ void FirmwareInitialize(StartType Start, PSYSTEM_TIME CurTime, LLH *CurPosition)
 		FREQ_SVID(FREQ_B1C, 21),
 		FREQ_SVID(FREQ_B1C, 22),
 		FREQ_SVID(FREQ_B1C, 26),
-/*		FREQ_SVID(FREQ_E1, 1),
+		FREQ_SVID(FREQ_E1, 1),
 		FREQ_SVID(FREQ_E1, 4),
 		FREQ_SVID(FREQ_E1, 19),
 		FREQ_SVID(FREQ_E1, 21),
-		FREQ_SVID(FREQ_E1, 27),*/
+		FREQ_SVID(FREQ_E1, 27),
 	0 };	// for debug use only
 	int SatNumber;
 	SAT_PREDICT_PARAM SatList[32];

@@ -14,6 +14,7 @@
 #include "SupportPackage.h"
 #include "GpsFrame.h"
 #include "BdsFrame.h"
+#include "GalFrame.h"
 
 #include <string.h>
 #include <math.h>
@@ -127,6 +128,8 @@ void MsrProc(PBB_MEASUREMENT Measurements, unsigned int ActiveMask, int CurMsInt
 				GpsFrameSync(&g_ChannelStatus[ch_num], Measurements[ch_num].DataNumber, Measurements[ch_num].DataStreamAddr[0], Measurements[ch_num].DataStreamAddr[1], -1);
 			else if (FreqID == FREQ_B1C)
 				BdsFrameProc(&g_ChannelStatus[ch_num]);
+			else if (FreqID == FREQ_E1)
+				GalFrameSync(&g_ChannelStatus[ch_num], Measurements[ch_num].DataNumber, Measurements[ch_num].DataStreamAddr, Measurements[ch_num].FrameIndex);
 		}
 		else
 		{

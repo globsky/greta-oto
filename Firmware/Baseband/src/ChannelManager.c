@@ -34,9 +34,16 @@ static void ProcessCohData(PCHANNEL_STATE ChannelState);
 static void CollectBitSyncData(PCHANNEL_STATE ChannelState);
 static void DecodeDataStream(PCHANNEL_STATE ChannelState);
 static void CalcCN0(PCHANNEL_STATE ChannelState);
-static int BitSyncTask(void *Param);
+static int GpsL1CABitSyncTask(void *Param);
+static int GalE1BitSyncTask(void *Param);
 static int DataSyncTask(void *Param);
 static int SyncPilotData(unsigned int DataWord, const unsigned int SecondCode[57], int StartOffset);
+
+static const unsigned int GalInvPos[25] = {
+0x81f6b, 0x03ed6, 0x07dac, 0x0fb59, 0x1f6b2, 0x3ed64, 0x7dac9, 0xfb592, 0xf6b24, 0xed648, 
+0xdac90, 0xb5920, 0x6b240, 0xd6481, 0xac903, 0x59207, 0xb240f, 0x6481f, 0xc903e, 0x9207d, 
+0x240fb, 0x481f6, 0x903ed, 0x207da, 0x40fb5, 
+};
 
 void SetNHConfig(PCHANNEL_STATE ChannelState, int NHPos, const unsigned int *NHCode);
 
@@ -336,8 +343,8 @@ int ComposeMeasurement(int ChannelID, PBB_MEASUREMENT Measurement, U32 *DataBuff
 	Measurement->DataNumber = ChannelState->DataStream.DataCount;
 	if ((ChannelState->State & DATA_STREAM_PRN2) && FREQ_ID_IS_B1C_L1C(ChannelState->FreqID))	// B1C/L1C using decoding data channel
 		Measurement->FrameIndex = ChannelState->DataStream.StartIndex;
-	else
-		Measurement->FrameIndex = -1;
+	else if ((ChannelState->State & DATA_STREAM_PRN2) && FREQ_ID_IS_E1(ChannelState->FreqID))	// E1 using current NH index
+		Measurement->FrameIndex = STATE_BUF_GET_NH_COUNT(&(ChannelState->StateBufferCache));
 	Measurement->DataStreamAddr = DataBuffer;
 	if ((ChannelState->State & DATA_STREAM_MASK) == DATA_STREAM_1BIT)
 	{
@@ -379,14 +386,26 @@ int ComposeMeasurement(int ChannelID, PBB_MEASUREMENT Measurement, U32 *DataBuff
 void CollectBitSyncData(PCHANNEL_STATE ChannelState)
 {
 	PBIT_SYNC_DATA BitSyncData = &(ChannelState->BitSyncData);
+	S16 PrevReal, PrevImag;
+	S16 CurrentReal, CurrentImag;
 
-	BitSyncData->CorData[BitSyncData->CorDataCount] = ChannelState->PendingCoh[4];	// copy peak correlator result
+	if (BitSyncData->PrevCorData == 0)	// not initialized
+	{
+		BitSyncData->PrevCorData = ChannelState->PendingCoh[4];
+		return;
+	}
+	PrevReal = (S16)(BitSyncData->PrevCorData >> 16);
+	PrevImag = (S16)(BitSyncData->PrevCorData & 0xffff);
+	CurrentReal = (S16)(ChannelState->PendingCoh[4] >> 16);
+	CurrentImag = (S16)(ChannelState->PendingCoh[4] & 0xffff);
+	BitSyncData->PolarityToggle <<= 1;
+	BitSyncData->PolarityToggle |= (((int)PrevReal * CurrentReal + (int)PrevImag * CurrentImag) < 0) ? 1 : 0;
+	BitSyncData->PrevCorData = ChannelState->PendingCoh[4];
 	if (++BitSyncData->CorDataCount == 20)	// 20 correlation result, send to bit sync task
 	{
 		BitSyncData->TimeTag = ChannelState->TrackingTime;
-		AddToTask(TASK_BASEBAND, BitSyncTask, BitSyncData, sizeof(BIT_SYNC_DATA));
+		AddToTask(TASK_BASEBAND, FREQ_ID_IS_L1CA(ChannelState->FreqID) ? GpsL1CABitSyncTask : GalE1BitSyncTask, BitSyncData, sizeof(BIT_SYNC_DATA));
 		BitSyncData->CorDataCount = 0;
-		BitSyncData->PrevCorData = BitSyncData->CorData[19];	// copy last one to PrevCorData for next 20 result
 	}
 }
 
@@ -405,14 +424,6 @@ void DecodeDataStream(PCHANNEL_STATE ChannelState)
 	int i, SymbolCount;
 	unsigned int Data;
 
-	ChannelState->FrameCounter ++;
-	if (FREQ_ID_IS_L1CA(ChannelState->FreqID) && ChannelState->FrameCounter == 1500)	// 1500bit for each round of subframe 1-5
-		ChannelState->FrameCounter = 0;
-	else if (FREQ_ID_IS_E1(ChannelState->FreqID) && ChannelState->FrameCounter == 500)	// 500bit for each round of even/odd
-		ChannelState->FrameCounter = 0;
-	else if (ChannelState->FrameCounter == 1800)	// 1800bit for B1C or L1C
-		ChannelState->FrameCounter = 0;
-
 	if (ChannelState->State & DATA_STREAM_PRN2)	// tracking pilot channel and decode data channel, uses hardware data decode
 	{
 		// determine whether at least one symbol decoded
@@ -426,6 +437,16 @@ void DecodeDataStream(PCHANNEL_STATE ChannelState)
 		}
 		else
 			SymbolCount = ChannelState->CoherentNumber / DataStream->TotalAccTime;	// coherent length must be multiple of symbol length
+
+		if (ChannelState->FrameCounter >= 0)
+			ChannelState->FrameCounter += SymbolCount;
+		if (FREQ_ID_IS_L1CA(ChannelState->FreqID) && ChannelState->FrameCounter >= 1500)	// 1500bit for each round of subframe 1-5
+			ChannelState->FrameCounter -= 1500;
+		else if (FREQ_ID_IS_E1(ChannelState->FreqID) && ChannelState->FrameCounter >= 500)	// 500bit for each round of even/odd
+			ChannelState->FrameCounter -= 500;
+		else if (ChannelState->FrameCounter >= 1800)	// 1800bit for B1C or L1C
+			ChannelState->FrameCounter -= 1800;
+
 		Data = GetRegValue((U32)(&(ChannelState->StateBufferHW->DecodeData)));
 		if (FREQ_ID_IS_B1C(ChannelState->FreqID) || FREQ_ID_IS_E1(ChannelState->FreqID))	// B1C/E1 has negative data
 			Data ^= 0xffffffff;
@@ -487,9 +508,9 @@ void DecodeDataStream(PCHANNEL_STATE ChannelState)
 
 		if (!(FREQ_ID_IS_L1CA(ChannelState->FreqID)) && DataStream->DataCount == 24)
 		{
-			BitSyncData->CorData[0] = DataStream->DataBuffer[0];
+			BitSyncData->PolarityToggle = DataStream->DataBuffer[0];
 			if (((DataStream->PrevReal >= 0) ? 0 : 1) ^ DataSymbol)	// data sign does not match data symbol, toggle stream
-				BitSyncData->CorData[0] ^= 0xffffffff;
+				BitSyncData->PolarityToggle ^= 0xffffffff;
 			BitSyncData->TimeTag = ChannelState->TrackingTime;
 //			BitSyncData->PrevCorData = ChannelState->BitSyncResult;	// stage of frame sync
 			AddToTask(TASK_BASEBAND, DataSyncTask, BitSyncData, sizeof(BIT_SYNC_DATA));
@@ -599,31 +620,24 @@ void SetNHConfig(PCHANNEL_STATE ChannelState, int NHPos, const unsigned int *NHC
 	SetRegValue((U32)(&(ChannelState->StateBufferHW->CorrState)), StateValue);
 }
 
-//*************** Task to do bit sync ****************
+//*************** Task to do GPS L1CA bit sync ****************
 //* This task is added to and called within baseband task queue
 // Parameters:
 //   Param: Pointer to bit sync data structure
 // Return value:
 //   0
-int BitSyncTask(void *Param)
+int GpsL1CABitSyncTask(void *Param)
 {
 	int i;
 	PBIT_SYNC_DATA BitSyncData = (PBIT_SYNC_DATA)Param;
-	S16 PrevReal = (S16)(BitSyncData->PrevCorData >> 16), PrevImag = (S16)(BitSyncData->PrevCorData & 0xffff);
-	S16 CurrentReal, CurrentImag;
-	int DotProduct;
 	int ToggleCount, MaxCount = 0, TotalCount = 0;
 	int MaxTogglePos = 0;
 
 	// accumulate toggle at corresponding position
 	for (i = 0; i < 20; i ++)
 	{
-		CurrentReal = (S16)(BitSyncData->CorData[i] >> 16);
-		CurrentImag = (S16)(BitSyncData->CorData[i] & 0xffff);
-		DotProduct = (int)PrevReal * CurrentReal + (int)PrevImag * CurrentImag;	// calculate I1*I2+Q1*Q2
-		if (DotProduct < 0)
+		if (BitSyncData->PolarityToggle & (1 << (19 - i)))
 			BitSyncData->ChannelState->ToggleCount[i] ++;
-		PrevReal = CurrentReal; PrevImag = CurrentImag;
 
 		// find max toggle count and calculate total count
 		ToggleCount = BitSyncData->ChannelState->ToggleCount[i];
@@ -645,6 +659,30 @@ int BitSyncTask(void *Param)
 	}
 	else if (TotalCount > 100)	// 100 toggles and still not success FAIL
 		BitSyncData->ChannelState->BitSyncResult = -1;
+
+	return 0;
+}
+
+//*************** Task to do Galileo E1C secondary sync ****************
+//* This task is added to and called within baseband task queue
+// Parameters:
+//   Param: Pointer to bit sync data structure
+// Return value:
+//   0
+int GalE1BitSyncTask(void *Param)
+{
+	int i;
+	PBIT_SYNC_DATA BitSyncData = (PBIT_SYNC_DATA)Param;
+	int TotalCount = BitSyncData->ChannelState->ToggleCount[0];
+
+	for (i = 0; i < 25; i ++)
+		if ((BitSyncData->PolarityToggle & 0xfffff) == GalInvPos[i])
+			break;
+	if (i < 25)	// secondary code toggle pattern match
+		BitSyncData->ChannelState->BitSyncResult = BitSyncData->TimeTag + (25 - i) * 4;	// set result, next secondary boundary when TrackTime == BitSyncResult)
+	else if (++BitSyncData->ChannelState->ToggleCount[0] == 10)	// failed after 10 times check
+		BitSyncData->ChannelState->BitSyncResult = -1;
+
 	return 0;
 }
 
@@ -676,8 +714,8 @@ int DataSyncTask(void *Param)
 		for (i = 0; i < 24; i ++)
 		{
 			DataWord <<= 1;
-			DataWord |= (BitSyncData->CorData[0] & 1) ? 1 : 0;
-			BitSyncData->CorData[0] >>= 1;
+			DataWord |= (BitSyncData->PolarityToggle & 1) ? 1 : 0;
+			BitSyncData->PolarityToggle >>= 1;
 		}
 		BitSyncData->ChannelState->BitSyncResult = SyncPilotData(DataWord, B1CSecondCode[Svid-1], BitSyncData->TimeTag / 10 - 24);
 		return 0;

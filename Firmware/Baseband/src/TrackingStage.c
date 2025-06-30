@@ -39,7 +39,7 @@ PTRACKING_CONFIG TrackingConfig[][4] = {	// pointer to TrackingConfigTable for d
 	&TrackingConfigTable[0], &TrackingConfigTable[8], &TrackingConfigTable[0], &TrackingConfigTable[0],	// pull-in
 	&TrackingConfigTable[1], &TrackingConfigTable[9], &TrackingConfigTable[1], &TrackingConfigTable[1],	// bit_sync
 	&TrackingConfigTable[3], &TrackingConfigTable[10],&TrackingConfigTable[6], &TrackingConfigTable[6],	// track 0
-	&TrackingConfigTable[4], &TrackingConfigTable[10],&TrackingConfigTable[7], &TrackingConfigTable[7],	// track 1
+	&TrackingConfigTable[4], &TrackingConfigTable[4], &TrackingConfigTable[7], &TrackingConfigTable[7],	// track 1
 	&TrackingConfigTable[5], &TrackingConfigTable[5], &TrackingConfigTable[5], &TrackingConfigTable[5],	// track 2
 };
 
@@ -93,13 +93,45 @@ void SwitchTrackingStage(PCHANNEL_STATE ChannelState, unsigned int TrackingStage
 		ChannelState->DataStream.DataCount = ChannelState->DataStream.CurrentAccTime = 0;
 		if (PrevStage == STAGE_BIT_SYNC)	// switch from bit sync, need to align to bit edge
 		{
-			CohCount = ChannelState->BitSyncResult % CurTrackingConfig->CoherentNumber;
-			ChannelState->TrackingTime = ChannelState->BitSyncResult - CohCount;		// reset tracking time from previous bit edge
-			STATE_BUF_SET_COH_COUNT(&(ChannelState->StateBufferCache), CohCount);
-			ChannelState->State |= STATE_CACHE_STATE_DIRTY;
+			if (FREQ_ID_IS_L1CA(ChannelState->FreqID))	// for L1CA
+			{
+				CohCount = ChannelState->BitSyncResult % CurTrackingConfig->CoherentNumber;
+				ChannelState->TrackingTime = ChannelState->BitSyncResult - CohCount;		// reset tracking time from previous bit edge
+				STATE_BUF_SET_COH_COUNT(&(ChannelState->StateBufferCache), CohCount);
+				ChannelState->State |= STATE_CACHE_STATE_DIRTY;
+			}
+			else	// for E1
+			{
+				// switch to decode data channel
+				STATE_BUF_ENABLE_PRN2(StateBuffer);
+				STATE_BUF_ENABLE_BOC(StateBuffer);	// enable BOC
+				STATE_BUF_SET_NARROW_FACTOR(StateBuffer, 2);	// set correlator interval to 1/8 chip
+				// enable HW data decode
+				STATE_BUF_SET_BIT_LENGTH(StateBuffer, 4);
+				STATE_BUF_SET_DECODE_BIT(StateBuffer, 2);
+				STATE_BUF_DATA_IN_I(StateBuffer);
+				// remove 1.023MHz carrier offset
+				ChannelState->StateBufferCache.CarrierFreq -= DIVIDE_ROUND(1023000LL << 32, SAMPLE_FREQ);
+				ChannelState->CarrierFreqBase -= DIVIDE_ROUND(1023000LL << 32, SAMPLE_FREQ);
+				ChannelState->CarrierFreqSave -= DIVIDE_ROUND(1023000LL << 32, SAMPLE_FREQ);
+				ChannelState->State |= (STATE_4QUAD_DISC | DATA_STREAM_PRN2 | STATE_ENABLE_BOC | STATE_CACHE_FREQ_DIRTY);
+				// adjust carrier phase
+				StateValue = GetRegValue((U32)(&(ChannelState->StateBufferHW->CarrierPhase)));
+				StateValue += 0x40000000;	// compensate pi/2 for sideband to BOC tracking and pi for negative stream
+				SetRegValue((U32)(&(ChannelState->StateBufferHW->CarrierPhase)), StateValue);
+				// enable NH
+				STATE_BUF_SET_NH_CONFIG(&(ChannelState->StateBufferCache), 25, 0x9b501c);
+				// set current NH count and coherent count
+				CohCount = ChannelState->BitSyncResult % CurTrackingConfig->CoherentNumber;
+				ChannelState->TrackingTime = ChannelState->BitSyncResult % 20;		// reset tracking time from previous 20ms boundary
+				STATE_BUF_SET_COH_COUNT(&(ChannelState->StateBufferCache), CohCount);
+				STATE_BUF_SET_NH_COUNT(&(ChannelState->StateBufferCache), ChannelState->BitSyncResult / 4);
+				ChannelState->State |= STATE_CACHE_STATE_DIRTY;
+				ChannelState->DataStream.DataCount = ChannelState->DataStream.CurrentAccTime = 0;	// reset data count for data stream decode
+//				ChannelState->DataStream.StartIndex = ChannelState->FrameCounter;
+			}
 		}
 	}
-#if 1
 	else if (TrackingStage == STAGE_TRACK1)
 	{
 		if (FREQ_ID_IS_B1C_L1C(ChannelState->FreqID))
@@ -131,7 +163,6 @@ void SwitchTrackingStage(PCHANNEL_STATE ChannelState, unsigned int TrackingStage
 			ChannelState->DataStream.StartIndex = ChannelState->FrameCounter;
 		}
 	}
-#endif
 	// set coherent/FFT/non-coherent number
 	STATE_BUF_SET_COH_NUMBER(&(ChannelState->StateBufferCache), CurTrackingConfig->CoherentNumber);
 	STATE_BUF_SET_POST_SHIFT(&(ChannelState->StateBufferCache), CurTrackingConfig->PostShift);
@@ -200,7 +231,14 @@ int StageDetermination(PCHANNEL_STATE ChannelState)
 				SwitchTrackingStage(ChannelState, STAGE_RELEASE);
 			else
 			{
-				ChannelState->BitSyncResult = (ChannelState->TrackingTime- ChannelState->BitSyncResult) % 20;	// ms number passed bit edge
+				if (FREQ_ID_IS_L1CA(ChannelState->FreqID))	// for L1CA
+					ChannelState->BitSyncResult = (ChannelState->TrackingTime- ChannelState->BitSyncResult) % 20;	// ms number passed bit edge
+				else
+				{
+					ChannelState->BitSyncResult = (100 - (ChannelState->BitSyncResult - ChannelState->TrackingTime)) % 100;
+					if (ChannelState->BitSyncResult < 0)
+						ChannelState->BitSyncResult += 100;	// ms number passed secondary code boundary
+				}
 				SwitchTrackingStage(ChannelState, STAGE_TRACK0);
 			}
 			StageChange = 1;
@@ -243,10 +281,10 @@ int StageDetermination(PCHANNEL_STATE ChannelState)
 		ChannelState->BitSyncData.PrevCorData = 0;	// clear previous correlation result for first round
 		memset(ChannelState->ToggleCount, 0, sizeof(ChannelState->ToggleCount));
 		ChannelState->BitSyncResult = 0;
-		if (FREQ_ID_IS_L1CA(ChannelState->FreqID))	// L1C/A need to do bit sync
-			SwitchTrackingStage(ChannelState, STAGE_BIT_SYNC);
-		else	// other signal switch to track 0
+		if (FREQ_ID_IS_B1C_L1C(ChannelState->FreqID))	// B1C/L1C secondary code sync performed at TRACK0 stage
 			SwitchTrackingStage(ChannelState, STAGE_TRACK0);
+		else	// other signal switch to bit-sync
+			SwitchTrackingStage(ChannelState, STAGE_BIT_SYNC);
 		break;
 	case STAGE_TRACK0:
 		if (ChannelState->CN0 > 2500)	// strong signal switch to track 1

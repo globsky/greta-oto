@@ -135,7 +135,7 @@ do \
 #define TRACKING_UPDATE (TRACKING_UPDATE_PLL | TRACKING_UPDATE_FLL | TRACKING_UPDATE_DLL)
 
 // bit20~23 for cache state
-#define STATE_CACHE_FREQ_DIRTY   0x100000	// carrier and code frequency (8/9) need to sync to HW
+#define STATE_CACHE_FREQ_DIRTY   0x100000	// carrier and code frequency (0/1) need to sync to HW
 #define STATE_CACHE_CONFIG_DIRTY 0x200000	// CorrConfig, NHConfig and CohConfig (2/3/4) need to sync to HW
 #define STATE_CACHE_CODE_DIRTY   0x400000	// PrnCount, CodePhase, DumpCount and CorrState (7/10/11/12) need to sync to HW
 #define STATE_CACHE_STATE_DIRTY  0x800000	// CorrState (12) need to be sync to HW

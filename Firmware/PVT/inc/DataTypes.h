@@ -88,7 +88,7 @@ typedef struct
 									// bit 3: subframe3 0 - Invalid, 1 - Valid
 									// bit 4: stream polarity 0 - Positive, 1 - Negative
 									// bit 5: polarity valid 0 - Invalid, 1 - Valid
-	unsigned short NavBitNumber;	// number of navigation data bit in buffer
+	signed short NavBitNumber;	// number of navigation data bit in buffer
 	signed short FrameStatus;		// frame sync status -1: no word found
 									//					 0~29: word boundary found
 									//					 30: preamble found, unknown subframe

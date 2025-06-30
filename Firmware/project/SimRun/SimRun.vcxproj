@@ -144,6 +144,7 @@
     <ClInclude Include="..\..\common\ConstTable.h" />
     <ClInclude Include="..\..\PVT\backend\inc\SatManage.h" />
     <ClInclude Include="..\..\PVT\frontend\inc\BdsFrame.h" />
+    <ClInclude Include="..\..\PVT\frontend\inc\GalFrame.h" />
     <ClInclude Include="..\..\PVT\frontend\inc\GpsFrame.h" />
     <ClInclude Include="..\..\PVT\inc\DataTypes.h" />
     <ClInclude Include="..\..\PVT\inc\GlobalVar.h" />
@@ -213,6 +214,7 @@
     <ClCompile Include="..\..\PVT\backend\src\SatCoord.c" />
     <ClCompile Include="..\..\PVT\backend\src\SatManage.c" />
     <ClCompile Include="..\..\PVT\frontend\src\BdsFrame.c" />
+    <ClCompile Include="..\..\PVT\frontend\src\GalFrame.c" />
     <ClCompile Include="..\..\PVT\frontend\src\GpsFrame.c" />
     <ClCompile Include="..\..\PVT\frontend\src\MsrProc.c" />
     <ClCompile Include="..\..\PVT\src\GlobalVar.c" />

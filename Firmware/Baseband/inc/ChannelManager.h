@@ -29,7 +29,8 @@ typedef struct
 	int TimeTag;		// time tag (assigned by TrackingTime) when sending CorData to bit sync task
 	struct tag_CHANNEL_STATE *ChannelState;	// channel to send correlation result
 	U32 PrevCorData;	// correlation result preceding to next 20 results (or flag for pilot data sync)
-	U32 CorData[20];	// 20 correlation result of peak correlator (or pilot data symbols for pilot data sync)
+	U32 PolarityToggle;	// bit to indicate whether there is polarity toggle (LSB as latest)
+//	U32 CorData[20];	// 20 correlation result of peak correlator (or pilot data symbols for pilot data sync)
 } BIT_SYNC_DATA, *PBIT_SYNC_DATA;
 
 // channel related functions and variables

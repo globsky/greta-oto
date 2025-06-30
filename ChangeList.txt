@@ -186,15 +186,20 @@
 		Greta Oto Design Manual
 		Greta Oto Register and Control Interface
 		Greta Oto Firmware Design
-6/18/2026
+6/18/2025
 	Bug fix
 		First several PRN code generation error in RTL for Weil and memory code when phase_init asserted
 		Fix bug of incorrect position to put parameters in TaskQueue when adding new task
 		Remove obsolete header file
 	Function and feature change
 		SimRun project uses JSON file instead of XML file and add VS2022 project file
-6/23/2026
+6/23/2025
 	Bug fix
 		Add adjustment of pi/2 carrier phase difference for BOC dual-band and side-band correlation
 	Function and feature change
 		Code improvement and change B1C PLL to 4 quadrant discrimination after secondary code sync
+6/30/2025
+	Function and feature change
+		Improvement on bit-sync task
+		Add E1 bit-sync and 4bit symbol hardware decode
+		Add E1 frame sync and Viterbi decode (function to do ephemeris decode not added yet)
