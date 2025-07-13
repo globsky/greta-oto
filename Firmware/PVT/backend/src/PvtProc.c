@@ -8,6 +8,7 @@
 
 #include "CommonDefines.h"
 #include "PlatformCtrl.h"
+#include "TimeManager.h"
 #include "PvtConst.h"
 #include "DataTypes.h"
 #include "GlobalVar.h"
@@ -56,6 +57,8 @@ void PvtProcInit(PRECEIVER_INFO pReceiverInfo)
 	memset(&g_ReceiverInfo, 0, sizeof(RECEIVER_INFO));
 	memset(&g_PvtCoreData, 0, sizeof(g_PvtCoreData));
 
+	g_ReceiverInfo.ReceiverTime = &GnssTime;
+
 	if (!pReceiverInfo)	// if initialize structure is NULL
 		return;
 	else
@@ -63,12 +66,6 @@ void PvtProcInit(PRECEIVER_INFO pReceiverInfo)
 		memcpy(&g_ReceiverInfo, pReceiverInfo, sizeof(RECEIVER_INFO));
 		if (g_ReceiverInfo.PosQuality > ExtSetPos)
 			g_ReceiverInfo.PosQuality = ExtSetPos;
-		if (g_ReceiverInfo.GpsTimeQuality > ExtSetTime)
-			g_ReceiverInfo.GpsTimeQuality = ExtSetTime;
-		if (g_ReceiverInfo.BdsTimeQuality > ExtSetTime)
-			g_ReceiverInfo.BdsTimeQuality = ExtSetTime;
-		if (g_ReceiverInfo.GalileoTimeQuality > ExtSetTime)
-			g_ReceiverInfo.GalileoTimeQuality = ExtSetTime;
 	}
 
 	// initialize state with input parameter
@@ -102,7 +99,7 @@ void PvtProc(int CurMsInterval)
 	// TODO: update satellite in view list, adjust observation time etc.
 	if (1 && PosFixResult >= 0)
 	{
-		GpsTimeToUtc(g_ReceiverInfo.WeekNumber, g_ReceiverInfo.GpsMsCount, &UtcTime, (PUTC_PARAM)0);
+		GpsTimeToUtc(g_ReceiverInfo.ReceiverTime->GpsWeekNumber, g_ReceiverInfo.ReceiverTime->GpsMsCount, &UtcTime, (PUTC_PARAM)0);
 		DEBUG_OUTPUT(OUTPUT_CONTROL(PVT, INFO), "%04d/%02d/%02d %02d:%02d:%02d.%03d %14.9f %14.9f %10.4f   5   9\n",
 			UtcTime.Year, UtcTime.Month, UtcTime.Day, UtcTime.Hour, UtcTime.Minute, UtcTime.Second, UtcTime.Millisecond,
 			g_ReceiverInfo.PosLLH.lat * 180 / PI, g_ReceiverInfo.PosLLH.lon * 180 / PI, g_ReceiverInfo.PosLLH.hae);
@@ -207,11 +204,11 @@ int PvtFix(int MsInterval)
 		}
 		g_ReceiverInfo.PosQuality = AccuratePos;
 		if (PosResult & PVT_USE_GPS)
-			g_ReceiverInfo.GpsTimeQuality = AccurateTime;
+			g_ReceiverInfo.ReceiverTime->TimeQuality |= GPS_CLK_ERR_VALID;
 		if (PosResult & PVT_USE_BDS)
-			g_ReceiverInfo.BdsTimeQuality = AccurateTime;
+			g_ReceiverInfo.ReceiverTime->TimeQuality |= BDS_CLK_ERR_VALID;
 		if (PosResult & PVT_USE_GAL)
-			g_ReceiverInfo.GalileoTimeQuality = AccurateTime;
+			g_ReceiverInfo.ReceiverTime->TimeQuality |= GAL_CLK_ERR_VALID;
 		g_ReceiverInfo.PosFlag |= PosResult;
 	}
 	else if (g_ReceiverInfo.CurrentPosType == PosTypeLSQ)	// normal LSQ PVT
@@ -222,11 +219,11 @@ int PvtFix(int MsInterval)
 		}
 		g_ReceiverInfo.PosQuality = AccuratePos;
 		if (PosResult & PVT_USE_GPS)
-			g_ReceiverInfo.GpsTimeQuality = AccurateTime;
+			g_ReceiverInfo.ReceiverTime->TimeQuality |= GPS_CLK_ERR_VALID;
 		if (PosResult & PVT_USE_BDS)
-			g_ReceiverInfo.BdsTimeQuality = AccurateTime;
+			g_ReceiverInfo.ReceiverTime->TimeQuality |= BDS_CLK_ERR_VALID;
 		if (PosResult & PVT_USE_GAL)
-			g_ReceiverInfo.GalileoTimeQuality = AccurateTime;
+			g_ReceiverInfo.ReceiverTime->TimeQuality |= GAL_CLK_ERR_VALID;
 		g_ReceiverInfo.PosFlag |= PosResult;
 	}
 	else if (g_ReceiverInfo.CurrentPosType == PosTypeFlexTime)	// unknown transmit time PVT
@@ -251,13 +248,13 @@ int PvtFix(int MsInterval)
 	g_ReceiverInfo.PosVel.x = STATE_X;
 	g_ReceiverInfo.PosVel.y = STATE_Y;
 	g_ReceiverInfo.PosVel.z = STATE_Z;
-	g_ReceiverInfo.GpsClkError = STATE_DT_GPS / LIGHT_SPEED;
-	g_ReceiverInfo.BdsClkError = STATE_DT_BDS / LIGHT_SPEED;
-	g_ReceiverInfo.GalileoClkError = STATE_DT_GAL / LIGHT_SPEED;
+	g_ReceiverInfo.ReceiverTime->GpsClkError = STATE_DT_GPS / LIGHT_SPEED;
+	g_ReceiverInfo.ReceiverTime->BdsClkError = STATE_DT_BDS / LIGHT_SPEED;
+	g_ReceiverInfo.ReceiverTime->GalClkError = STATE_DT_GAL / LIGHT_SPEED;
 	g_ReceiverInfo.PosVel.vx = STATE_VX;
 	g_ReceiverInfo.PosVel.vy = STATE_VY;
 	g_ReceiverInfo.PosVel.vz = STATE_VZ;
-	g_ReceiverInfo.ClkDrifting = STATE_TDOT / LIGHT_SPEED;
+	g_ReceiverInfo.ReceiverTime->ClkDrifting = STATE_TDOT / LIGHT_SPEED;
 
 	// convert ECEF coordinate to LLH coordinate
 	EcefToLlh(&(g_ReceiverInfo.PosVel), &(g_ReceiverInfo.PosLLH));

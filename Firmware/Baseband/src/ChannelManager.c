@@ -17,11 +17,13 @@
 #include "FirmwarePortal.h"
 #include "TaskManager.h"
 #include "ChannelManager.h"
+#include "TeManager.h"
 #include "BBCommonFunc.h"
 #include "PvtEntry.h"
 
 CHANNEL_STATE ChannelStateArray[TOTAL_CHANNEL_NUMBER];
 extern PTRACKING_CONFIG TrackingConfig[][4];
+extern int DoDataDecode(void* Param);
 
 void CalcDiscriminator(PCHANNEL_STATE ChannelState, unsigned int Method);
 void CohBufferFft(PCHANNEL_STATE ChannelState);
@@ -38,6 +40,7 @@ static int GpsL1CABitSyncTask(void *Param);
 static int GalE1BitSyncTask(void *Param);
 static int DataSyncTask(void *Param);
 static int SyncPilotData(unsigned int DataWord, const unsigned int SecondCode[57], int StartOffset);
+static void SetWeekMsCount(PCHANNEL_STATE ChannelState);
 
 static const unsigned int GalInvPos[25] = {
 0x81f6b, 0x03ed6, 0x07dac, 0x0fb59, 0x1f6b2, 0x3ed64, 0x7dac9, 0xfb592, 0xf6b24, 0xed648, 
@@ -88,6 +91,7 @@ void InitChannel(PCHANNEL_STATE pChannel)
 		pChannel->State |= DATA_STREAM_8BIT;
 	}
 	pChannel->State |= STATE_CACHE_DIRTY;	// set cache dirty
+	pChannel->WeekMsCounter = -1;
 
 	SwitchTrackingStage(pChannel, STAGE_PULL_IN);	// switch to pull-in stage
 }
@@ -256,6 +260,15 @@ void ProcessCohData(PCHANNEL_STATE ChannelState)
 {
 	ChannelState->TrackingTime += ChannelState->CoherentNumber;	// accumulate tracking time
 	DEBUG_OUTPUT(OUTPUT_CONTROL(COH_PROC, OFF), "track time %d\n", ChannelState->TrackingTime);
+	ChannelState->TickCount = BasebandTickCount;
+	if (ChannelState->WeekMsCounter >= 0)	// frame sync completed
+	{
+		ChannelState->WeekMsCounter += ChannelState->CoherentNumber;
+		if (ChannelState->WeekMsCounter >= MS_IN_WEEK)
+			ChannelState->WeekMsCounter = 0;
+	}
+	else if (ChannelState->SyncTickCount > 0)
+		ChannelState->WeekMsCounter = MS_IN_WEEK - (ChannelState->SyncTickCount - BasebandTickCount);
 
 	// collect correlation result for bit sync if in bit sync stage
 	if ((ChannelState->State & STAGE_MASK) == STAGE_BIT_SYNC)
@@ -313,68 +326,42 @@ void ProcessCohData(PCHANNEL_STATE ChannelState)
 //   Measurement: pointer to baseband measurement structure
 //   DataBuffer: buffer to store data stream
 // Return value:
-//   number of U32 data filled into DataBuffer
-int ComposeMeasurement(int ChannelID, PBB_MEASUREMENT Measurement, U32 *DataBuffer)
+//   0
+int ComposeMeasurement(int ChannelID, PBB_MEASUREMENT Measurement)
 {
 	PCHANNEL_STATE ChannelState = &ChannelStateArray[ChannelID];
 	PSTATE_BUFFER StateBuffer = &(ChannelState->StateBufferCache);
-	int WordNumber;
-	int CohCount, CurrentCor;
+	int CohCount, CurrentCor, CodeCount;
+	int MsCount, DataAccTime;
 
 	SyncCacheRead(ChannelState, SYNC_CACHE_READ_STATUS);
-	memcpy((void *)Measurement, (void *)ChannelState, sizeof(U32) * 3);	// copy first elements of structure
+	Measurement->ChannelState = ChannelState;
 
-	Measurement->CodeFreq = STATE_BUF_GET_CODE_FREQ(StateBuffer);
-	Measurement->CodeNCO = STATE_BUF_GET_CODE_PHASE(StateBuffer);
-	Measurement->CodeCount = GET_PRN_COUNT(ChannelState->FreqID, StateBuffer->PrnCount);
-	Measurement->CodeCount = (Measurement->CodeCount << 1) + STATE_BUF_GET_CODE_SUB_PHASE(StateBuffer) - 4;	// compensate 4 correlator interval to align to COR4
+	Measurement->CodePhase = STATE_BUF_GET_CODE_PHASE(StateBuffer);
+	CodeCount = GET_PRN_COUNT(ChannelState->FreqID, StateBuffer->PrnCount);
+	CodeCount %= 1023;	// within 1ms
+	CodeCount = (CodeCount << 1) + STATE_BUF_GET_CODE_SUB_PHASE(StateBuffer) - 4;	// compensate 4 correlator interval to align to COR4
 	CohCount = STATE_BUF_GET_COH_COUNT(StateBuffer);
 	// check whether CurrentCor != 0, if so, CohCount has 1 lag to Cor0
 	CurrentCor = STATE_BUF_GET_CUR_CORR(&(ChannelState->StateBufferCache));
 	if (CurrentCor)
 		CohCount ++;
-	if (FREQ_ID_IS_L1CA(ChannelState->FreqID))	// L1C/A need to add millisecond count within 20ms
-		Measurement->CodeCount += (ChannelState->DataStream.CurrentAccTime + CohCount) * 2046;
 
 	Measurement->CarrierFreq = STATE_BUF_GET_CARRIER_FREQ(StateBuffer);
-	Measurement->CarrierNCO = STATE_BUF_GET_CARRIER_PHASE(StateBuffer);
+	Measurement->CarrierPhase = STATE_BUF_GET_CARRIER_PHASE(StateBuffer);
 	Measurement->CarrierCount = STATE_BUF_GET_CARRIER_COUNT(StateBuffer);
-	// fill data stream here
-	Measurement->DataNumber = ChannelState->DataStream.DataCount;
-	if ((ChannelState->State & DATA_STREAM_PRN2) && FREQ_ID_IS_B1C_L1C(ChannelState->FreqID))	// B1C/L1C using decoding data channel
-		Measurement->FrameIndex = ChannelState->DataStream.StartIndex;
-	else if ((ChannelState->State & DATA_STREAM_PRN2) && FREQ_ID_IS_E1(ChannelState->FreqID))	// E1 using current NH index
-		Measurement->FrameIndex = STATE_BUF_GET_NH_COUNT(&(ChannelState->StateBufferCache));
-	Measurement->DataStreamAddr = DataBuffer;
-	if ((ChannelState->State & DATA_STREAM_MASK) == DATA_STREAM_1BIT)
-	{
-		WordNumber = (Measurement->DataNumber + 31) / 32;
-		ChannelState->DataStream.DataBuffer[WordNumber-1] <<= ((~Measurement->DataNumber + 1) & 0x1f);	// last word shift to MSB
-		memcpy(Measurement->DataStreamAddr, ChannelState->DataStream.DataBuffer, sizeof(U32) * WordNumber);
-	}
-	else if ((ChannelState->State & DATA_STREAM_MASK) == DATA_STREAM_4BIT)
-	{
-		WordNumber = (Measurement->DataNumber + 7) / 8;
-		ChannelState->DataStream.DataBuffer[WordNumber-1] <<= (((~Measurement->DataNumber + 1) & 0x7) * 4);	// last word shift to MSB
-		memcpy(Measurement->DataStreamAddr, ChannelState->DataStream.DataBuffer, sizeof(U32) * WordNumber);
-	}
-	else if ((ChannelState->State & DATA_STREAM_MASK) == DATA_STREAM_8BIT)
-	{
-		WordNumber = (Measurement->DataNumber + 3) / 4;
-		ChannelState->DataStream.DataBuffer[WordNumber-1] <<= (((~Measurement->DataNumber + 1) & 0x3) * 8);	// last word shift to MSB
-		memcpy(Measurement->DataStreamAddr, ChannelState->DataStream.DataBuffer, sizeof(U32) * WordNumber);
-		ChannelState->DataStream.ChannelState = ChannelState;
-		if ((ChannelState->State & DATA_STREAM_PRN2) && ChannelState->DataStream.DataCount > 0)
-			AddToTask(TASK_POSTMEAS, BdsDecodeTask, &(ChannelState->DataStream), sizeof(DATA_STREAM) - 32 + WordNumber);
-	}
-	if (FREQ_ID_IS_L1CA(ChannelState->FreqID) || (ChannelState->State & DATA_STREAM_PRN2))	// clear DataCount if decoding data channel
-		ChannelState->DataStream.DataCount= 0;
-	ChannelState->DataStream.StartIndex = ChannelState->FrameCounter;
 
-	Measurement->CN0 = ChannelState->CN0;
-	Measurement->LockIndicator = 100;
+	MsCount = (ChannelState->WeekMsCounter < 0) ? -100 : ChannelState->WeekMsCounter;	// -100 make sure negative value after add CohCount
+	// L1CA align to symbol boundary if tracking state go beyond BIT_SYNC and do data decode
+	if (FREQ_ID_IS_L1CA(ChannelState->FreqID) && (GET_STAGE(ChannelState) >= STAGE_TRACK))
+		DataAccTime = ChannelState->DataStream.CurrentAccTime;
+	else
+		DataAccTime = 0;
+	Measurement->WeekMsCount = MsCount - DataAccTime; // week millisecond go back to symbol boundary
+	CohCount += DataAccTime;	// adjustment to week millisecond apply to CorCount
+	Measurement->CodeCount = CodeCount + CohCount * 2046;
 
-	return WordNumber;
+	return 0;
 }
 
 //*************** Put 1ms correlation result in buffer and send 20 results to bit sync task ****************
@@ -419,8 +406,8 @@ void DecodeDataStream(PCHANNEL_STATE ChannelState)
 {
 	PDATA_STREAM DataStream = &(ChannelState->DataStream);
 	PBIT_SYNC_DATA BitSyncData = &(ChannelState->BitSyncData);
-	int DataSymbol;
-	int CurIndex;
+	DATA_FOR_DECODE DataForDecode;
+	unsigned int DataSymbol = 0;
 	int i, SymbolCount;
 	unsigned int Data;
 
@@ -438,6 +425,7 @@ void DecodeDataStream(PCHANNEL_STATE ChannelState)
 		else
 			SymbolCount = ChannelState->CoherentNumber / DataStream->TotalAccTime;	// coherent length must be multiple of symbol length
 
+		// update FrameCounter
 		if (ChannelState->FrameCounter >= 0)
 			ChannelState->FrameCounter += SymbolCount;
 		if (FREQ_ID_IS_L1CA(ChannelState->FreqID) && ChannelState->FrameCounter >= 1500)	// 1500bit for each round of subframe 1-5
@@ -456,25 +444,34 @@ void DecodeDataStream(PCHANNEL_STATE ChannelState)
 			{
 			case DATA_STREAM_1BIT:
 				DataSymbol = (Data >> (SymbolCount - i - 1)) & 1;
-				CurIndex = DataStream->DataCount / 32;
-				DataStream->DataBuffer[CurIndex] <<= 1;
+				DataStream->Symbols <<= 1;
+				DataStream->BitCount ++;
 				break;
 			case DATA_STREAM_4BIT:
 				DataSymbol = (Data >> ((SymbolCount - i - 1) * 4)) & 0xf;
-				CurIndex = DataStream->DataCount / 8;
-				DataStream->DataBuffer[CurIndex] <<= 4;
+				DataStream->Symbols <<= 4;
+				DataStream->BitCount += 4;
 				break;
 			case DATA_STREAM_8BIT:
 				DataSymbol = (Data >> ((SymbolCount - i - 1) * 8)) & 0xff;
-				CurIndex = DataStream->DataCount / 4;
-				DataStream->DataBuffer[CurIndex] <<= 8;
+				DataStream->Symbols <<= 8;
+				DataStream->BitCount += 8;
 				break;
 			}
-			DataStream->DataBuffer[CurIndex] |= DataSymbol;
-			DataStream->DataCount ++;
+			DataStream->Symbols |= DataSymbol;
+			if (DataStream->BitCount == 32)
+			{
+				DataForDecode.ChannelState = ChannelState;
+				DataForDecode.DataStream = DataStream->Symbols;
+				DataForDecode.StartIndex = DataStream->StartIndex;
+				DataForDecode.TickCount = BasebandTickCount;
+				DataStream->BitCount = 0;
+				AddToTask(TASK_BASEBAND, DoDataDecode, &DataForDecode, sizeof(DATA_FOR_DECODE));
+				DataStream->StartIndex = ChannelState->FrameCounter;
+			}
 		}
 	}
-	else	// decode L1C/A or decode pilot channel NH code
+	else	// decode L1C/A or decode pilot channel NH code (1bit only)
 	{
 		DataStream->CurrentAccTime += ChannelState->CoherentNumber;
 		DataStream->CurReal += (S16)(ChannelState->PendingCoh[4] >> 16);
@@ -483,38 +480,43 @@ void DecodeDataStream(PCHANNEL_STATE ChannelState)
 		if (DataStream->CurrentAccTime < DataStream->TotalAccTime)
 			return;
 
-		DEBUG_OUTPUT(OUTPUT_CONTROL(COH_PROC, INFO), "DATA %5d %5d at %d\n", DataStream->CurReal, DataStream->CurImag, DataStream->DataCount);
+		DEBUG_OUTPUT(OUTPUT_CONTROL(COH_PROC, OFF), "DATA %5d %5d at %d\n", DataStream->CurReal, DataStream->CurImag, DataStream->BitCount);
 
-		if ((ChannelState->State & STAGE_MASK) == STAGE_TRACK1)	// PLL lock, determine by sign
+		if ((ChannelState->State & STAGE_MASK) == STAGE_TRACK0 || (ChannelState->State & STAGE_MASK) == STAGE_TRACK1)	// PLL lock, determine by sign
 			DataSymbol = ((DataStream->CurReal < 0) ? 1 : 0);
 		else	// determine by data toggle
 		{
 			// determine symbol toggle
 			DataSymbol = DataStream->CurReal * DataStream->PrevReal + DataStream->CurImag * DataStream->PrevImag;
-			DataSymbol = ((DataSymbol < 0) ? 1 : 0) ^ (DataStream->PrevSymbol);
+			DataSymbol = ((DataSymbol < 0) ? 1 : 0) ^ (DataStream->Symbols & 1);
 			// store to previous values for next symbol
-			DataStream->PrevSymbol = DataSymbol;
 			DataStream->PrevReal = DataStream->CurReal;
 			DataStream->PrevImag = DataStream->CurImag;
 		}
 		// put into data stream buffer
-		CurIndex = DataStream->DataCount / 32;
-		DataStream->DataBuffer[CurIndex] <<= 1;
-		DataStream->DataBuffer[CurIndex] |= DataSymbol;
+		DataStream->Symbols <<= 1;
+		DataStream->Symbols |= DataSymbol;
 
-		DataStream->DataCount ++;
+		DataStream->BitCount ++;
 		DataStream->CurrentAccTime = 0;
 		DataStream->CurReal = DataStream->CurImag = 0;
 
-		if (!(FREQ_ID_IS_L1CA(ChannelState->FreqID)) && DataStream->DataCount == 24)
+		if (FREQ_ID_IS_L1CA(ChannelState->FreqID) && DataStream->BitCount == 32)	// 32bits for L1CA data decode
 		{
-			BitSyncData->PolarityToggle = DataStream->DataBuffer[0];
-			if (((DataStream->PrevReal >= 0) ? 0 : 1) ^ DataSymbol)	// data sign does not match data symbol, toggle stream
-				BitSyncData->PolarityToggle ^= 0xffffffff;
+			DataForDecode.ChannelState = ChannelState;
+			DataForDecode.TickCount = BasebandTickCount;
+			DataForDecode.StartIndex = -1;
+			DataForDecode.DataStream = DataStream->Symbols;
+			AddToTask(TASK_BASEBAND, DoDataDecode, &DataForDecode, sizeof(DATA_FOR_DECODE));
+			DataStream->BitCount = 0;
+		}
+		if (!(FREQ_ID_IS_L1CA(ChannelState->FreqID)) && DataStream->BitCount == 24)	// 24bits for B1C/L1C secondary code sync
+		{
+			BitSyncData->PolarityToggle = DataStream->Symbols;
 			BitSyncData->TimeTag = ChannelState->TrackingTime;
 //			BitSyncData->PrevCorData = ChannelState->BitSyncResult;	// stage of frame sync
 			AddToTask(TASK_BASEBAND, DataSyncTask, BitSyncData, sizeof(BIT_SYNC_DATA));
-			DataStream->DataCount = 0;
+			DataStream->BitCount = 0;
 		}
 	}
 }
@@ -692,7 +694,7 @@ int GalE1BitSyncTask(void *Param)
 //* 0: sync to secondary code fail
 //* 0x800+index: secondary code start from index with positive sign
 //* 0x1000+index: secondary code start from index with negative sign
-//* 0<=index<=24 for E1, 0<=index<=1799 for B1C/L1C
+//* index is the bit index within secondary code at TrackingTime==0
 // Parameters:
 //   Param: Pointer to bit sync data structure
 // Return value:

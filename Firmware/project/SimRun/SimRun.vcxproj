@@ -146,6 +146,7 @@
     <ClInclude Include="..\..\PVT\frontend\inc\BdsFrame.h" />
     <ClInclude Include="..\..\PVT\frontend\inc\GalFrame.h" />
     <ClInclude Include="..\..\PVT\frontend\inc\GpsFrame.h" />
+    <ClInclude Include="..\..\PVT\frontend\inc\TimeManager.h" />
     <ClInclude Include="..\..\PVT\inc\DataTypes.h" />
     <ClInclude Include="..\..\PVT\inc\GlobalVar.h" />
     <ClInclude Include="..\..\PVT\inc\PvtConst.h" />
@@ -217,6 +218,7 @@
     <ClCompile Include="..\..\PVT\frontend\src\GalFrame.c" />
     <ClCompile Include="..\..\PVT\frontend\src\GpsFrame.c" />
     <ClCompile Include="..\..\PVT\frontend\src\MsrProc.c" />
+    <ClCompile Include="..\..\PVT\frontend\src\TimeManager.c" />
     <ClCompile Include="..\..\PVT\src\GlobalVar.c" />
     <ClCompile Include="..\..\PVT\src\PvtBasicFunc.c" />
     <ClCompile Include="SignalSim\src\Almanac.cpp" />

@@ -246,6 +246,9 @@
     <ClInclude Include="..\..\PVT\frontend\inc\GalFrame.h">
       <Filter>PVT\frontend\inc</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\PVT\frontend\inc\TimeManager.h">
+      <Filter>PVT\frontend\inc</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="SignalSim\src\FNavBit.cpp">
@@ -430,6 +433,9 @@
     </ClCompile>
     <ClCompile Include="SimRun.cpp" />
     <ClCompile Include="..\..\PVT\frontend\src\GalFrame.c">
+      <Filter>PVT\frontend\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\PVT\frontend\src\TimeManager.c">
       <Filter>PVT\frontend\src</Filter>
     </ClCompile>
   </ItemGroup>

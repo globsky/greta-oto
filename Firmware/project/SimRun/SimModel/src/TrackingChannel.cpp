@@ -282,12 +282,12 @@ void CTrackingChannel::GetCorrelationResult(GNSS_TIME CurTime, SATELLITE_PARAM *
 
 		// calculate carrier phase of source signal
 		SourceCarrierPhase = GetCarrierPhase(pSatParam, 0);
+		if (Sideband)
+			SourceCarrierPhase += 0.25;
 		SourceCarrierPhase -= (int)SourceCarrierPhase;
 		SourceCarrierPhase = 1 - SourceCarrierPhase;	// carrier is fractional part of negative of travel time, equvalent to 1 minus positive fractional part
 		// calculate phase difference
 		PhaseDiff = CarrierParam.GetPhaseDiff(SourceCarrierPhase - CarrierPhase / 4294967296., Alpha);
-		if (Sideband)
-			PhaseDiff -= 0.25;
 		Rotate = complex_number(cos(PhaseDiff * PI2), sin(PhaseDiff * PI2));
 //		printf("SrcPhase = %.5f LocalPhase = %.5f PhaseDiff = %.5f\n", SourceCarrierPhase, CarrierPhase / 4294967296., PhaseDiff);
 
@@ -470,8 +470,7 @@ void CTrackingChannel::DecodeDataAcc(int DataValue)
 		DecodeData = (DecodeData << 1) | ((DataValue & 0x80000000) ? 1 : 0);
 		break;
 	case 1:	// 2bit
-		DataValue >>= (13 - BitSelect);
-		DataValue = (DataValue >> 1) + (DataValue & 1);	// round
+		DataValue >>= (14 - BitSelect);
 		if (DataValue > 1)
 			DataValue  = 1;
 		else if (DataValue < -2)
@@ -479,8 +478,7 @@ void CTrackingChannel::DecodeDataAcc(int DataValue)
 		DecodeData = (DecodeData << 2) | (DataValue & 0x3);
 		break;
 	case 2:	// 4bit
-		DataValue >>= (11 - BitSelect);
-		DataValue = (DataValue >> 1) + (DataValue & 1);	// round
+		DataValue >>= (12 - BitSelect);
 		if (DataValue > 7)
 			DataValue  = 7;
 		else if (DataValue < -8)

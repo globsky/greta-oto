@@ -26,11 +26,11 @@ int GetSatelliteInView(SAT_PREDICT_PARAM SatList[32])
 
 	if (g_ReceiverInfo.PosQuality == UnknownPos)
 		return 0;
-	if ((g_ReceiverInfo.GpsTimeQuality == UnknownTime) && (g_ReceiverInfo.BdsTimeQuality == UnknownTime) && (g_ReceiverInfo.GalileoTimeQuality == UnknownTime))
+	if (g_ReceiverInfo.ReceiverTime->TimeQuality == UnknownTime)
 		return 0;
 	Ephemeris = g_GpsEphemeris;
 	SatelliteInfo = g_GpsSatelliteInfo;
-	Time = g_ReceiverInfo.GpsMsCount * 0.001;
+	Time = g_ReceiverInfo.ReceiverTime->GpsMsCount * 0.001;
 	for (i = 0; i < TOTAL_GPS_SAT_NUMBER; i ++)
 	{
 		if (sat_num >= 32)
@@ -46,7 +46,7 @@ int GetSatelliteInView(SAT_PREDICT_PARAM SatList[32])
 	}
 	Ephemeris = g_BdsEphemeris;
 	SatelliteInfo = g_BdsSatelliteInfo;
-	Time = (g_ReceiverInfo.GpsMsCount - 14000) * 0.001;
+	Time = g_ReceiverInfo.ReceiverTime->BdsMsCount * 0.001;
 	for (i = 0; i < TOTAL_BDS_SAT_NUMBER; i ++)
 	{
 		if (sat_num >= 32)
@@ -62,7 +62,7 @@ int GetSatelliteInView(SAT_PREDICT_PARAM SatList[32])
 	}
 	Ephemeris = g_GalileoEphemeris;
 	SatelliteInfo = g_GalileoSatelliteInfo;
-	Time = g_ReceiverInfo.GpsMsCount * 0.001;
+	Time = g_ReceiverInfo.ReceiverTime->GpsMsCount * 0.001;
 	for (i = 0; i < TOTAL_GAL_SAT_NUMBER; i ++)
 	{
 		if (sat_num >= 32)

@@ -51,6 +51,9 @@ do \
 #define SET_BIT64(Dest, Position) ((Dest) |= (1ULL << Position))
 #define CLEAR_BIT64(Dest, Position) ((Dest) &= ~(1ULL << Position))
 
+#define MSB2INT(Data) (((int)(Data)) >> 16)
+#define LSB2INT(Data) ((int)((S16)(Data & 0xffff)))
+
 //==========================
 // baseband configurations
 //==========================
@@ -83,6 +86,7 @@ do \
 #define FREQ_SVID(freq_id, svid) (((freq_id) << 6) | (svid))
 #define GET_FREQ_ID(freq_svid) (((freq_svid) >> 6) & 3)
 #define GET_SVID(freq_svid) ((freq_svid) & 0x3f)
+#define BDS_GEO_SVID(svid) ((svid < 6) || (svid > 58))
 
 //==========================
 // state definitions
@@ -100,6 +104,7 @@ do \
 #define STAGE_TRACK2   (STAGE_TRACK + 2)
 
 #define STAGE_MASK          0xf
+#define GET_STAGE(ChannelState) ((ChannelState)->State & STAGE_MASK)
 #define STAGE_CONFIG_INDEX(stage) (((stage) & 0x8) ? ((stage)-5) : ((stage)-3))
 
 // bit4~6 for tracking loop control
@@ -161,6 +166,8 @@ do \
 #define SAMPLES_1MS (SAMPLE_FREQ / 1000)
 #define GPS_L1_WAVELENGTH 0.19029367279836488
 
+#define MS_IN_WEEK 604800000
+
 #define DIVIDE_ROUND(divident, divisor) (S32)(((divident) + divisor/2) / divisor)
 #define CARRIER_FREQ(doppler) DIVIDE_ROUND(((S64)(IF_FREQ + (doppler))) << 32, SAMPLE_FREQ)	// multiply 2^32/fs
 #define CARRIER_FREQ_BOC(doppler) DIVIDE_ROUND(((S64)(IF_FREQ_BOC + (doppler))) << 32, SAMPLE_FREQ)	// multiply 2^32/fs
@@ -175,50 +182,16 @@ do \
 #pragma pack(4)		// set alignment to 4-byte boundary
 
 typedef struct
-{	
-	U8 UserChannel;		// user channel number (reserved for future use)
-	U8 LogicChannel;	// physical channel number (map to hardware logic channel)
-	U8 FreqID;	// system and frequency
-	U8 Svid;	// SVID start from 1
-	U32 State;	// bitwise flags and indicators
-	int TrackingTime;	// millisecond at current stage (reset at stage swith or at phase loss lock at final stage)
-	// above variables same as CHANNEL_STATE
-	S32 CarrierFreq;	// carrier frequency control word
-	U32 CarrierNCO;		// carrier NCO count
-	S32 CarrierCount;	// carrier cycle count
-	U32 CodeFreq;		// code frequency
-	U32 CodeNCO;		// code NCO
-	S32 CodeCount;		// code count in current bit, unit is 1/2 chip
-	U16 CN0;			// C/N0 in unit of 0.01dB
-	U16 DataNumber;		// data number in stream buffer
-	S32 FrameIndex;		// position of first data in frame
-	U32 LockIndicator;	// carrier lock indicator
-	U32 *DataStreamAddr;	// address of data in data stream buffer
-} BB_MEASUREMENT, *PBB_MEASUREMENT;
-
-typedef struct
 {
-	unsigned int MeasMask;
-	unsigned int RunTimeAcc;
-	int MeasInterval;
-	PBB_MEASUREMENT Measurements;
+	unsigned int MeasMask;	// measurement valid bit mask
+	int Interval;			// tick interval since last measurement interrupt
+	int ClockAdjust;		// extra receiver clock adjustment to Interval
+	unsigned int TickCount;	// baseband tick count of current epoch
+	// following data is not used when invoking task MeasurementProc() but should assigned when output baseband measurement to help rebuild raw measurement in post process
+	int TimeQuality;		// quality of receiver time
+	int GpsMsCount;			// millisecond count within a week for GPS/Galileo
+	int BdsMsCount;			// millisecond count within a week for BDS
 } BB_MEAS_PARAM, *PBB_MEAS_PARAM;
-
-//==========================
-// data stream sent to decode task
-//==========================
-typedef struct
-{
-	struct tag_CHANNEL_STATE *ChannelState;	// channel to send data to decode task
-	int PrevReal, PrevImag;	// accumulated I/Q in previous data period
-	int CurReal, CurImag;	// accumulated I/Q in current data period
-	int TotalAccTime;		// total accumulation period in millisecond
-	int CurrentAccTime;		// current accumulated time in millisecond
-	int DataCount;			// number of decoded symbols
-	int StartIndex;			// index of the first data symbol within a frame
-	int PrevSymbol;			// previous symbol (determine data toggle)
-	U32 DataBuffer[128/4];	// maximum 128 bytes to hold decoded symbols
-} DATA_STREAM, *PDATA_STREAM;
 
 //==========================
 // satellite prediction and aiding

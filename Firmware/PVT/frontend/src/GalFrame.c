@@ -33,7 +33,7 @@ static int FindMinIndex();
 //   none
 void GalFrameSync(PCHANNEL_STATUS pChannelStatus, int data_count, unsigned int *data, int FrameIndex)
 {
-	PGPS_FRAME_INFO pFrameInfo = (PGPS_FRAME_INFO)(pChannelStatus->FrameInfo);
+	PFRAME_INFO pFrameInfo = (PFRAME_INFO)(&(pChannelStatus->FrameInfo));
 	unsigned int SymbolWord = data[0], PageData[4];
 	int SymbolIndex = 0, PosIndex;
 	unsigned int *pBuffer;
@@ -47,42 +47,42 @@ void GalFrameSync(PCHANNEL_STATUS pChannelStatus, int data_count, unsigned int *
 		while (data_count > 0)
 		{
 			// move in sign bit of the symbol
-			pFrameInfo->NavDataStream[0] = (pFrameInfo->NavDataStream[0] << 1) | (SymbolWord >> 31);
+			pFrameInfo->SymbolData[0] = (pFrameInfo->SymbolData[0] << 1) | (SymbolWord >> 31);
 			SymbolWord <<= 4;
 			data_count --;
 			if (((++SymbolIndex) & 7) == 0)
 				SymbolWord = data[SymbolIndex >> 3];
-			pFrameInfo->NavBitNumber ++;
-			if (pFrameInfo->NavBitNumber >= 10)
+			pFrameInfo->SymbolNumber ++;
+			if (pFrameInfo->SymbolNumber >= 10)
 			{
-				if ((pFrameInfo->NavDataStream[0] & 0x3ff) == 0x160)	// sync pattern match
+				if ((pFrameInfo->SymbolData[0] & 0x3ff) == 0x160)	// sync pattern match
 				{
 					if (((FrameIndex + 250 - data_count) % 25) == 10)	// align to NH boundary
 					{
 						// sync pattern found, change frame status to 2
 						pFrameInfo->FrameStatus = 2;
 						// force symbol number to 0
-						pFrameInfo->NavBitNumber = 0;
+						pFrameInfo->SymbolNumber = 0;
 						break;
 					}
 				}
-				pFrameInfo->NavBitNumber = 9;	// discard oldest symbol
+				pFrameInfo->SymbolNumber = 9;	// discard oldest symbol
 			}
 		}
 	}
-	// put data in SubframeData
+	// put data in FrameData
 	if (pFrameInfo->FrameStatus >= 0)
 	{
-		pBuffer = &(pFrameInfo->SubframeData[0][0]);
+		pBuffer = &(pFrameInfo->FrameData[0]);
 		while (data_count > 0)
 		{
-			if (pFrameInfo->NavBitNumber < 0)	// sync pattern
+			if (pFrameInfo->SymbolNumber < 0)	// sync pattern
 			{
-				pFrameInfo->NavDataStream[0] = (pFrameInfo->NavDataStream[0] << 1) | (SymbolWord >> 31);
-				if ((pFrameInfo->FrameStatus & 2) && pFrameInfo->NavBitNumber == -1)	// need to double check sync pattern
+				pFrameInfo->SymbolData[0] = (pFrameInfo->SymbolData[0] << 1) | (SymbolWord >> 31);
+				if ((pFrameInfo->FrameStatus & 2) && pFrameInfo->SymbolNumber == -1)	// need to double check sync pattern
 				{
-					pFrameInfo->NavDataStream[0] ^= 0x160;
-					PosIndex = __builtin_popcount(pFrameInfo->NavDataStream[0] & 0x3ff);	// count number of symbols that sign does not match sync pattern
+					pFrameInfo->SymbolData[0] ^= 0x160;
+					PosIndex = __builtin_popcount(pFrameInfo->SymbolData[0] & 0x3ff);	// count number of symbols that sign does not match sync pattern
 					if (PosIndex == 0)	// sync pattern double check passed
 						pFrameInfo->FrameStatus &= ~2;	// clear check sync pattern flag
 					else if (PosIndex >= 2)	// sync pattern double check failed
@@ -95,20 +95,20 @@ void GalFrameSync(PCHANNEL_STATUS pChannelStatus, int data_count, unsigned int *
 			}
 			else
 			{
-				PosIndex = (pFrameInfo->NavBitNumber & 7) * 4;
-				pBuffer[pFrameInfo->NavBitNumber / 8] &= ~(0xf0000000 >> PosIndex);	// clear 4bit to put symbol
-				pBuffer[pFrameInfo->NavBitNumber / 8] |= ((SymbolWord & 0xf0000000) >> PosIndex);	// put symbol (in 4MSB of DataStream) in
+				PosIndex = (pFrameInfo->SymbolNumber & 7) * 4;
+				pBuffer[pFrameInfo->SymbolNumber / 8] &= ~(0xf0000000 >> PosIndex);	// clear 4bit to put symbol
+				pBuffer[pFrameInfo->SymbolNumber / 8] |= ((SymbolWord & 0xf0000000) >> PosIndex);	// put symbol (in 4MSB of DataStream) in
 			}
 			SymbolWord <<= 4;
 			data_count --;
 			if (((++SymbolIndex) & 7) == 0)
 				SymbolWord = data[SymbolIndex >> 3];
-			pFrameInfo->NavBitNumber ++;
-			if (pFrameInfo->NavBitNumber == 240)	// one page completed
+			pFrameInfo->SymbolNumber ++;
+			if (pFrameInfo->SymbolNumber == 240)	// one page completed
 			{
 				// do Viterbi decode on page data
 				GalViterbiDecode(pBuffer, PageData);
-				pFrameInfo->NavBitNumber = -10;	// skip first 10 symbols for next page as sync pattern
+				pFrameInfo->SymbolNumber = -10;	// skip first 10 symbols for next page as sync pattern
 			}
 		}
 	}

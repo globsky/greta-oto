@@ -11,16 +11,20 @@
 #include <math.h>
 
 #include "DataTypes.h"
+#include "PlatformCtrl.h"
+#include "TaskManager.h"
+#include "ChannelManager.h"
+#include "TimeManager.h"
 #include "GlobalVar.h"
 #include "SupportPackage.h"
 
-//#define MSG_INFO 0
-//#define MSG_WARNING 0
-//#define MSG_ERROR 1
-//#define DEBUG_OUTPUT(enable, ...) if(enable) printf(__VA_ARGS__)
+#define MAX_GPS_TOW		100799
+#define PAYLOAD_LENGTH 10
+#define PACKAGE_LENGTH (sizeof(SYMBOL_PACKAGE) + sizeof(unsigned int)*(PAYLOAD_LENGTH))	// 3 variables + 10 payload
 
-#define TLM_WORD (data[9])
-#define HOW_WORD (data[8])
+// word in data array with following order
+#define WORD1  (data[9])
+#define WORD2  (data[8])
 #define WORD3  (data[7])
 #define WORD4  (data[6])
 #define WORD5  (data[5])
@@ -37,24 +41,32 @@ typedef struct
 	unsigned short ecc;
 	short delta_i;
 	short omega_dot;
+	signed short af0, af1;
 	unsigned int sqrtA;
 	int omega0;
 	int w;
 	int M0;
-	short af0;
-	short af1;
 } RAW_ALMANAC, *PRAW_ALMANAC;
 
-static RAW_ALMANAC RawAlmanac[32];
-static unsigned int RawAlmanacMask;
+extern U32 EphAlmMutex;
 
-static void FillInBits(unsigned int *target, unsigned int *src0, unsigned int *src1, int number);
+static unsigned int RawAlmanacMask;
+static unsigned int SubframeMask[32];
+static unsigned int SubFrameData[32][30];
+static RAW_ALMANAC RawAlmanac[32];
+static unsigned int AlmValidMask = 0;
+static unsigned int AlmHealthMask = 0;
+static int AlmRefToa = -1, AlmRefWeek = -1;	// -1 means not valid
+
+
+static void FillInBits(unsigned int* target, unsigned int* src, int number);
 static int GetTowFromWord(unsigned int word);
-static int GpsFrameDecode(PCHANNEL_STATUS pChannelStatus, unsigned int *data);
-static int DecodeGpsEphemeris(PGNSS_EPHEMERIS pEph, const unsigned int SubframeData[3][10]);
-static void DecodeGpsAlm(const unsigned int *SubframeData, int PageId);
-static void DecodeRawAlm(const int *data, PRAW_ALMANAC pAlm);
-static void ConvertAlmanac(PRAW_ALMANAC pRawAlm, PMIDI_ALMANAC pAlm, int week);
+static int GpsFrameDecode(void* Param);
+static int DecodeGpsEphemeris(int svid, const unsigned int data[30]);
+static int DecodeGpsAlmanac(int svid, const unsigned int data[10]);
+//static int DecodeGpsHealthAS(const unsigned int data[10]);
+static int DecodeGpsHealthWeek(const unsigned int data[10]);
+static int ConvertAlmanac(int svid, int week);
 
 extern BOOL GpsParityCheck(unsigned int word);
 
@@ -69,20 +81,27 @@ void GpsDecodeInit()
 }
 
 //*************** GPS Frame sync process ****************
-//* assume maximum epoch interval is 1280ms, which is 64bit
+//* do GPS LNAV frame sync and data collection
+//* meaning of FrameState:
+//* -1: frame sync not completed
+//* 1~5: reserved for fast frame sync with current subframe id
+//* 30: preamble found but frame sync not confirmed
+//* 31~35: frame sync comfirmed and this value as recent decoded subframe id + 30
 // Parameters:
-//   pChannelStatus: pointer to channel status structure
-//   data_count: number of data in data stream
-//   data0: first 32bit data stream
-//   data1: second 32bit data stream (data stream from MSB to LSB)
-//   EstimateTow: estimate current TOW, -1 if invalid
+//   pFrameInfo: pointer to frame info structure
+//   DataForDecode: pointer to structure of symbols to be decoded
 // Return value:
-//   none
-void GpsFrameSync(PCHANNEL_STATUS pChannelStatus, int data_count, unsigned int data0, unsigned data1, int EstimateTow)
+//   current millisecond count within current week (negative if unknown)
+int GpsNavDataProc(PFRAME_INFO pFrameInfo, PDATA_FOR_DECODE DataForDecode)
 {
 	int fillin_count;
-	int index, tow0, tow1;
-	PGPS_FRAME_INFO pFrameInfo = (PGPS_FRAME_INFO)(pChannelStatus->FrameInfo);
+	int index, tow0, tow1, frame_id;
+	int data_count = 32;	// DataStream contais 32bit data
+	int BitCount = -1;
+	U32 DataStream = DataForDecode->DataStream;
+	PCHANNEL_STATE ChannelState = DataForDecode->ChannelState;
+	unsigned int Package[PACKAGE_LENGTH];
+	PSYMBOL_PACKAGE SymbolPackage = (PSYMBOL_PACKAGE)Package;
 
 	// if not frame sync, find word sync by checking parity
 	if (pFrameInfo->FrameStatus < 0)
@@ -90,49 +109,49 @@ void GpsFrameSync(PCHANNEL_STATUS pChannelStatus, int data_count, unsigned int d
 		while (data_count > 0)
 		{
 			// move bits in data0/data1 into data stream gather 32bit to do parity check
-			fillin_count = 32 - (int)pFrameInfo->NavBitNumber;	// how many bit to complete 32bit
+			fillin_count = 32 - (int)pFrameInfo->SymbolNumber;	// how many bit to complete 32bit
 			if (fillin_count <= 0)
 				fillin_count = 1;	// at least fill in one bit
 			else if (fillin_count > data_count)
 				fillin_count = data_count;	// at most fill in all bit
 			// simplified shift, only consider last two 32bit without frame sync
-			pFrameInfo->NavDataStream[1] <<= fillin_count;
-			pFrameInfo->NavDataStream[1] |= (pFrameInfo->NavDataStream[0] >> (30 - fillin_count));
-			FillInBits(&pFrameInfo->NavDataStream[0], &data0, &data1, fillin_count);
+			pFrameInfo->SymbolData[1] <<= fillin_count;
+			pFrameInfo->SymbolData[1] |= (pFrameInfo->SymbolData[0] >> (30 - fillin_count));
+			FillInBits(&pFrameInfo->SymbolData[0], &DataStream, fillin_count);
 			data_count -= fillin_count;
-			pFrameInfo->NavBitNumber += fillin_count;
+			pFrameInfo->SymbolNumber += fillin_count;
 
 			// check whether 32bit completed for word parity check
-			if (pFrameInfo->NavBitNumber >= 32)
+			if (pFrameInfo->SymbolNumber >= 32)
 			{
-				if (GpsParityCheck(pFrameInfo->NavDataStream[0]))	// check parity of 32 bit word
+				if (GpsParityCheck(pFrameInfo->SymbolData[0]))	// check parity of 32 bit word
 				{
-					// check HOW word first
-					if (EstimateTow >= 0 && (tow0 = GetTowFromWord(pFrameInfo->NavDataStream[0])) >= 0)
+					/*// reserved for future fast frame sync
+					if (EstimateTow >= 0 && (tow0 = GetTowFromWord(pFrameInfo->SymbolData[0])) >= 0)
 					{
 						if (tow0 == EstimateTow || tow0 == (EstimateTow + 1))	// estimate TOW is idential or within one subframe delay
-						{								
+						{
 							pFrameInfo->tow = tow0;
 							pFrameInfo->FrameStatus = 30;
-							pFrameInfo->NavBitNumber = 62;
+							pFrameInfo->SymbolNumber = 62;
 							// sync at HOW, fill in TLM, last two bit in HOW should be 0, so 1 means negative stream
-							pFrameInfo->NavDataStream[1] = (pFrameInfo->NavDataStream[0] & 1) ? ~0x22c24838 : 0x22c24838;
+							pFrameInfo->SymbolData[1] = (pFrameInfo->SymbolData[0] & 1) ? ~0x22c24838 : 0x22c24838;
 							break;
 						}
-					}
+					}*/
 					// check preamble, preamble include D29* and D30* are 10bit 0x8b or 0x374
-					if ((pFrameInfo->NavDataStream[0] >> 22) == 0x8b || (pFrameInfo->NavDataStream[0] >> 22) == 0x374)
+					if ((pFrameInfo->SymbolData[0] >> 22) == 0x8b || (pFrameInfo->SymbolData[0] >> 22) == 0x374)
 					{
 						// frame sync with subframe id unknown
 						pFrameInfo->FrameStatus = 30;
-						// force drop bit exceed 32
-						pFrameInfo->NavBitNumber = 32;
+						// bits in SymbolData exceed 32 dropped, only keep TLM word in SymbolData[0]
+						pFrameInfo->SymbolNumber = 32;
 						break;
 					}
 				}
 				// only maintain at most 2 words (plus D29* and D30* in previous word) when frame sync is not reached
-				if (pFrameInfo->NavBitNumber > 62)
-					pFrameInfo->NavBitNumber = 62;
+				if (pFrameInfo->SymbolNumber > 62)
+					pFrameInfo->SymbolNumber = 62;
 			}
 		}
 	}
@@ -148,93 +167,111 @@ void GpsFrameSync(PCHANNEL_STATUS pChannelStatus, int data_count, unsigned int d
 			if (pFrameInfo->FrameStatus < 30)
 				fillin_count = data_count;
 			// if tow not get, calculate how many bit to complete 2 word
-			else if (pFrameInfo->NavBitNumber < 62 && pFrameInfo->tow < 0 && pFrameInfo->FrameStatus == 30) 
-				fillin_count = 62 - (int)pFrameInfo->NavBitNumber;
+			else if (pFrameInfo->SymbolNumber < 62 && pFrameInfo->TimeTag < 0 && pFrameInfo->FrameStatus == 30)
+				fillin_count = 62 - (int)pFrameInfo->SymbolNumber;
 			// if frame id not get, calculate how many bit to complete 12 word
 			else if (pFrameInfo->FrameStatus == 30)
-				fillin_count = 362 - (int)pFrameInfo->NavBitNumber;
+				fillin_count = 362 - (int)pFrameInfo->SymbolNumber;
 			else // calculate how many bit to complete 10 word
-				fillin_count = 302 - (int)pFrameInfo->NavBitNumber;
+				fillin_count = 302 - (int)pFrameInfo->SymbolNumber;
 			if (fillin_count > data_count)
 				fillin_count = data_count;	// at most fill in all bits
 			while (fillin_count >= 30)	// fill in whole word
 			{
-				for (index = 11; index > 0; index --)
-					pFrameInfo->NavDataStream[index] = pFrameInfo->NavDataStream[index-1];
-				FillInBits(&pFrameInfo->NavDataStream[0], &data0, &data1, 30);
+				for (index = 11; index > 0; index--)
+					pFrameInfo->SymbolData[index] = pFrameInfo->SymbolData[index - 1];
+				FillInBits(&pFrameInfo->SymbolData[0], &DataStream, 30);
 				data_count -= 30;
 				fillin_count -= 30;
-				pFrameInfo->NavBitNumber += 30;
+				pFrameInfo->SymbolNumber += 30;
 			}
 			if (fillin_count > 0)	// fill remnant bits
 			{
-				for (index = 11; index > 0; index --)
+				for (index = 11; index > 0; index--)
 				{
-					pFrameInfo->NavDataStream[index] <<= fillin_count;
-					pFrameInfo->NavDataStream[index] |= (pFrameInfo->NavDataStream[index-1] >> (30 - fillin_count));
+					pFrameInfo->SymbolData[index] <<= fillin_count;
+					pFrameInfo->SymbolData[index] |= (pFrameInfo->SymbolData[index - 1] >> (30 - fillin_count));
 				}
-				FillInBits(&pFrameInfo->NavDataStream[0], &data0, &data1, fillin_count);
+				FillInBits(&pFrameInfo->SymbolData[0], &DataStream, fillin_count);
 			}
 			data_count -= fillin_count;
-			pFrameInfo->NavBitNumber += fillin_count;
+			pFrameInfo->SymbolNumber += fillin_count;
 
 			// second step: decode data bit
 			// total 10 or 12 word get (current subframe and preamble and HOW word in next subframe)
-			if (pFrameInfo->NavBitNumber == ((pFrameInfo->FrameStatus == 30) ? 362 : 302))
+			if (pFrameInfo->SymbolNumber == ((pFrameInfo->FrameStatus == 30) ? 362 : 302))
 			{
 				// unknown subframe id, check for next TLM and TOW continue
 				if (pFrameInfo->FrameStatus == 30)
 				{
-					tow0 = pFrameInfo->tow + 1;
+					tow0 = pFrameInfo->TimeTag + 1;
 					if (tow0 > MAX_GPS_TOW)
 						tow0 = 0;
-					tow1 = GetTowFromWord(pFrameInfo->NavDataStream[0]);
+					tow1 = GetTowFromWord(pFrameInfo->SymbolData[0]);
 					// preamble match and TOW continue, frame sync confirmed
-					if (((pFrameInfo->NavDataStream[1] >> 22) == 0x8b || (pFrameInfo->NavDataStream[1] >> 22) == 0x374) && (tow1 == tow0))
+					if (((pFrameInfo->SymbolData[1] >> 22) == 0x8b || (pFrameInfo->SymbolData[1] >> 22) == 0x374) && (tow1 == tow0))
 					{
 						// tow0 is the starting tow of next subframe
-						pFrameInfo->tow = tow0;
-//						DEBUG_OUTPUT(MSG_INFO, "Frame sync get for PRN%d, tow=%d\n", pChannelStatus->svid, pFrameInfo->tow);
+						pFrameInfo->TimeTag = tow0;
 						// copy latest TLM to previous subframe TLM because first TLM may be missing when using TOW sync
-						pFrameInfo->NavDataStream[11] = pFrameInfo->NavDataStream[1];
+						pFrameInfo->SymbolData[11] = pFrameInfo->SymbolData[1];
+						// assign subframe id
+						frame_id = (pFrameInfo->SymbolData[10] >> 8) & 0x7;
+						if (pFrameInfo->SymbolData[10] & 0x40000000)	// contents of HOW XOR with D30
+							frame_id ^= 7;
+						pFrameInfo->FrameStatus = 30 + frame_id;
 						// decode current subframe
-						pFrameInfo->FrameStatus = 30 + GpsFrameDecode(pChannelStatus, pFrameInfo->NavDataStream + 2);
+						SymbolPackage->ChannelState = ChannelState;
+						SymbolPackage->FrameIndex = frame_id;
+						SymbolPackage->PayloadLength = PAYLOAD_LENGTH;
+						memcpy(SymbolPackage->Symbols, pFrameInfo->SymbolData + 2, sizeof(unsigned int) * PAYLOAD_LENGTH);
+						AddToTask(TASK_POSTMEAS, GpsFrameDecode, SymbolPackage, PACKAGE_LENGTH);
 						// drop current subframe
-						pFrameInfo->NavBitNumber -= 300;
+						pFrameInfo->SymbolNumber -= 300;
+						BitCount = tow0 * 300 + pFrameInfo->SymbolNumber + data_count - 2;	// bit count of last decoded bit within the week
 					}
 					else // incorrect frame sync get, search for preamble again
 					{
 						// first try to find another preamble in following word
-						for (index = 10; index >= 0; index --)
+						for (index = 10; index >= 0; index--)
 						{
-							pFrameInfo->NavBitNumber -= 30;
-							if ((pFrameInfo->NavDataStream[index] >> 22) == 0x8b ||	(pFrameInfo->NavDataStream[index] >> 22) == 0x374)
+							pFrameInfo->SymbolNumber -= 30;
+							if ((pFrameInfo->SymbolData[index] >> 22) == 0x8b || (pFrameInfo->SymbolData[index] >> 22) == 0x374)
 								break;
 						}
 						// if search fail or word has preamble failed to pass parity check, roll back to preamble search again
-						if (index < 0 || !GpsParityCheck(pFrameInfo->NavDataStream[index]))
+						if (index < 0 || !GpsParityCheck(pFrameInfo->SymbolData[index]))
 						{
 							pFrameInfo->FrameStatus = -1;
-							pFrameInfo->NavBitNumber = 32;
+							pFrameInfo->SymbolNumber = 32;
 							data_count = 0;
 						}
 						// TODO: if previouse frame sync using TLM/HOW has already use TOW to set receiver time, need to reset
 						if (index > 0)	// found preamble again, set TOW
-							pFrameInfo->tow = GetTowFromWord(pFrameInfo->NavDataStream[index-1]);
+							pFrameInfo->TimeTag = GetTowFromWord(pFrameInfo->SymbolData[index - 1]);
 						else
-							pFrameInfo->tow = -1;
+							pFrameInfo->TimeTag = -1;
 					}
 				}
 				else if (pFrameInfo->FrameStatus > 30)	// already in frame sync, do data decode
 				{
 					// move tow to next subframe
-					pFrameInfo->tow ++;
-					if (pFrameInfo->tow > MAX_GPS_TOW)
-						pFrameInfo->tow = 0;
+					pFrameInfo->TimeTag ++;
+					if (pFrameInfo->TimeTag > MAX_GPS_TOW)
+						pFrameInfo->TimeTag = 0;
+					// assign subframe id
+					frame_id = (pFrameInfo->SymbolData[8] >> 8) & 0x7;
+					if (pFrameInfo->SymbolData[8] & 0x40000000)	// contents of HOW XOR with D30
+						frame_id ^= 7;
+					pFrameInfo->FrameStatus = 30 + frame_id;
 					// decode current subframe
-					pFrameInfo->FrameStatus = 30 + GpsFrameDecode(pChannelStatus, pFrameInfo->NavDataStream);
+					SymbolPackage->ChannelState = ChannelState;
+					SymbolPackage->FrameIndex = frame_id;
+					SymbolPackage->PayloadLength = 10;
+					memcpy(SymbolPackage->Symbols, pFrameInfo->SymbolData, sizeof(unsigned int) * PAYLOAD_LENGTH);
+					AddToTask(TASK_POSTMEAS, GpsFrameDecode, SymbolPackage, PACKAGE_LENGTH);
 					// drop current subframe
-					pFrameInfo->NavBitNumber -= 300;
+					pFrameInfo->SymbolNumber -= 300;
 				}
 				else
 				{
@@ -243,51 +280,50 @@ void GpsFrameSync(PCHANNEL_STATUS pChannelStatus, int data_count, unsigned int d
 				}
 			}
 			// TLM and HOW both get, calculate tow
-			else if ( pFrameInfo->NavBitNumber == 62 &&  pFrameInfo->FrameStatus == 30)
+			else if (pFrameInfo->SymbolNumber == 62 && pFrameInfo->FrameStatus == 30)
 			{
-				tow0 = GetTowFromWord(pFrameInfo->NavDataStream[0]);
-				if (tow0 < 0 || (EstimateTow >= 0 && !(tow0 == EstimateTow || tow0 == (EstimateTow + 1))))	// get TOW fail or not consistant with receiver time, drop frame sync
+				tow0 = GetTowFromWord(pFrameInfo->SymbolData[0]);
+				/*if (tow0 < 0 || (EstimateTow >= 0 && !(tow0 == EstimateTow || tow0 == (EstimateTow + 1))))	// get TOW fail or not consistant with receiver time, drop frame sync
 					pFrameInfo->FrameStatus = -1;
-				else
+				else*/
+				if (tow0 >= 0)
 				{
 					// set TOW
-					pFrameInfo->tow = tow0;
+					pFrameInfo->TimeTag = tow0;
 					// set polarity
 					pFrameInfo->FrameFlag |= POLARITY_VALID;
-					if ((pFrameInfo->NavDataStream[0] & 0x3) == 0x0)
+					if ((pFrameInfo->SymbolData[0] & 0x3) == 0x0)
 						pFrameInfo->FrameFlag &= ~NEGATIVE_STREAM;
 					else
 						pFrameInfo->FrameFlag |= NEGATIVE_STREAM;
+					BitCount = tow0 * 300 + pFrameInfo->SymbolNumber + data_count - 2;	// bit count of last decoded bit within the week
 				}
 			}
 		}
 	}
+
+	return BitCount * 20;
 }
 
 //*************** Shift bits from source to target ****************
-//* source bits in src0|src1 (MSB in MSB of src0, LSB in LSB of src1)
+//* source bits in src (MSB first)
 //* data shifted in fill LSB of target, previous bits in target shift left
 //* contents in src0|src1 also shifted left with MSBs move out
 // Parameters:
 //   target: pointer to target word
-//   src0: pointer to source 0 word
-//   src1: pointer to source 1 word
+//   src: pointer to source data stream
 //   number: number of bits to shift in
 // Return value:
 //   none
-void FillInBits(unsigned int *target, unsigned int *src0, unsigned int *src1, int number)
+void FillInBits(unsigned int* target, unsigned int* src, int number)
 {
 	if (number == 32)
-	{
-		*target = *src0;
-		*src0 = *src1;
-	}
+		*target = *src;
 	else
 	{
 		*target <<= number;
-		*target |= (*src0 >> (32 - number));
-		*src0 <<= number; *src0 |= (*src1 >> (32 - number));
-		*src1 <<= number;
+		*target |= (*src >> (32 - number));
+		*src <<= number;
 	}
 }
 
@@ -335,151 +371,105 @@ static int GetTowFromWord(unsigned int word)
 	return tow;
 }
 
-/*******************************************
-* Decode one subframe
-* return 1~5 for parity check error
-* return 6 for subframe id decode error
-* return 31~35 for decode success
-*********************************************/
-//*************** Decode GPS subframe ****************
-//* for subframe 1/2/3, collect all three subframes and decode ephemeris
-//* for subframe 4/5 decode almanac, UTC etc.
+//*************** Task function to process one GPS subframe ****************
 // Parameters:
-//   pChannelStatus: pointer to channel status
-//   data: 10 WORD navigation data stream
+//   Param: pointer to structure holding one subframe data
 // Return value:
-//   1~5 for subframe id successfully decoded, 6 for unknown subframe
-#define SUBFRAME_VALID(pChannel, id) (pChannel->FrameFlag & SUBFRAME##id##_VALID)
-int GpsFrameDecode(PCHANNEL_STATUS pChannelStatus, unsigned int *data)
+//   0
+int GpsFrameDecode(void* Param)
 {
-	int frame_id = GET_UBITS(HOW_WORD, 8, 3);
-	int i, TOW, PageId;
-	int svid = pChannelStatus->svid;
-	PGPS_FRAME_INFO pFrameInfo = (PGPS_FRAME_INFO)(pChannelStatus->FrameInfo);
+	PSYMBOL_PACKAGE SymbolPackage = (PSYMBOL_PACKAGE)Param;
+	int Svid = SymbolPackage->ChannelState->Svid;
+	int FrameIndex = SymbolPackage->FrameIndex - 1;
+	unsigned int *data = SymbolPackage->Symbols;
+	int i, Page, Week, StreamPolarity = 0;
 
-	if (HOW_WORD & 0x40000000)
-		frame_id ^= 0x7;
-
-//	printf("SV%02d Frame%d decode\n", pChannelStatus->svid, frame_id);
-	if ((TLM_WORD >> 22) == 0x374)
-	{
-		pFrameInfo->FrameFlag |= NEGATIVE_STREAM;
-		pFrameInfo->FrameFlag |= POLARITY_VALID;
-	}
-	else if ((TLM_WORD >> 22) == 0x8b)
-	{
-		pFrameInfo->FrameFlag &= ~NEGATIVE_STREAM;
-		pFrameInfo->FrameFlag |= POLARITY_VALID;
-	}
-	else	//preamble fail
-		return 6;
-
-	if (frame_id < 1 || frame_id > 5)
-		return 6;
-
-	// restore contents d1~d24, by XOR D30* with D1~D24
+	// restore contents d0~d29, put stream polarity in D29 indicate whether word contents identical to positive stream
+	// StreamPolarity initialize with 0 means first word always has positive content
 	for (i = 9; i >= 0; i --)
 	{
 		if (!GpsParityCheck((unsigned int)(data[i])))
 			return 6;
 		if (data[i] & 0x40000000)
-			data[i] ^= 0x3fffffc0;
+			data[i] ^= 0x3fffffff;
+		data[i] = (data[i] & 0x7fffffff) | StreamPolarity;
+		StreamPolarity ^=(data[i] << 31);
 	}
 
-	// if match existing ephemeris, for subframe 1/2/3, do not do data decode
-	if (frame_id == 1)
+	DEBUG_OUTPUT(OUTPUT_CONTROL(DATA_DECODE, INFO), "svid%2d decode subframe %d\n", Svid, FrameIndex + 1);
+	switch (FrameIndex)
 	{
-		pFrameInfo->iodc = ((data[7] << 2) & 0x300) | GET_UBITS(data[2], 22, 8);
-		if (g_GpsEphemeris[svid-1].flag && pFrameInfo->iodc == g_GpsEphemeris[svid-1].iodc)
-			return 1;
+	case 0:
+		memcpy(SubFrameData[Svid-1], data, sizeof(unsigned int) * 10);
+		SubframeMask[Svid-1] |= 1;
+		Week = GET_UBITS(data[7], 20, 10);
+		SetReceiverTime(FREQ_L1CA, Week + 2048, -1, 0);	// only set week number
+		break;
+	case 1:
+		memcpy(SubFrameData[Svid-1] + 10, data, sizeof(unsigned int) * 10);
+		SubframeMask[Svid-1] |= 2;
+		break;
+	case 2:
+		memcpy(SubFrameData[Svid-1] + 20, data, sizeof(unsigned int) * 10);
+		SubframeMask[Svid-1] |= 4;
+		break;
+	case 3:
+	case 4:
+		if (((data[7] >> 28) & 0x3) != 1)	// check DataID
+			break;
+		Page = (data[7] >> 22) & 0x3f;
+		if (Page > 1 && Page <= 32)
+			DecodeGpsAlmanac(Page, data);
+		else if (Page == 56)
+			;	// UTC & ionosphere
+		else if (Page == 63)
+			;	// DecodeGpsHealthAS(data);
+		else if (Page == 51)
+			DecodeGpsHealthWeek(data);
+		break;
 	}
-	else if (frame_id == 2)
+	if ((SubframeMask[Svid-1] & 7) == 7)
 	{
-		pFrameInfo->iode2 = GET_UBITS(data[7], 22, 8);
-		if (g_GpsEphemeris[svid-1].flag && pFrameInfo->iode2 == g_GpsEphemeris[svid-1].iode2)
-			return 2;
+		DecodeGpsEphemeris(Svid, SubFrameData[Svid-1]);
+		SubframeMask[Svid-1] = 0;
 	}
-	else if (frame_id == 3)
-	{
-		pFrameInfo->iode3 = GET_UBITS(data[0], 22, 8);
-		if (g_GpsEphemeris[svid-1].flag && pFrameInfo->iode3 == g_GpsEphemeris[svid-1].iode3)
-			return 3;
-	}
-	else // frame_id == 4 or 5
-	{
-		// decode almanac/UTC parameter etc. here
-		TOW = (int)GET_UBITS(HOW_WORD, 13, 17);
-		PageId = ((TOW - 1) / 5) % 25;
-		DecodeGpsAlm(data, PageId);
-		return frame_id;
-	}
-
-	// fill in corresponding data array for subframe 1~3 and set flag
-	if (frame_id <= 3)
-	{
-		pFrameInfo->FrameFlag |= (SUBFRAME1_VALID << (frame_id - 1));
-		memcpy(pFrameInfo->SubframeData[frame_id-1], data, sizeof(unsigned int) * 10);
-	}
-	// if subframe 1 get, decode week number
-	if (frame_id == 1 && (g_ReceiverInfo.PosFlag & GPS_WEEK_VALID) == 0)
-	{
-		g_ReceiverInfo.WeekNumber = 2048 + GET_UBITS(data[7], 20, 10);
-		g_ReceiverInfo.PosFlag |= (GPS_WEEK_VALID);// | CALC_INVIEW_GPS);
-	}
-	
-	// check if iodc, iode2 and iode3 are not identical, only leave recent subframe data
-	if ((SUBFRAME_VALID(pFrameInfo, 1) && SUBFRAME_VALID(pFrameInfo, 2) && (pFrameInfo->iodc & 0xff) != pFrameInfo->iode2) ||
-		(SUBFRAME_VALID(pFrameInfo, 1) && SUBFRAME_VALID(pFrameInfo, 3) && (pFrameInfo->iodc & 0xff) != pFrameInfo->iode3) ||
-		(SUBFRAME_VALID(pFrameInfo, 2) && SUBFRAME_VALID(pFrameInfo, 3) && pFrameInfo->iode2 != pFrameInfo->iode3))
-	{
-		pFrameInfo->FrameFlag &= ~ALL_SUBFRAME_VALID;//clear 
-		pFrameInfo->FrameFlag |= (SUBFRAME1_VALID << (frame_id - 1));
-	}
-	if ((pFrameInfo->FrameFlag & ALL_SUBFRAME_VALID) == ALL_SUBFRAME_VALID)
-	{
-		if (1)//pChannelStatus->cn0 > 3800 || EphemerisValid(&g_GpsEphemeris[svid-1], &g_GpsAlmanac[svid-1], pFrameInfo->SubframeData))	//check ephemeris valid
-		{
-			if (g_GpsEphemeris[svid-1].flag == 0 || pFrameInfo->iodc != g_GpsEphemeris[svid-1].iodc)
-			{
-				g_GpsEphemeris[svid-1].svid = svid;
-				DecodeGpsEphemeris(&g_GpsEphemeris[svid-1], pFrameInfo->SubframeData);
-			}
-		}
-		else
-		{
-			pChannelStatus->ChannelErrorFlag |= CHANNEL_ERR_XCORR;
-		}
-
-		pFrameInfo->FrameFlag &= ~ALL_SUBFRAME_VALID;	
-	}
-
-	return frame_id;
+	return 0;
 }
 
-//*************** Decode GPS frame data to get ephemeris ****************
+//*************** Decode GPS ephemeris with subframe 1~3 ****************
 // Parameters:
-//   pEph: pointer to ephemeris structure
-//   SunframeData: array of 3x10 WORD of subframe1/2/3
+//   svid: GPS SVID ranging from 1 to 32
+//   data: subframe data, each WORD in 30LSB of 32bit data content
 // Return value:
-//   1 if decode success, otherwise 0
-int DecodeGpsEphemeris(PGNSS_EPHEMERIS pEph, const unsigned int SubframeData[3][10])
+//   1 if decode success or 0 if decode fail
+int DecodeGpsEphemeris(int svid, const unsigned int data[30])
 {
-	const int *data;
+	PGNSS_EPHEMERIS pEph = &g_GpsEphemeris[svid-1];
+	unsigned short iodc;
 
-	// subframe 1:
-	data = (const int *)SubframeData[0];
+	pEph->svid = svid - 1 + MIN_GPS_SAT_ID;
 	pEph->health = GET_UBITS(WORD3, 8, 6);
 	if (pEph->health != 0)
 	{
 		pEph->flag = 0;
 		return 0;
 	}
-	pEph->flag = 1;
 
-	pEph->iodc = ((WORD3 << 2) & 0x300) | GET_UBITS(WORD8, 22, 8);
-	pEph->week = 1024 + (int)GET_UBITS(WORD3, 20, 10);
-	if (pEph->week < 500)	// week number for 2009/3/28 and later
-		pEph->week += 1024;
+	iodc = ((WORD3 << 2) & 0x300) | GET_UBITS(WORD8, 22, 8);
+	if (((iodc & 0xff) != GET_UBITS(data[17], 22, 8)) || ((iodc & 0xff) != GET_UBITS(data[20], 22, 8)))
+		return 0;
+	// subframe 1:
+	if (pEph->health != 0)
+	{
+		pEph->flag = 0;
+		return 0;
+	}
+
+	MutexTake(EphAlmMutex);
+
+	pEph->flag = 1;
+	pEph->iodc = iodc;
+	pEph->week = 2048 + (int)GET_UBITS(WORD3, 20, 10);
 	pEph->ura = GET_UBITS(WORD3, 14, 4);
 	pEph->tgd = ScaleDouble(GET_BITS(WORD7, 6, 8), 31); // .31
 	pEph->toc = (int)GET_UBITS(WORD8, 6, 16) * 16;
@@ -488,8 +478,8 @@ int DecodeGpsEphemeris(PGNSS_EPHEMERIS pEph, const unsigned int SubframeData[3][
 	pEph->af2 = ScaleDouble(GET_BITS(WORD9, 22, 8), 55); // .55
 
 	// subframe 2:
-	data = (int *)SubframeData[1];
-	pEph->iode2 = GET_UBITS(WORD3, 22, 8);
+	data += 10;
+	pEph->iode2 = (unsigned char)(iodc & 0xff);
 	pEph->crs = ScaleDouble(GET_BITS(WORD3, 6, 16), 5); // .5
 	pEph->delta_n = ScaleDouble(GET_BITS(WORD4, 14, 16), 43) * PI; // .43 * PI
 	pEph->M0 = ScaleDouble(((WORD4 << 18) & 0xff000000) | GET_UBITS(WORD5, 6, 24), 31) * PI; // .31 * PI
@@ -500,8 +490,8 @@ int DecodeGpsEphemeris(PGNSS_EPHEMERIS pEph, const unsigned int SubframeData[3][
 	pEph->toe = (int)GET_UBITS(WORD10, 14, 16) * 16;
 
 	// subframe 3:
-	data = (int *)SubframeData[2];
-	pEph->iode3 = GET_UBITS(WORD10, 22, 8);
+	data += 10;
+	pEph->iode3 = (unsigned char)(iodc & 0xff);
 	pEph->cic = ScaleDouble(GET_BITS(WORD3, 14, 16), 29); // .29
 	pEph->omega0 = ScaleDouble(((WORD3 << 18) & 0xff000000) | GET_UBITS(WORD4, 6, 24), 31) * PI; // .31 * PI
 	pEph->cis = ScaleDouble(GET_BITS(WORD5, 14, 16), 29); // .29
@@ -512,221 +502,147 @@ int DecodeGpsEphemeris(PGNSS_EPHEMERIS pEph, const unsigned int SubframeData[3][
 	pEph->idot = ScaleDouble(GET_BITS(WORD10, 8, 14), 43) * PI; // .43 * PI
 
 	// calculate derived variables
-	pEph->axis_dot = 0.;
 	pEph->axis = pEph->sqrtA * pEph->sqrtA;
 	pEph->n = WGS_SQRT_GM / (pEph->sqrtA * pEph->axis) + pEph->delta_n;
 	pEph->root_ecc = sqrt(1.0 - pEph->ecc * pEph->ecc);
 	pEph->omega_t = pEph->omega0 - WGS_OMEGDOTE * pEph->toe;
 	pEph->omega_delta = pEph->omega_dot - WGS_OMEGDOTE;
+
+	MutexGive(EphAlmMutex);
 	return 1;
 }
 
-//page number  1  2  3  4  5  6  7  8  9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25
-//subframe 5   1  2  3  4  5  6  7  8  9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  51
-//subframe 4  57 25 26 27 28 57 29 30 31  32  57  62  52  53  54  57  55  56  58  59  57  60  61  62  63
-// This is the order in which the subframe 4 page ID's are subcommutated.
-static const int pg2svid4[] = {57,25,26,27,28,57,29,30,31,32,57,62,52,53,54,57,55,56,58,59,57,60,61,62,63};
-// This is the order in which the subframe 5 page ID's are subcommutated.
-static const int pg2svid5[] = {1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,51};
-
-//*************** Decode GPS subframe 4/5 ****************
+//*************** Decode subframe 4/5 to a fixed point GPS almanac structure  ****************
 // Parameters:
-//   SubframeData: array of 10 WORD of subframe4/5
-//   PageId: page number range 0~24 start from week epoch
+//   svid: GPS SVID ranging from 1 to 32
+//   data: subframe data, each WORD in 30LSB of 32bit data content
 // Return value:
-//   none
-void DecodeGpsAlm(const unsigned int *SubframeData, int PageId)
+//   svid if decode success or 0 if decode fail
+int DecodeGpsAlmanac(int svid, const unsigned int data[10])
 {
-	int *data = (int *)SubframeData;
-	int i, PageNumber;
-	int week;
-	PRAW_ALMANAC pAlm;
-	unsigned char toa;
-	int frameid =  (int)GET_UBITS(HOW_WORD, 8, 3);
-	int sv = 0;
-	int WeekNumber;
+	PRAW_ALMANAC pAlm = &RawAlmanac[svid - 1];
+	unsigned char toa = GET_UBITS(WORD4, 22, 8);
+	int omega0 = GET_BITS(WORD7, 6, 24);
 
-	if (g_ReceiverInfo.PosFlag & GPS_WEEK_VALID)
-		WeekNumber = g_ReceiverInfo.WeekNumber;
-	else
-		WeekNumber = -1;
-
-	PageNumber = (int)GET_UBITS(WORD3, 22, 6);
-	//check if some satellite invalid
-	if(PageNumber == 0)
-	{
-		if(frameid==4)
-			sv = pg2svid4[PageId];
-		else if(frameid == 5)
-			sv = pg2svid5[PageId];
-		
-		if(sv >= 1 && sv <= 32)
-			g_GpsAlmanac[sv-1].health = 1;
-	}
-
-	if (PageNumber >= 1 && PageNumber <= 32)	// almanac, decode to raw almanac format
-	{
-		if ((RawAlmanacMask & (1 << (PageNumber-1))) != 0)	// do not repeat decode same page
-			return;
-		pAlm = &RawAlmanac[PageNumber-1];	// page number is svid, minus 1 to get index
-		DecodeRawAlm(data, pAlm);
-		RawAlmanacMask |= (1 << (PageNumber-1));
-	}
-	else if (PageNumber == 63)//get 6 bit sv health
-	{
-		g_GpsAlmanac[25 - 1].health = (int)GET_UBITS(WORD8, 6, 6);
-		g_GpsAlmanac[26 - 1].health = (int)GET_UBITS(WORD9, 24, 6);
-		g_GpsAlmanac[27 - 1].health = (int)GET_UBITS(WORD9, 18, 6);
-		g_GpsAlmanac[28 - 1].health = (int)GET_UBITS(WORD9, 12, 6);
-		g_GpsAlmanac[29 - 1].health = (int)GET_UBITS(WORD9, 6, 6);
-		g_GpsAlmanac[30 - 1].health = (int)GET_UBITS(WORD10, 24, 6);
-		g_GpsAlmanac[31 - 1].health = (int)GET_UBITS(WORD10, 18, 6);
-		g_GpsAlmanac[32 - 1].health = (int)GET_UBITS(WORD10, 12, 6);
-	}
-	else if (PageNumber == 51 && WeekNumber >= 0)	// almanac toa and week number
-	{
-		g_GpsAlmanac[1 - 1].health = (int)GET_UBITS(WORD4, 24, 6);
-		g_GpsAlmanac[2 - 1].health = (int)GET_UBITS(WORD4, 18, 6);
-		g_GpsAlmanac[3 - 1].health = (int)GET_UBITS(WORD4, 12, 6);
-		g_GpsAlmanac[4 - 1].health = (int)GET_UBITS(WORD4, 6, 6);
-		g_GpsAlmanac[5 - 1].health = (int)GET_UBITS(WORD5, 24, 6);
-		g_GpsAlmanac[6 - 1].health = (int)GET_UBITS(WORD5, 18, 6);
-		g_GpsAlmanac[7 - 1].health = (int)GET_UBITS(WORD5, 12, 6);
-		g_GpsAlmanac[8 - 1].health = (int)GET_UBITS(WORD5, 6, 6);
-		g_GpsAlmanac[9 - 1].health = (int)GET_UBITS(WORD6, 24, 6);
-		g_GpsAlmanac[10 - 1].health = (int)GET_UBITS(WORD6, 18, 6);
-		g_GpsAlmanac[11 - 1].health = (int)GET_UBITS(WORD6, 12, 6);
-		g_GpsAlmanac[12 - 1].health = (int)GET_UBITS(WORD6, 6, 6);
-		g_GpsAlmanac[13 - 1].health = (int)GET_UBITS(WORD7, 24, 6);
-		g_GpsAlmanac[14 - 1].health = (int)GET_UBITS(WORD7, 18, 6);
-		g_GpsAlmanac[15 - 1].health = (int)GET_UBITS(WORD7, 12, 6);
-		g_GpsAlmanac[16 - 1].health = (int)GET_UBITS(WORD7, 6, 6);
-		g_GpsAlmanac[17 - 1].health = (int)GET_UBITS(WORD8, 24, 6);
-		g_GpsAlmanac[18 - 1].health = (int)GET_UBITS(WORD8, 18, 6);
-		g_GpsAlmanac[19 - 1].health = (int)GET_UBITS(WORD8, 12, 6);
-		g_GpsAlmanac[20 - 1].health = (int)GET_UBITS(WORD8, 6, 6);
-		g_GpsAlmanac[21 - 1].health = (int)GET_UBITS(WORD9, 24, 6);
-		g_GpsAlmanac[22 - 1].health = (int)GET_UBITS(WORD9, 18, 6);
-		g_GpsAlmanac[23 - 1].health = (int)GET_UBITS(WORD9, 12, 6);
-		g_GpsAlmanac[24 - 1].health = (int)GET_UBITS(WORD9, 6, 6);
-
-		if (RawAlmanacMask == 0)	// no raw almanac to decode
-			return;
-
-		// get week number
-		toa = GET_UBITS(WORD3, 14, 8);
-		week = GET_UBITS(WORD3, 6, 8);
-
-		// low 8bit week number match decoded value
-		if (week == (WeekNumber & 0xff))
-			week = WeekNumber;
-		else if (week == ((WeekNumber - 1) & 0xff))
-			week = WeekNumber - 1;
-		else if (week == ((WeekNumber + 1) & 0xff))
-			week = WeekNumber + 1;
-		else
-			RawAlmanacMask = 0;
-
-		for (i = 0; i < 32; i ++)
-		{
-			if (g_GpsAlmanac[i].flag && g_GpsAlmanac[i].week == week)
-				RawAlmanacMask &= ~(1 << i);
-		}
-		for (i = 0; i < 32; i ++)
-		{
-			if (RawAlmanacMask & (1 << i) && RawAlmanac[i].toa == toa)
-			{
-				if(g_GpsAlmanac[i].toa != toa)// judge for fresh
-				{
-					ConvertAlmanac(&RawAlmanac[i], &g_GpsAlmanac[i], week);
-				}
-			}
-		}
-		RawAlmanacMask = 0;
-	}
-	else if (PageNumber == 56)	// ionosphere and UTC parameters
-	{
-		g_GpsIonoParam.a0 = ScaleDouble(GET_BITS(WORD3, 14, 8), 30);
-		g_GpsIonoParam.a1 = ScaleDouble(GET_BITS(WORD3,  6, 8), 27);
-		g_GpsIonoParam.a2 = ScaleDouble(GET_BITS(WORD4, 22, 8), 24);
-		g_GpsIonoParam.a3 = ScaleDouble(GET_BITS(WORD4, 14, 8), 24);
-		g_GpsIonoParam.b0 = ScaleDouble(GET_BITS(WORD4,  6, 8), -11);
-		g_GpsIonoParam.b1 = ScaleDouble(GET_BITS(WORD5, 22, 8), -14);
-		g_GpsIonoParam.b2 = ScaleDouble(GET_BITS(WORD5, 14, 8), -16);
-		g_GpsIonoParam.b3 = ScaleDouble(GET_BITS(WORD5,  6, 8), -16);
-		g_GpsIonoParam.flag = 1;
-
-		if (WeekNumber >= 0)
-		{
-			g_GpsUtcParam.A0 = ScaleDouble(((WORD7 << 2) & 0xffffff00) | GET_UBITS(WORD8, 22, 8), 30);
-			g_GpsUtcParam.A1 = ScaleDouble(GET_BITS(WORD6, 6, 24), 50);
-			g_GpsUtcParam.tot = GET_UBITS(WORD8, 14, 8);// * 4096
-			g_GpsUtcParam.WN = GET_UBITS(WORD8, 6, 8);
-			g_GpsUtcParam.TLS = GET_UBITS(WORD9, 22, 8);
-			g_GpsUtcParam.WNLSF = GET_UBITS(WORD9, 14, 8);
-			g_GpsUtcParam.DN = GET_UBITS(WORD9, 6, 8);
-			g_GpsUtcParam.TLSF = GET_UBITS(WORD10, 22, 8);
-			g_GpsUtcParam.flag = 1;
-
-			// restore WN and WNLSF from truncated value
-			// absolute diff of untruncated value of WeekNumber and WN shall not exceed 127
-			g_GpsUtcParam.WN |= (WeekNumber & 0xff00);
-			if ((g_GpsUtcParam.WN - WeekNumber) < -127)
-				g_GpsUtcParam.WN += 256;
-			else if ((g_GpsUtcParam.WN - WeekNumber) > 127)
-				g_GpsUtcParam.WN -= 256;
-
-			// WNLSF shall not less than WN
-			g_GpsUtcParam.WNLSF |= (g_GpsUtcParam.WN & 0xff00);
-			if (g_GpsUtcParam.WNLSF < g_GpsUtcParam.WN)
-				g_GpsUtcParam.WNLSF += 256;
-		}
-	}
-}
-
-//*************** Decode subframe data to raw almanac ****************
-//* raw almanac is fixed point almanac parameters decoded from data segment of subframe data
-//* the raw almanac will be converted to almanac structure after week number decoded
-// Parameters:
-//   dData: array of 10 WORD of subframe4/5
-//   pAlm: pointer to raw almanac
-// Return value:
-//   none
-void DecodeRawAlm(const int *data, PRAW_ALMANAC pAlm)
-{
-	pAlm->toa = (int)GET_UBITS(WORD4, 22, 8);
+	if (pAlm->toa == toa && pAlm->omega0 == omega0)	// same toa and omega0, repeat almanac from same or different satellite
+		return 0;
+	pAlm->toa = toa;
 	pAlm->health = GET_UBITS(WORD5, 6, 8);
 	pAlm->ecc = GET_UBITS(WORD3, 6, 16);
 	pAlm->delta_i = GET_BITS(WORD4, 6, 16);
 	pAlm->omega_dot = GET_BITS(WORD5, 14, 16);
 	pAlm->sqrtA = GET_UBITS(WORD6, 6, 24);
-	pAlm->omega0 = GET_BITS(WORD7, 6, 24);
+	pAlm->omega0 = omega0;
 	pAlm->w = GET_BITS(WORD8, 6, 24);
 	pAlm->M0 = GET_BITS(WORD9, 6, 24);
 	pAlm->af0 = (short)GET_BITS(WORD10, 22, 8) << 3;
 	pAlm->af0 |= GET_UBITS(WORD10, 8, 3);
 	pAlm->af1 = (short)GET_BITS(WORD10, 11, 11);
+//	AlmRefWeek = g_ReceiverInfo.ReceiverTime->GpsWeekNumber;
+//	AlmRefToa = pAlm->toa;
+
+	if (AlmRefWeek >= 0 && AlmRefToa >= 0)	// has valid week and toa
+	{
+		if (AlmRefToa == pAlm->toa)
+			ConvertAlmanac(svid, AlmRefWeek);	// update almanac if toa match
+		else	// toa change, wait next matching page 51
+		{
+			AlmRefWeek = AlmRefToa = -1;
+			AlmValidMask = (1 << (svid - 1));
+		}
+	}
+	else	// set valid mask and wait next page 51
+		AlmValidMask |= (1 << (svid - 1));
+
+	return svid;
 }
 
-//*************** Convert raw almanac to almanac structure ****************
-// Parameters:
-//   pRawAlm: pointer to raw almanac
-//   pAlm: pointer to almanac structure
-//   week: week number of almanac
-// Return value:
-//   none
-void ConvertAlmanac(PRAW_ALMANAC pRawAlm, PMIDI_ALMANAC pAlm, int week)
+/*int DecodeGpsHealthAS(const unsigned int data[10])
 {
+	int i;
+
+	AlmHealthMask = 0;	// reset all health flag
+	// get MSB as overall health flag
+	for (i = 23; i < 31; i ++)	// i = svid - 2
+	{
+		if ((data[7-i/4] & (1 << (29 - (i & 3) * 6))) == 0)
+			AlmHealthMask |= (1 << (i + 1));
+	}
+	return 0;
+}*/
+
+//*************** Decode page 51 data to get health and week number  ****************
+// Parameters:
+//   data: subframe data holding page 51
+// Return value:
+//   svid if decode success or 0 if decode fail
+int DecodeGpsHealthWeek(const unsigned int data[10])
+{
+	int i;
+	int toa, week, receiver_week = g_ReceiverInfo.ReceiverTime->GpsWeekNumber;
+
+	toa = GET_UBITS(WORD3, 14, 8);
+	week = GET_UBITS(WORD3, 6, 8);
+
+	// low 8bit week number match decoded value (allow +-1 for broadcast almanac of previous week or next week)
+	if (week == (receiver_week & 0xff))
+		week = receiver_week;
+	else if (week == ((receiver_week - 1) & 0xff))
+		week = receiver_week - 1;
+	else if (week == ((receiver_week + 1) & 0xff))
+		week = receiver_week + 1;
+	else
+	{
+		AlmRefWeek = -1;	// invalidate reference week
+		return 0;
+	}
+	AlmRefWeek = week;
+	AlmRefToa = toa;
+
+/*	// get MSB as overall health flag
+	for (i = 0; i < 24; i ++)	// i = svid - 1
+	{
+		if ((data[6-i/4] & (1 << (29 - (i & 3) * 6))) == 0)
+			AlmHealthMask |= (1 << i);
+	}*/
+
+	// convert all pending almanac
+	for (i = 0; i < 32; i ++)
+		if (AlmValidMask & (1 << i))
+			ConvertAlmanac(i + 1, AlmRefWeek);
+	AlmValidMask = 0;
+
+	return 0;
+}
+
+//*************** Decode a fixed point almanac into global almanac structure ****************
+// Parameters:
+//   svid: GPS SVID ranging from 1 to 32
+//   week: current GPS week
+// Return value:
+//   svid if decode success or 0 if decode fail
+int ConvertAlmanac(int svid, int week)
+{
+	PRAW_ALMANAC pRawAlm = &RawAlmanac[svid - 1];
+	PMIDI_ALMANAC pAlm = &g_GpsAlmanac[svid - 1];
+//	KINEMATIC_INFO PosVel;
+
+	if (pAlm->flag == 1 && (pAlm->toa >> 12) == pRawAlm->toa)	// same toa, skip update
+		return 0;
+
+	MutexTake(EphAlmMutex);
+
 	pAlm->health = pRawAlm->health;
+	pAlm->svid = (unsigned char)svid;
 	pAlm->toa = (unsigned long)pRawAlm->toa << 12;
 	pAlm->week = week;
-	pAlm->M0 = ScaleDouble(pRawAlm->M0, 24);
+	pAlm->M0 = ScaleDouble(pRawAlm->M0, 23) * PI;
 	pAlm->ecc = ScaleDoubleU(pRawAlm->ecc, 21);
 	pAlm->sqrtA = ScaleDoubleU(pRawAlm->sqrtA, 11);
-	pAlm->omega0 = ScaleDouble(pRawAlm->omega0, 24);
+	pAlm->omega0 = ScaleDouble(pRawAlm->omega0, 23) * PI;
 	pAlm->i0 = (0.3 + ScaleDouble(pRawAlm->delta_i, 19)) * PI;
 	pAlm->w = ScaleDouble(pRawAlm->w, 23) * PI;
-	pAlm->omega_dot = ScaleDouble(pRawAlm->omega_dot, 39);
+	pAlm->omega_dot = ScaleDouble(pRawAlm->omega_dot, 38) * PI;
 	pAlm->af0 = ScaleDouble(pRawAlm->af0, 20);
 	pAlm->af1 = ScaleDouble(pRawAlm->af1, 38);
 
@@ -734,8 +650,12 @@ void ConvertAlmanac(PRAW_ALMANAC pRawAlm, PMIDI_ALMANAC pAlm, int week)
 
 	// calculate derived variables
 	pAlm->axis = pAlm->sqrtA * pAlm->sqrtA;
-	pAlm->n = WGS_SQRT_GM / (pAlm->sqrtA * pAlm->axis) / (2 * PI);
+	pAlm->n = WGS_SQRT_GM / (pAlm->sqrtA * pAlm->axis);
 	pAlm->root_ecc = sqrt(1.0 - pAlm->ecc * pAlm->ecc);
-	pAlm->omega_t = pAlm->omega0 - WGS_OMEGDOTE / (2 * PI) * (pAlm->toa);
-	pAlm->omega_delta = pAlm->omega_dot - WGS_OMEGDOTE / (2 * PI);
+	pAlm->omega_t = pAlm->omega0 - WGS_OMEGDOTE * (pAlm->toa);
+	pAlm->omega_delta = pAlm->omega_dot - WGS_OMEGDOTE;
+//	SatPosSpeedMidiAlm(g_ReceiverInfo.ReceiverTime->GpsWeekNumber, g_ReceiverInfo.ReceiverTime->GpsMsCount / 1000, pAlm, &PosVel);
+
+	MutexGive(EphAlmMutex);
+	return svid;
 }

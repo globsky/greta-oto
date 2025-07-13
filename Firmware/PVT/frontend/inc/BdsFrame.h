@@ -11,6 +11,6 @@
 
 #include "DataTypes.h"
 
-void BdsFrameProc(PCHANNEL_STATUS pChannelStatus);
+int BdsNavDataProc(PFRAME_INFO pFrameInfo, PDATA_FOR_DECODE DataForDecode);
 
 #endif //__BDS_FRAME_H__

@@ -33,6 +33,17 @@ typedef struct
 //	U32 CorData[20];	// 20 correlation result of peak correlator (or pilot data symbols for pilot data sync)
 } BIT_SYNC_DATA, *PBIT_SYNC_DATA;
 
+typedef struct
+{
+	int PrevReal, PrevImag;	// accumulated I/Q in previous data period
+	int CurReal, CurImag;	// accumulated I/Q in current data period
+	int TotalAccTime;		// total accumulation period in millisecond
+	int CurrentAccTime;		// current accumulated time in millisecond
+	int BitCount;			// number of bits in Symbols, symbol count depend on bits per symbol
+	int StartIndex;			// index of the first data symbol within a frame
+	U32 Symbols;			// store symbols up to 32bits (32 1bit symbols, 8 4bit symbols or 4 8bit symbols)
+} DATA_STREAM, *PDATA_STREAM;
+
 // channel related functions and variables
 typedef struct tag_CHANNEL_STATE
 {
@@ -44,6 +55,10 @@ typedef struct tag_CHANNEL_STATE
 	// following variable for tracking stage
 	int TrackingTime;		// millisecond at current stage (reset at stage swith or at phase loss lock at final stage)
 	int TrackingTimeout;	// millisecond for current stage timeout (-1 for final stage)
+	// variables to sync TOW
+	unsigned int SyncTickCount;
+	int WeekMsCounter;
+	unsigned int TickCount;
 	// state buffer cache and pointer to hardware buffer
 	STATE_BUFFER StateBufferCache;	// local image of state buffer
 	volatile PSTATE_BUFFER StateBufferHW;	// pointer to hardware state buffer
@@ -92,6 +107,17 @@ typedef struct tag_CHANNEL_STATE
 	int LoseLockCounter;
 } CHANNEL_STATE, *PCHANNEL_STATE;
 
+//==========================
+// data stream sent to decode task
+//==========================
+typedef struct
+{
+	PCHANNEL_STATE ChannelState;
+	unsigned int TickCount;
+	int StartIndex;
+	U32 DataStream;
+} DATA_FOR_DECODE, *PDATA_FOR_DECODE;
+
 typedef struct
 {
 	int CoherentNumber;		// same as coherent number settings in CohConfig field of state buffer
@@ -104,6 +130,17 @@ typedef struct
 	int BandWidthDLL16x;	// loop filter bandwidth for DLL with scale factor 1/16Hz, bit16~17 as order
 	int TrackingTimeout;	// timeout for current tracking stage, -1 for no timeout
 } TRACKING_CONFIG, *PTRACKING_CONFIG;
+
+typedef struct
+{	
+	PCHANNEL_STATE ChannelState;
+	S32 CodeCount;		// code count with unit of 1/2 chip (could be negative value after apply Cor0 to Cor4 compensation)
+	U32 CodePhase;		// code NCO
+	U32 CarrierPhase;	// carrier NCO count
+	S32 CarrierCount;	// carrier cycle count
+	S32 CarrierFreq;	// carrier FCW
+	int WeekMsCount;	// week ms count at observation time
+} BB_MEASUREMENT, *PBB_MEASUREMENT;
 
 typedef struct
 {
@@ -123,6 +160,6 @@ void InitChannel(PCHANNEL_STATE pChannel);
 void ConfigChannel(PCHANNEL_STATE pChannel, int Doppler, int CodePhase16x);
 void SyncCacheWrite(PCHANNEL_STATE ChannelState);
 void ProcessCohSum(int ChannelID, unsigned int OverwriteProtect);
-int ComposeMeasurement(int ChannelID, PBB_MEASUREMENT Measurement, U32 *DataBuffer);
+int ComposeMeasurement(int ChannelID, PBB_MEASUREMENT Measurement);
 
 #endif // __CHANNEL_MANAGER_H__

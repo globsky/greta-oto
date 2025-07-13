@@ -88,15 +88,15 @@ void SwitchTrackingStage(PCHANNEL_STATE ChannelState, unsigned int TrackingStage
 	else if (TrackingStage == STAGE_TRACK0)
 	{
 		// reset data for data decode, switch to tracking stage at epoch of bit edge
-		ChannelState->DataStream.PrevReal = ChannelState->DataStream.PrevImag = ChannelState->DataStream.PrevSymbol = 0;
+		ChannelState->DataStream.PrevReal = ChannelState->DataStream.PrevImag = 0;
 		ChannelState->DataStream.CurReal = ChannelState->DataStream.CurImag = 0;
-		ChannelState->DataStream.DataCount = ChannelState->DataStream.CurrentAccTime = 0;
+		ChannelState->DataStream.BitCount = ChannelState->DataStream.CurrentAccTime = 0;
 		if (PrevStage == STAGE_BIT_SYNC)	// switch from bit sync, need to align to bit edge
 		{
 			if (FREQ_ID_IS_L1CA(ChannelState->FreqID))	// for L1CA
 			{
 				CohCount = ChannelState->BitSyncResult % CurTrackingConfig->CoherentNumber;
-				ChannelState->TrackingTime = ChannelState->BitSyncResult - CohCount;		// reset tracking time from previous bit edge
+				ChannelState->DataStream.CurrentAccTime = ChannelState->TrackingTime = ChannelState->BitSyncResult - CohCount;		// reset tracking time from previous bit edge
 				STATE_BUF_SET_COH_COUNT(&(ChannelState->StateBufferCache), CohCount);
 				ChannelState->State |= STATE_CACHE_STATE_DIRTY;
 			}
@@ -127,7 +127,7 @@ void SwitchTrackingStage(PCHANNEL_STATE ChannelState, unsigned int TrackingStage
 				STATE_BUF_SET_COH_COUNT(&(ChannelState->StateBufferCache), CohCount);
 				STATE_BUF_SET_NH_COUNT(&(ChannelState->StateBufferCache), ChannelState->BitSyncResult / 4);
 				ChannelState->State |= STATE_CACHE_STATE_DIRTY;
-				ChannelState->DataStream.DataCount = ChannelState->DataStream.CurrentAccTime = 0;	// reset data count for data stream decode
+				ChannelState->DataStream.BitCount = ChannelState->DataStream.CurrentAccTime = 0;	// reset data count for data stream decode
 //				ChannelState->DataStream.StartIndex = ChannelState->FrameCounter;
 			}
 		}
@@ -159,7 +159,7 @@ void SwitchTrackingStage(PCHANNEL_STATE ChannelState, unsigned int TrackingStage
 			ChannelState->FrameCounter = Time;
 			SetNHConfig(ChannelState, Time, B1CSecondCode[ChannelState->Svid-1]);
 			ChannelState->BitSyncResult = 0;
-			ChannelState->DataStream.DataCount = ChannelState->DataStream.CurrentAccTime = 0;	// reset data count for data stream decode
+			ChannelState->DataStream.BitCount = ChannelState->DataStream.CurrentAccTime = 0;	// reset data count for data stream decode
 			ChannelState->DataStream.StartIndex = ChannelState->FrameCounter;
 		}
 	}
@@ -292,7 +292,7 @@ int StageDetermination(PCHANNEL_STATE ChannelState)
 			SwitchTrackingStage(ChannelState,  STAGE_TRACK1);
 			// if previous decoded acc data sign and symbol not consistent, rotate phase by PI
 			// in track 1 stage, will use acc data to determine symbol
-			if (FREQ_ID_IS_L1CA(ChannelState->FreqID) && (((ChannelState->DataStream.PrevReal >> 31) & 1) ^ ChannelState->DataStream.PrevSymbol))
+			if (FREQ_ID_IS_L1CA(ChannelState->FreqID) && (((ChannelState->DataStream.PrevReal >> 31) & 1) ^ (ChannelState->DataStream.Symbols & 1)))
 			{
 				StateValue = GetRegValue((U32)(&(ChannelState->StateBufferHW->CarrierPhase)));
 				StateValue ^= 0x80000000;

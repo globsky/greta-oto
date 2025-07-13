@@ -18,6 +18,9 @@ void EXIT_CRITICAL() {}
 U32 EventCreate() { return 0; }
 void EventSet(U32 Event) {}
 void EventWait(U32 Event) {}
+U32 MutexCreate() { return 0; }
+void MutexTake(U32 Mutex) {}
+void MutexGive(U32 Mutex) {}
 
 #if defined _MSC_VER	// implementation of __builtin_xxx in Visual Studio
 

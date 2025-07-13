@@ -203,3 +203,10 @@
 		Improvement on bit-sync task
 		Add E1 bit-sync and 4bit symbol hardware decode
 		Add E1 frame sync and Viterbi decode (function to do ephemeris decode not added yet)
+7/13/2025
+	Function and feature change
+		Rewrite navigation data decode and receiver time management scheme
+		Add a global baseband tick-count register in behavior model SimModel (will add later in C model and RTL)
+		Remove rounding in hardware symbol decode in behavior model SimModel (will add later in C model and RTL)
+	Bug fix
+		BOC sideband 1/4 cycle compensation method changed to avoid phase jump during switch

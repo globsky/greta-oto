@@ -50,6 +50,9 @@ void EXIT_CRITICAL();
 U32 EventCreate();
 void EventSet(U32 Event);
 void EventWait(U32 Event);
+U32 MutexCreate();
+void MutexTake(U32 Mutex);
+void MutexGive(U32 Mutex);
 
 int __builtin_popcount(unsigned int data);
 int __builtin_clz(unsigned int data);

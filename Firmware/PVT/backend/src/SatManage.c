@@ -8,6 +8,7 @@
 
 #include "CommonDefines.h"
 #include "DataTypes.h"
+#include "TimeManager.h"
 #include "GlobalVar.h"
 #include "SupportPackage.h"
 #include <string.h>
@@ -168,7 +169,7 @@ void ApplyCorrection(PCHANNEL_STATUS ObservationList[], int ObsCount)
 		{
 			// ionosphere correction
 			if (g_GpsIonoParam.flag)	// first try GPS ionosphere parameter
-				ObservationList[i]->DeltaT -= GpsIonoDelay(&g_GpsIonoParam, &(g_ReceiverInfo.PosLLH), g_ReceiverInfo.GpsMsCount, &SatelliteInfo[sv_index]);
+				ObservationList[i]->DeltaT -= GpsIonoDelay(&g_GpsIonoParam, &(g_ReceiverInfo.PosLLH), g_ReceiverInfo.ReceiverTime->GpsMsCount, &SatelliteInfo[sv_index]);
 //			else if (g_BdsIonoParam.flag)	// then try BD2 ionosphere parameter
 //				ObservationList[i]->DeltaT -= BdsIonoDelay(&g_BdsIonoParam, &(g_ReceiverInfo.PosLLH), g_ReceiverInfo.GpsMsCount, &SatelliteInfo[sv_index]);
 			// troposphere correction
@@ -300,9 +301,9 @@ double TropoDelay(double Elevation, PRECEIVER_INFO pReceiverInfo)
 	int LatDegree;
 
 	// first try to find the current day of year on GPS time
-	if (pReceiverInfo->GpsTimeQuality >= CoarseTime && (pReceiverInfo->PosFlag & GPS_WEEK_VALID))
+	if (ReceiverWeekMsValid() && ReceiverWeekNumberValid())
 		// based on GPS week 1669 start from 2012/01/01
-		SeasonVar = pReceiverInfo->WeekNumber - 1669 + (pReceiverInfo->GpsMsCount) / 604800000.0;
+		SeasonVar = pReceiverInfo->ReceiverTime->GpsWeekNumber - 1669 + (pReceiverInfo->ReceiverTime->GpsMsCount) / 604800000.0;
 	// do not have date info, use simple equation
 	else
 		return (7.712e-9 / sin(sqrt(temp + 1.904e-3)) + 2.802e-10 / sin(sqrt(temp + 6.854e-4)));

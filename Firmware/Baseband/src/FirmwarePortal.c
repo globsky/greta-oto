@@ -44,7 +44,7 @@ void InterruptService()
 	
 	if (IntFlag & (1 << 9))
 		MeasIntCounter++;
-	BasebandTickCount = MeasIntCounter * MeasurementInterval + MeasCount;
+	BasebandTickCount = GetRegValue(ADDR_TICK_COUNT);
 
 	if (IntFlag & (1 << 8))		// coherent sum interrupt
 		CohSumInterruptProc();
@@ -70,6 +70,7 @@ void InterruptService()
 void FirmwareInitialize(StartType Start, PSYSTEM_TIME CurTime, LLH *CurPosition)
 {
 	int i, sv_list[32] = {
+#if 1
 		FREQ_SVID(FREQ_L1CA, 3),
 //		FREQ_SVID(FREQ_L1CA, 4),
 		FREQ_SVID(FREQ_L1CA, 7),
@@ -79,16 +80,21 @@ void FirmwareInitialize(StartType Start, PSYSTEM_TIME CurTime, LLH *CurPosition)
 		FREQ_SVID(FREQ_L1CA, 16),
 		FREQ_SVID(FREQ_L1CA, 27),
 		FREQ_SVID(FREQ_L1CA, 30),
+#endif
+#if 1
 		FREQ_SVID(FREQ_B1C, 8),
 		FREQ_SVID(FREQ_B1C, 19),
 		FREQ_SVID(FREQ_B1C, 21),
 		FREQ_SVID(FREQ_B1C, 22),
 		FREQ_SVID(FREQ_B1C, 26),
+#endif
+#if 0
 		FREQ_SVID(FREQ_E1, 1),
 		FREQ_SVID(FREQ_E1, 4),
 		FREQ_SVID(FREQ_E1, 19),
 		FREQ_SVID(FREQ_E1, 21),
 		FREQ_SVID(FREQ_E1, 27),
+#endif
 	0 };	// for debug use only
 	int SatNumber;
 	SAT_PREDICT_PARAM SatList[32];
@@ -119,19 +125,18 @@ void FirmwareInitialize(StartType Start, PSYSTEM_TIME CurTime, LLH *CurPosition)
 	TaskInitialize();
 	TEInitialize();
 	AEInitialize();
-	BdsDecodeInit();
 	MsrProcInit();
 	PvtProcInit((PRECEIVER_INFO)0);
 	if (Start != ColdStart)
 	{
 		LoadAllParameters();
-		if (Start == HotStart)
+/*		if (Start == HotStart)
 		{
 			UtcToGpsTime(CurTime, &(g_ReceiverInfo.WeekNumber), &(g_ReceiverInfo.GpsMsCount), &g_GpsUtcParam);
 			g_ReceiverInfo.GpsTimeQuality = g_ReceiverInfo.BdsTimeQuality = g_ReceiverInfo.GalileoTimeQuality = ExtSetTime;
 		}
 		else
-			g_ReceiverInfo.GpsTimeQuality = g_ReceiverInfo.BdsTimeQuality = g_ReceiverInfo.GalileoTimeQuality = UnknownTime;
+			g_ReceiverInfo.GpsTimeQuality = g_ReceiverInfo.BdsTimeQuality = g_ReceiverInfo.GalileoTimeQuality = UnknownTime;*/
 		g_ReceiverInfo.PosQuality = ExtSetPos;
 		g_ReceiverInfo.PosVel.vx = g_ReceiverInfo.PosVel.vy = g_ReceiverInfo.PosVel.vz = 0.0;
 		SatNumber = GetSatelliteInView(SatList);

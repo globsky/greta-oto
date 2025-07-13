@@ -13,6 +13,7 @@
 #include "TaskManager.h"
 #include "ChannelManager.h"
 #include "TEManager.h"
+#include "TimeManager.h"
 #include "PvtEntry.h"
 #include "ComposeOutput.h"
 
@@ -21,7 +22,6 @@ unsigned int MeasIntCounter;
 unsigned int BasebandTickCount;
 U32 ChannelOccupation;
 BB_MEASUREMENT BasebandMeasurement[TOTAL_CHANNEL_NUMBER];
-U32 DataStreamBuffer[100/4*TOTAL_CHANNEL_NUMBER];		// 100 8bit symbols x 32 channels
 BB_MEAS_PARAM MeasurementParam;
 
 int MeasProcTask(void *Param);
@@ -38,7 +38,6 @@ void TEInitialize()
 
 	MeasIntCounter = BasebandTickCount = 0;
 	ChannelOccupation = 0;
-	MeasurementParam.RunTimeAcc = 0;
 	memset(ChannelStateArray, 0, sizeof(ChannelStateArray));
 	for (i = 0; i < TOTAL_CHANNEL_NUMBER; i ++)
 	{
@@ -138,24 +137,38 @@ void MeasurementProc()
 {
 	int i, ch_num = 0;
 	U32 ChannelMask;
-	U32 *BufferPointer = DataStreamBuffer;
 	PBB_MEASUREMENT Msr;
-	int WordNumber;
 
-	MeasurementParam.RunTimeAcc += GetRegValue(ADDR_MEAS_NUMBER);
 	for (i = 0, ChannelMask = 1; i < TOTAL_CHANNEL_NUMBER; i ++, ChannelMask <<= 1)
 	{
 		if (ChannelOccupation & ChannelMask)
 		{
 			Msr = &BasebandMeasurement[i];
-			BufferPointer += (WordNumber = ComposeMeasurement(i, Msr, BufferPointer));
+			ComposeMeasurement(i, Msr);
 		}
 	}
 
 	// assign measurement parameter structure and add process task to PostMeasTask queue
 	MeasurementParam.MeasMask = ChannelOccupation;
-	MeasurementParam.MeasInterval = MeasurementInterval;
-	MeasurementParam.Measurements = BasebandMeasurement;
+	MeasurementParam.Interval = MeasurementInterval;
+/*	if (ClockAdjustment != 0)	// there is receiver clock adjustment
+	{
+		if (MeasInterval != NominalMeasInterval)	// To3 epoch with interval adjustment
+		{
+			MeasurementData.ClockAdjust = ClockAdjustment;
+			ClockAdjustment = 0;	// clear to 0 to be sure adjustment to be used once
+		}
+		else if (NextInterval == NominalMeasInterval)	// To2 epoch with clock adjustment only
+		{
+			MeasurementData.ClockAdjust = ClockAdjustment;
+			ClockAdjustment = 0;	// clear to 0 to be sure adjustment to be used once
+		}
+		else	// To2 epoch with interval adjustment
+			MeasurementData.ClockAdjust = 0;
+	}
+	else*/
+		MeasurementParam.ClockAdjust = 0;
+	MeasurementParam.TickCount = BasebandTickCount;
 	AddToTask(TASK_POSTMEAS, MeasProcTask, &MeasurementParam, sizeof(BB_MEAS_PARAM));
 //	printf("MSR %d\n", MeasurementParam.RunTimeAcc);
 }
@@ -168,15 +181,23 @@ void MeasurementProc()
 //   0
 int MeasProcTask(void *Param)
 {
-	int OutputBasebandMeas = 0;
+	int OutputBasebandMeas = 1;
 	PBB_MEAS_PARAM MeasParam = (PBB_MEAS_PARAM)Param;
-	PBB_MEASUREMENT Msr = MeasParam->Measurements;
+	PBB_MEASUREMENT Msr = BasebandMeasurement;
 
+	// update receiver time to current epoch
+	UpdateReceiverTime(MeasParam->TickCount, MeasParam->Interval - MeasParam->ClockAdjust);
+	// calculate raw measurement
+	MsrProc(MeasParam);
+	// do PVT
+	PvtProc(MeasParam->Interval);
 	if (OutputBasebandMeas)
+	{
+		MeasParam->TimeQuality = GnssTime.TimeQuality;
+		MeasParam->GpsMsCount = GnssTime.GpsMsCount;
+		MeasParam->BdsMsCount = GnssTime.BdsMsCount;
 		AddToTask(TASK_INOUT, MeasPrintTask, Param, sizeof(BB_MEAS_PARAM));
-
-	MsrProc(Msr, MeasParam->MeasMask, MeasParam->MeasInterval, MeasurementInterval);
-	PvtProc(MeasParam->MeasInterval);
+	}
 
 	return 0;
 }

@@ -10,6 +10,7 @@
 #define __DATA_TYPES_H__
 
 #include "CommonDefines.h"
+#include "ChannelManager.h"
 #include "PvtConst.h"
 
 #pragma pack(push)	// push current alignment
@@ -24,8 +25,7 @@ typedef int BOOL;
 typedef enum {	UnknownTime = 0,	// no time information
 				ExtSetTime,			// time from external source (eg. RTC, network etc.)
 				CoarseTime,			// time from satellite signal transmit time minus average travel time
-				FlexTime,			// time from 5 satellite positioning
-				KeepTime,			// time from Kalman prediction without Kalman update
+				KeepTime,			// time after aligned to epoch of observation
 				AccurateTime,		// time from successful LSQ or Kalman update
 } TimeAccuracy;
 
@@ -80,52 +80,27 @@ typedef struct CONVERT_MATRIX
 	double x2u, y2u, z2u;
 } CONVERT_MATRIX, *PCONVERT_MATRIX;
 
-typedef struct
+typedef struct tag_FRAME_INFO
 {
-	unsigned int FrameFlag;			// bit 0:
-									// bit 1: subframe1 0 - Invalid, 1 - Valid
-									// bit 2: subframe2 0 - Invalid, 1 - Valid
-									// bit 3: subframe3 0 - Invalid, 1 - Valid
-									// bit 4: stream polarity 0 - Positive, 1 - Negative
+	signed short SymbolNumber;		// number of symbols in buffer
+	signed char FrameStatus;		// frame sync status -1: not sync
+	unsigned char FrameFlag;		// bit 4: stream polarity 0 - Positive, 1 - Negative
 									// bit 5: polarity valid 0 - Invalid, 1 - Valid
-	signed short NavBitNumber;	// number of navigation data bit in buffer
-	signed short FrameStatus;		// frame sync status -1: no word found
-									//					 0~29: word boundary found
-									//					 30: preamble found, unknown subframe
-									//					 31~35: frame sync, subframe 1~5
-	int tow;						// tow number in current subframe
-	unsigned int WordFlag;			// bit 00~09 : subframe1 word 1~10
-									// bit 10~19 : subframe2 word 1~10
-									// bit 20~29 : subframe3 word 1~10
-	unsigned short iodc;			// IODC in SubframeData
-	unsigned char iode2;			// IODE2 in SubframeData
-	unsigned char iode3;			// IODE3 in SubframeData
-	unsigned int NavDataStream[12];	// buffer to store current navigation bit stream
-	unsigned int SubframeData[3][10];	// buffer to hold received navigation bit stream
-	unsigned int NewSubFrame[10];	// buffer to hold latest subframe data
-} GPS_FRAME_INFO, *PGPS_FRAME_INFO;
-// definition for above FrameFlag field
-#define SUBFRAME1_VALID		0x02
-#define SUBFRAME2_VALID		0x04
-#define SUBFRAME3_VALID		0x08
-#define ALL_SUBFRAME_VALID	(SUBFRAME1_VALID | SUBFRAME2_VALID | SUBFRAME3_VALID)
+	int TimeTag;					// definition varies, time tag within week/day of start of current frame (GPS), week number decoded (BDS)
+	unsigned int TickCount;			// baseband tick count at end of last symbol
+	unsigned int SymbolData[12];	// buffer to store current symbol stream
+	unsigned int FrameData[60];		// store frame data (LNAV/INAV need 30 and CNAV1 need 60)
+} FRAME_INFO, *PFRAME_INFO;
 #define NEGATIVE_STREAM		0x10
 #define POLARITY_VALID		0x20
-// definition for above WordFlag field
-#define SUBFRAME1_WORD_VALID	0x000003ff
-#define SUBFRAME2_WORD_VALID	0x000ffc00
-#define SUBFRAME3_WORD_VALID	0x3ff00000  //indicate 30 words valid for subframe 1,2,3
-#define ALL_SUBFRAME_WORD_VALID (SUBFRAME1_WORD_VALID | SUBFRAME2_WORD_VALID | SUBFRAME3_WORD_VALID)
 
 typedef struct
 {
-	unsigned int FrameFlag;
-	unsigned short NavBitNumber;
-	signed short FrameStatus;
-	int tow;						// 
-	unsigned int SubFrame2Data[19];	// buffer to hold subframe 2 data
-	unsigned int SubFrame3Data[9];	// buffer to hold latest subframe data
-} BDS_FRAME_INFO, *PBDS_FRAME_INFO;
+	PCHANNEL_STATE ChannelState;
+	int FrameIndex;
+	int PayloadLength;
+	unsigned int Symbols[0];	// length varies, at least 1
+} SYMBOL_PACKAGE, *PSYMBOL_PACKAGE;
 
 typedef struct
 {
@@ -155,7 +130,7 @@ typedef struct
 	int LockTime;					// Continuous track time in ms without cycle slip
 	unsigned int state;				// same as state field in BB measurement
 	unsigned int ChannelErrorFlag;	// error flags that PVT feedback to baseband, see below for details
-	void *FrameInfo;				// pointer to frame info structure of different system
+	FRAME_INFO FrameInfo;			// frame info structure of different system
 } CHANNEL_STATUS, *PCHANNEL_STATUS;
 // definitions for ChannelFlag field
 #define CHANNEL_ACTIVE		0x01	// this is an active channel in baseband
@@ -273,22 +248,45 @@ typedef struct
 	double omega_delta;	// Delta Between omega_dot and WGS_OMEGDOTE
 } REDUCED_ALMANAC, *PREDUCED_ALMANAC;
 
+typedef struct tag_RECEIVER_TIME
+{
+	enum TimeAccuracy TimeQuality;
+	unsigned int TimeFlag;
+	unsigned int TickCount;	// Baseband tick count of observation at current receiver time
+	int GpsMsCount;			// millisecond count within a week for GPS/Galileo
+	int BdsMsCount;			// millisecond count within a week for BDS
+	int GpsWeekNumber;		// week number of receiver time used by GPS/Galileo
+	int BdsWeekNumber;		// week number of receiver time used by BDS
+	double GpsClkError;		// receiver clock error to GPS time, in second
+	double BdsClkError;		// receiver clock error to BDS time, in second
+	double GalClkError;		// receiver clock error to Galileo time, in second
+	double ClkDrifting;		// receiver clock drifting, in m/s
+} RECEIVER_TIME, *PRECEIVER_TIME;
+
+// definitions for TimeFlag
+#define TIME_WEEK_MS_VALID  0x1
+#define TIME_WEEK_NUM_VALID 0x2
+#define GPS_CLK_ERR_VALID   0x10
+#define BDS_CLK_ERR_VALID   0x20
+#define GAL_CLK_ERR_VALID   0x40
+
 typedef struct
 {
 	KINEMATIC_INFO PosVel;	// receiver position/velocity in ECEF coordinate
 	LLH PosLLH;				// receiver position
 	GROUND_SPEED GroundSpeed;// receiver group speed
-	double GpsClkError;		// receiver clock error to GPS time, in second
-	double GalileoClkError;	// receiver clock error to Galileo time, in second
-	double BdsClkError;		// receiver clock error to BDS time, in second
-	double ClkDrifting;		// receiver clock drifting, in m/s
+//	double GpsClkError;		// receiver clock error to GPS time, in second
+//	double GalileoClkError;	// receiver clock error to Galileo time, in second
+//	double BdsClkError;		// receiver clock error to BDS time, in second
+//	double ClkDrifting;		// receiver clock drifting, in m/s
 	double DopArray[8];		// HDOP, VDOP, PDOP, TDOP, SigmaEE, SigmaNN, SigmaEN, reserved
 
-	int GpsMsCount;			// millisecond count within a week, identical to all systems
-	int WeekNumber;			// week number of receiver time used by GPS
-	TimeAccuracy GpsTimeQuality;
-	TimeAccuracy BdsTimeQuality;
-	TimeAccuracy GalileoTimeQuality;
+//	int GpsMsCount;			// millisecond count within a week, identical to all systems
+//	int WeekNumber;			// week number of receiver time used by GPS
+//	TimeAccuracy GpsTimeQuality;
+//	TimeAccuracy BdsTimeQuality;
+//	TimeAccuracy GalileoTimeQuality;
+	RECEIVER_TIME *ReceiverTime;
 	PosAccuracy PosQuality;
 	unsigned int PosFlag;	// Positioning flag
 	PositionType PrevPosType;
@@ -304,7 +302,6 @@ typedef struct
 #define PVT_USE_GPS			(1 << SYSTEM_GPS)
 #define PVT_USE_BDS			(1 << SYSTEM_BDS)
 #define PVT_USE_GAL			(1 << SYSTEM_GAL)
-#define GPS_WEEK_VALID		0x1000
 
 typedef struct
 {

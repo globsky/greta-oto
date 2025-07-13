@@ -39,6 +39,7 @@ public:
 	U32 ReqCount;					// 10bit
 	U32 InterruptFlag;				// 4bit, bit8~11
 	U32 IntMask;					// 4bit, bit8~11
+	U32 TickCount;					// 32bit
 
 	// variables for SignalSim
 	GNSS_TIME CurTime;

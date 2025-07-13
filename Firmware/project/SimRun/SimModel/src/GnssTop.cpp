@@ -27,6 +27,7 @@ CGnssTop::CGnssTop()
 	CalculateCovar(COR_NUMBER, 4, CTrackingChannel::CovarMatrix[1]);
 	CalculateCovar(COR_NUMBER, 8, CTrackingChannel::CovarMatrix[2]);
 	CalculateCovar(COR_NUMBER, 2, CTrackingChannel::CovarMatrix[3]);
+	TickCount = 0;
 }
 
 CGnssTop::~CGnssTop()
@@ -37,6 +38,7 @@ void CGnssTop::Reset(U32 ResetMask)
 {
 //	if (ResetMask & 2)
 //		TrackingEngine.Reset();
+	TickCount = 0;
 }
 
 void CGnssTop::Clear(U32 ClearMask)
@@ -142,6 +144,8 @@ U32 CGnssTop::GetRegValue(int Address)
 			return ReqCount;
 		case ADDR_OFFSET_INTERRUPT_MASK:
 			return IntMask;
+		case ADDR_OFFSET_TICK_COUNT:
+			return TickCount;
 		default:
 			return 0;
 		}
@@ -225,6 +229,7 @@ int CGnssTop::Process(int BlockSize)
 			MeasurementCount = 0;
 			InterruptFlag |= (1 << 9);
 		}
+		TickCount ++;
 	}
 	if (ReqCount)
 	{
