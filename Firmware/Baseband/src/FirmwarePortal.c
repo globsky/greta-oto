@@ -88,7 +88,7 @@ void FirmwareInitialize(StartType Start, PSYSTEM_TIME CurTime, LLH *CurPosition)
 		FREQ_SVID(FREQ_B1C, 22),
 		FREQ_SVID(FREQ_B1C, 26),
 #endif
-#if 0
+#if 1
 		FREQ_SVID(FREQ_E1, 1),
 		FREQ_SVID(FREQ_E1, 4),
 		FREQ_SVID(FREQ_E1, 19),

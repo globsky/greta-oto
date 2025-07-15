@@ -126,6 +126,7 @@ void SwitchTrackingStage(PCHANNEL_STATE ChannelState, unsigned int TrackingStage
 				ChannelState->TrackingTime = ChannelState->BitSyncResult % 20;		// reset tracking time from previous 20ms boundary
 				STATE_BUF_SET_COH_COUNT(&(ChannelState->StateBufferCache), CohCount);
 				STATE_BUF_SET_NH_COUNT(&(ChannelState->StateBufferCache), ChannelState->BitSyncResult / 4);
+				ChannelState->FrameCounter = ChannelState->BitSyncResult / 4;
 				ChannelState->State |= STATE_CACHE_STATE_DIRTY;
 				ChannelState->DataStream.BitCount = ChannelState->DataStream.CurrentAccTime = 0;	// reset data count for data stream decode
 //				ChannelState->DataStream.StartIndex = ChannelState->FrameCounter;
@@ -233,12 +234,8 @@ int StageDetermination(PCHANNEL_STATE ChannelState)
 			{
 				if (FREQ_ID_IS_L1CA(ChannelState->FreqID))	// for L1CA
 					ChannelState->BitSyncResult = (ChannelState->TrackingTime- ChannelState->BitSyncResult) % 20;	// ms number passed bit edge
-				else
-				{
-					ChannelState->BitSyncResult = (100 - (ChannelState->BitSyncResult - ChannelState->TrackingTime)) % 100;
-					if (ChannelState->BitSyncResult < 0)
-						ChannelState->BitSyncResult += 100;	// ms number passed secondary code boundary
-				}
+				else	// for E1, recalculate current millisecond count within 100ms NH cycle
+					ChannelState->BitSyncResult = (1000 - (ChannelState->BitSyncResult - ChannelState->TrackingTime)) % 100;	// add 100 to make sure result if positive
 				SwitchTrackingStage(ChannelState, STAGE_TRACK0);
 			}
 			StageChange = 1;

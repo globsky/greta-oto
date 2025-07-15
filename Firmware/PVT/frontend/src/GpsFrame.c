@@ -51,13 +51,10 @@ typedef struct
 extern U32 EphAlmMutex;
 
 static unsigned int RawAlmanacMask;
-static unsigned int SubframeMask[32];
-static unsigned int SubFrameData[32][30];
 static RAW_ALMANAC RawAlmanac[32];
 static unsigned int AlmValidMask = 0;
 static unsigned int AlmHealthMask = 0;
 static int AlmRefToa = -1, AlmRefWeek = -1;	// -1 means not valid
-
 
 static void FillInBits(unsigned int* target, unsigned int* src, int number);
 static int GetTowFromWord(unsigned int word);
@@ -80,9 +77,9 @@ void GpsDecodeInit()
 	RawAlmanacMask = 0;
 }
 
-//*************** GPS Frame sync process ****************
+//*************** GPS navigation data process ****************
 //* do GPS LNAV frame sync and data collection
-//* meaning of FrameState:
+//* meaning of FrameStatus:
 //* -1: frame sync not completed
 //* 1~5: reserved for fast frame sync with current subframe id
 //* 30: preamble found but frame sync not confirmed
@@ -222,7 +219,7 @@ int GpsNavDataProc(PFRAME_INFO pFrameInfo, PDATA_FOR_DECODE DataForDecode)
 						pFrameInfo->FrameStatus = 30 + frame_id;
 						// decode current subframe
 						SymbolPackage->ChannelState = ChannelState;
-						SymbolPackage->FrameIndex = frame_id;
+						SymbolPackage->FrameInfo = pFrameInfo;
 						SymbolPackage->PayloadLength = PAYLOAD_LENGTH;
 						memcpy(SymbolPackage->Symbols, pFrameInfo->SymbolData + 2, sizeof(unsigned int) * PAYLOAD_LENGTH);
 						AddToTask(TASK_POSTMEAS, GpsFrameDecode, SymbolPackage, PACKAGE_LENGTH);
@@ -266,7 +263,7 @@ int GpsNavDataProc(PFRAME_INFO pFrameInfo, PDATA_FOR_DECODE DataForDecode)
 					pFrameInfo->FrameStatus = 30 + frame_id;
 					// decode current subframe
 					SymbolPackage->ChannelState = ChannelState;
-					SymbolPackage->FrameIndex = frame_id;
+					SymbolPackage->FrameInfo = pFrameInfo;
 					SymbolPackage->PayloadLength = 10;
 					memcpy(SymbolPackage->Symbols, pFrameInfo->SymbolData, sizeof(unsigned int) * PAYLOAD_LENGTH);
 					AddToTask(TASK_POSTMEAS, GpsFrameDecode, SymbolPackage, PACKAGE_LENGTH);
@@ -379,8 +376,9 @@ static int GetTowFromWord(unsigned int word)
 int GpsFrameDecode(void* Param)
 {
 	PSYMBOL_PACKAGE SymbolPackage = (PSYMBOL_PACKAGE)Param;
+	PFRAME_INFO FrameInfo = SymbolPackage->FrameInfo;
 	int Svid = SymbolPackage->ChannelState->Svid;
-	int FrameIndex = SymbolPackage->FrameIndex - 1;
+	int FrameID;
 	unsigned int *data = SymbolPackage->Symbols;
 	int i, Page, Week, StreamPolarity = 0;
 
@@ -396,25 +394,26 @@ int GpsFrameDecode(void* Param)
 		StreamPolarity ^=(data[i] << 31);
 	}
 
-	DEBUG_OUTPUT(OUTPUT_CONTROL(DATA_DECODE, INFO), "svid%2d decode subframe %d\n", Svid, FrameIndex + 1);
-	switch (FrameIndex)
+	FrameID = (data[8] >> 8) & 0x7;
+	DEBUG_OUTPUT(OUTPUT_CONTROL(DATA_DECODE, INFO), "svid%2d decode subframe %d\n", Svid, FrameID);
+	switch (FrameID)
 	{
-	case 0:
-		memcpy(SubFrameData[Svid-1], data, sizeof(unsigned int) * 10);
-		SubframeMask[Svid-1] |= 1;
+	case 1:
+		memcpy(FrameInfo->FrameData, data, sizeof(unsigned int) * 10);
+		FrameInfo->FrameFlag |= 1;
 		Week = GET_UBITS(data[7], 20, 10);
 		SetReceiverTime(FREQ_L1CA, Week + 2048, -1, 0);	// only set week number
 		break;
-	case 1:
-		memcpy(SubFrameData[Svid-1] + 10, data, sizeof(unsigned int) * 10);
-		SubframeMask[Svid-1] |= 2;
-		break;
 	case 2:
-		memcpy(SubFrameData[Svid-1] + 20, data, sizeof(unsigned int) * 10);
-		SubframeMask[Svid-1] |= 4;
+		memcpy(FrameInfo->FrameData + 10, data, sizeof(unsigned int) * 10);
+		FrameInfo->FrameFlag |= 2;
 		break;
 	case 3:
+		memcpy(FrameInfo->FrameData + 20, data, sizeof(unsigned int) * 10);
+		FrameInfo->FrameFlag |= 4;
+		break;
 	case 4:
+	case 5:
 		if (((data[7] >> 28) & 0x3) != 1)	// check DataID
 			break;
 		Page = (data[7] >> 22) & 0x3f;
@@ -428,10 +427,10 @@ int GpsFrameDecode(void* Param)
 			DecodeGpsHealthWeek(data);
 		break;
 	}
-	if ((SubframeMask[Svid-1] & 7) == 7)
+	if ((FrameInfo->FrameFlag & 7) == 7)
 	{
-		DecodeGpsEphemeris(Svid, SubFrameData[Svid-1]);
-		SubframeMask[Svid-1] = 0;
+		DecodeGpsEphemeris(Svid, FrameInfo->FrameData);
+		FrameInfo->FrameFlag &= ~7;
 	}
 	return 0;
 }
@@ -446,27 +445,22 @@ int DecodeGpsEphemeris(int svid, const unsigned int data[30])
 {
 	PGNSS_EPHEMERIS pEph = &g_GpsEphemeris[svid-1];
 	unsigned short iodc;
-
-	pEph->svid = svid - 1 + MIN_GPS_SAT_ID;
-	pEph->health = GET_UBITS(WORD3, 8, 6);
-	if (pEph->health != 0)
-	{
-		pEph->flag = 0;
-		return 0;
-	}
+	unsigned char health;
 
 	iodc = ((WORD3 << 2) & 0x300) | GET_UBITS(WORD8, 22, 8);
+	if (pEph->flag == 1 && pEph->iodc == iodc)	// do not decode repeat ephemeris
+		return 1;
 	if (((iodc & 0xff) != GET_UBITS(data[17], 22, 8)) || ((iodc & 0xff) != GET_UBITS(data[20], 22, 8)))
 		return 0;
-	// subframe 1:
-	if (pEph->health != 0)
-	{
-		pEph->flag = 0;
+	health = GET_UBITS(WORD3, 8, 6);
+	if (health != 0)
 		return 0;
-	}
 
 	MutexTake(EphAlmMutex);
 
+	// subframe 1:
+	pEph->svid = svid - 1 + MIN_GPS_SAT_ID;
+	pEph->health = health;
 	pEph->flag = 1;
 	pEph->iodc = iodc;
 	pEph->week = 2048 + (int)GET_UBITS(WORD3, 20, 10);

@@ -75,7 +75,7 @@ int DoDataDecode(void* Param)
 	int WeekMs = -1, WeekNumber = -1, CurTimeMs;
 	S8 Svid = ChannelState->Svid;
 
-	DEBUG_OUTPUT(OUTPUT_CONTROL(DATA_DECODE, INFO), "channel%2d svid%2d decode data at time%8d: ", ChannelState->LogicChannel, Svid, DataForDecode->TickCount);
+	DEBUG_OUTPUT(OUTPUT_CONTROL(DATA_DECODE, INFO), "channel%2d svid%2d decode data %08x start index%4d at time%8d\n", ChannelState->LogicChannel, Svid, DataForDecode->DataStream, DataForDecode->StartIndex, DataForDecode->TickCount);
 	for (i = 31; i >= 0; i--)
 		DEBUG_OUTPUT(OUTPUT_CONTROL(DATA_DECODE, INFO), "%1d", (DataForDecode->DataStream & (1 << i)) ? 1 : 0);
 	DEBUG_OUTPUT(OUTPUT_CONTROL(DATA_DECODE, INFO), "\n");
@@ -92,7 +92,8 @@ int DoDataDecode(void* Param)
 			WeekNumber = pFrameInfo->TimeTag;
 			break;
 		case FREQ_E1:
-			WeekMs = -1;//GalFrameSync(pFrameInfo, DataForDecode);
+			WeekMs = GalNavDataProc(pFrameInfo, DataForDecode);
+			WeekNumber = pFrameInfo->TimeTag;
 			break;
 		default:
 			WeekMs = -1;

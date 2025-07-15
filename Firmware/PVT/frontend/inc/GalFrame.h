@@ -11,6 +11,6 @@
 
 #include "DataTypes.h"
 
-void GalFrameSync(PCHANNEL_STATUS pChannelStatus, int data_count, unsigned int *data, int FrameIndex);
+int GalNavDataProc(PFRAME_INFO pFrameInfo, PDATA_FOR_DECODE DataForDecode);
 
 #endif //__GAL_FRAME_H__

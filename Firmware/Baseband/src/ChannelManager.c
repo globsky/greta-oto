@@ -464,10 +464,10 @@ void DecodeDataStream(PCHANNEL_STATE ChannelState)
 				DataForDecode.ChannelState = ChannelState;
 				DataForDecode.DataStream = DataStream->Symbols;
 				DataForDecode.StartIndex = DataStream->StartIndex;
-				DataForDecode.TickCount = BasebandTickCount;
+				DataForDecode.TickCount = BasebandTickCount - DataStream->TotalAccTime * (SymbolCount - 1 - i);
 				DataStream->BitCount = 0;
 				AddToTask(TASK_BASEBAND, DoDataDecode, &DataForDecode, sizeof(DATA_FOR_DECODE));
-				DataStream->StartIndex = ChannelState->FrameCounter;
+				DataStream->StartIndex = ChannelState->FrameCounter - (SymbolCount - 1 - i);
 			}
 		}
 	}

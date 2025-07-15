@@ -207,7 +207,9 @@ int ProcessAcqResult(void *Param)
 		CodePhase += TimeGap * Doppler / 96250;	// 16 x Doppler x dt / 1540 (dt = TimeGap / 1000)
 		if (CodePhase < 0)
 			CodePhase += 20 * 1023 * 16;	// 20ms code phase round
-//		if (GET_FREQ_ID(pAcqConfig->SatConfig[i].FreqSvid) != FREQ_B1C)
+//		if (GET_FREQ_ID(pAcqConfig->SatConfig[i].FreqSvid) != FREQ_E1)
+//			continue;
+//		if (GET_SVID(pAcqConfig->SatConfig[i].FreqSvid) != 19 && GET_SVID(pAcqConfig->SatConfig[i].FreqSvid) != 1)
 //			continue;
 		if ((NewChannel = GetAvailableChannel()) != NULL)
 		{

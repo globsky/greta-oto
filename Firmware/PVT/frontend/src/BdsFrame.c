@@ -18,7 +18,7 @@
 #include "SupportPackage.h"
 
 #define PAYLOAD_LENGTH (19 + 9)	// 19 DWORD for subframe2 and 9 DWORD for subframe3
-#define PACKAGE_LENGTH (sizeof(SYMBOL_PACKAGE) + sizeof(unsigned int)*(PAYLOAD_LENGTH))	// 3 variables + 10 payload
+#define PACKAGE_LENGTH (sizeof(SYMBOL_PACKAGE) + sizeof(unsigned int)*(PAYLOAD_LENGTH))	// 3 variables + 28 payload
 
 extern U32 EphAlmMutex;
 
@@ -27,9 +27,9 @@ static int BdsFrameProc(PFRAME_INFO BdsFrameInfo, PDATA_FOR_DECODE DataForDecode
 static int BdsFrameDecode(void* Param);
 static int DecodeBdsEphemeris(int svid, const unsigned int data[19]);
 
-//*************** GPS Frame sync process ****************
+//*************** BDS navigation data process ****************
 //* do BDS CNAV1 frame process
-//* meaning of FrameState:
+//* meaning of FrameStatus:
 //* -1: SymbolNumber not aligned with symbol position within frame
 //* 0: current data in subframe1, SymbolNumber is number of symbols in subframe1
 //* 1~48: current data in corresponding column of subframe2/3, SymbolNumber is number of symbols in current column
@@ -138,8 +138,9 @@ void PutColumnData(unsigned int ColumnData[9], int ColumnIndex, U16 Subframe23Da
 //*************** Do BDS B-CNAV1 frame process ****************
 // Parameters:
 //   BdsFrameInfo: Pointer to BDS frame info structure
+//   DataForDecode: pointer to structure of symbols to be decoded
 // Return value:
-//   none
+//   current symbols within week, -1 if unknown
 int BdsFrameProc(PFRAME_INFO BdsFrameInfo, PDATA_FOR_DECODE DataForDecode)
 {
 	int i, svid, soh, how, SymbolCount = -1;
@@ -154,7 +155,7 @@ int BdsFrameProc(PFRAME_INFO BdsFrameInfo, PDATA_FOR_DECODE DataForDecode)
 
 	// TODO: first check CRC, if success, no LDPC decode needed
 	SymbolPackage->ChannelState = DataForDecode->ChannelState;
-	SymbolPackage->FrameIndex = svid;
+	SymbolPackage->FrameInfo = BdsFrameInfo;
 	SymbolPackage->PayloadLength = PAYLOAD_LENGTH;
 	// put two 16bit DOWRD together to form 19 DWORD for subframe2
 	for (i = 0; i < 19; i ++)
@@ -188,7 +189,7 @@ int BdsFrameProc(PFRAME_INFO BdsFrameInfo, PDATA_FOR_DECODE DataForDecode)
 int BdsFrameDecode(void* Param)
 {
 	PSYMBOL_PACKAGE SymbolPackage = (PSYMBOL_PACKAGE)Param;
-	int svid = SymbolPackage->FrameIndex;
+	int svid = SymbolPackage->ChannelState->Svid;
 
 	// decode subframe2 for ephemeris
 	DecodeBdsEphemeris(svid, SymbolPackage->Symbols);

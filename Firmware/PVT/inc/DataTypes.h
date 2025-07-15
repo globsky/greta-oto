@@ -84,20 +84,20 @@ typedef struct tag_FRAME_INFO
 {
 	signed short SymbolNumber;		// number of symbols in buffer
 	signed char FrameStatus;		// frame sync status -1: not sync
-	unsigned char FrameFlag;		// bit 4: stream polarity 0 - Positive, 1 - Negative
-									// bit 5: polarity valid 0 - Invalid, 1 - Valid
+	unsigned char FrameFlag;		// bit 6: stream polarity 0 - Positive, 1 - Negative
+									// bit 7: polarity valid 0 - Invalid, 1 - Valid
 	int TimeTag;					// definition varies, time tag within week/day of start of current frame (GPS), week number decoded (BDS)
 	unsigned int TickCount;			// baseband tick count at end of last symbol
 	unsigned int SymbolData[12];	// buffer to store current symbol stream
-	unsigned int FrameData[60];		// store frame data (LNAV/INAV need 30 and CNAV1 need 60)
+	unsigned int FrameData[57];		// store frame data (LNAV need 30, I/NAV need 50 and CNAV1 need 57)
 } FRAME_INFO, *PFRAME_INFO;
-#define NEGATIVE_STREAM		0x10
-#define POLARITY_VALID		0x20
+#define NEGATIVE_STREAM		0x40
+#define POLARITY_VALID		0x80
 
 typedef struct
 {
 	PCHANNEL_STATE ChannelState;
-	int FrameIndex;
+	PFRAME_INFO FrameInfo;
 	int PayloadLength;
 	unsigned int Symbols[0];	// length varies, at least 1
 } SYMBOL_PACKAGE, *PSYMBOL_PACKAGE;

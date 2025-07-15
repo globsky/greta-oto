@@ -112,10 +112,10 @@ typedef struct tag_CHANNEL_STATE
 //==========================
 typedef struct
 {
-	PCHANNEL_STATE ChannelState;
-	unsigned int TickCount;
-	int StartIndex;
-	U32 DataStream;
+	PCHANNEL_STATE ChannelState;	// pointer to channel sending navigation data
+	unsigned int TickCount;			// baseband tick count of current time
+	int StartIndex;					// index of first symbol within current frame/page, -1 if unknown
+	U32 DataStream;					// 32bit navigation data stream
 } DATA_FOR_DECODE, *PDATA_FOR_DECODE;
 
 typedef struct

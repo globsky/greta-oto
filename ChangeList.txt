@@ -210,3 +210,10 @@
 		Remove rounding in hardware symbol decode in behavior model SimModel (will add later in C model and RTL)
 	Bug fix
 		BOC sideband 1/4 cycle compensation method changed to avoid phase jump during switch
+7/15/2025
+	Function and feature change
+		Add Galileo E1 I/NAV page data collection, CRC check and ephemeris decode
+		Optimize GPS/BDS navigation data decode and reduce memory usage
+		Galileo raw measurement now can be used in PVT
+	Bug fix
+		Fix the bug that when coherent time longer than data length, TickCount and StartIndex may set incorrect value
