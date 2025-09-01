@@ -292,7 +292,7 @@ void CTrackingChannel::GetCorrelationResult(GNSS_TIME CurTime, SATELLITE_PARAM *
 //		printf("SrcPhase = %.5f LocalPhase = %.5f PhaseDiff = %.5f\n", SourceCarrierPhase, CarrierPhase / 4294967296., PhaseDiff);
 
 		// calculate signal amplitude
-		Amplitude = 1.4142135 * pow(10, (pSatParam->CN0 - 3000) / 2000.) * NOISE_AMP;
+		Amplitude = pow(10, (pSatParam->CN0 - 3000) / 2000.) * NOISE_AMP;
 		Amplitude *= (fabs(FreqDiff) > 1e-3) ? (sin(FreqDiff) / FreqDiff) : 1.0;
 		TransmitTime = GetTransmitTime(CurTime, GetTravelTime(pSatParam, 0) + 0.001);	// add one extra millisecond to get previous finished millisecond
 		Milliseconds = TransmitTime.MilliSeconds % BitLength;
@@ -461,7 +461,7 @@ void CTrackingChannel::DecodeDataAcc(int DataValue)
 	int BitSelect;
 
 	BitSelect = (BitLength >= 16) ? 2 : ((BitLength >= 8) ? 1 : 0);
-	BitSelect = PreShiftBits + PostShiftBits - BitSelect;
+	BitSelect = PreShiftBits + PostShiftBits + 1 - BitSelect;
 	if (BitSelect < 0)
 		BitSelect = 0;
 	switch (DecodeBit)

@@ -40,7 +40,6 @@ static int GpsL1CABitSyncTask(void *Param);
 static int GalE1BitSyncTask(void *Param);
 static int DataSyncTask(void *Param);
 static int SyncPilotData(unsigned int DataWord, const unsigned int SecondCode[57], int StartOffset);
-static void SetWeekMsCount(PCHANNEL_STATE ChannelState);
 
 static const unsigned int GalInvPos[25] = {
 0x81f6b, 0x03ed6, 0x07dac, 0x0fb59, 0x1f6b2, 0x3ed64, 0x7dac9, 0xfb592, 0xf6b24, 0xed648, 
@@ -463,11 +462,10 @@ void DecodeDataStream(PCHANNEL_STATE ChannelState)
 			{
 				DataForDecode.ChannelState = ChannelState;
 				DataForDecode.DataStream = DataStream->Symbols;
-				DataForDecode.StartIndex = DataStream->StartIndex;
-				DataForDecode.TickCount = BasebandTickCount - DataStream->TotalAccTime * (SymbolCount - 1 - i);
+				DataForDecode.SymbolIndex = ChannelState->FrameCounter;
+				DataForDecode.TickCount = BasebandTickCount - DataStream->TotalAccTime * (SymbolCount - 1 - i);	// minus decoded symbols not yet put in DataStream
 				DataStream->BitCount = 0;
 				AddToTask(TASK_BASEBAND, DoDataDecode, &DataForDecode, sizeof(DATA_FOR_DECODE));
-				DataStream->StartIndex = ChannelState->FrameCounter - (SymbolCount - 1 - i);
 			}
 		}
 	}
@@ -505,7 +503,7 @@ void DecodeDataStream(PCHANNEL_STATE ChannelState)
 		{
 			DataForDecode.ChannelState = ChannelState;
 			DataForDecode.TickCount = BasebandTickCount;
-			DataForDecode.StartIndex = -1;
+			DataForDecode.SymbolIndex = -1;
 			DataForDecode.DataStream = DataStream->Symbols;
 			AddToTask(TASK_BASEBAND, DoDataDecode, &DataForDecode, sizeof(DATA_FOR_DECODE));
 			DataStream->BitCount = 0;

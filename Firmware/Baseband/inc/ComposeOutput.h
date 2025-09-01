@@ -10,5 +10,6 @@
 #define __COMPOSE_OUTPUT_H__
 
 int MeasPrintTask(void *Param);
+int BasebandDataOutput(void *Param);
 
 #endif //__COMPOSE_OUTPUT_H__

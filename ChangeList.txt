@@ -217,3 +217,13 @@
 		Galileo raw measurement now can be used in PVT
 	Bug fix
 		Fix the bug that when coherent time longer than data length, TickCount and StartIndex may set incorrect value
+8/31/2025
+	Function and feature change
+		Remove rounding in hardware data decode for better quantization balance
+		Add global tick count register in baseband hardware
+		Adjust places of some functions and definitions
+		Change StartIndex field in DATA_FOR_DECODE structure to SymbolIndex for simpler data decode process
+		Observation time align to whole second and limit clock error within +-1ms
+		Rewrite the baseband observation post process project
+	Bug fix
+		Fix the bug that signal power is 3dB higher than configured value in behavior model

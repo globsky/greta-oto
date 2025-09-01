@@ -42,6 +42,7 @@ reg [9:0] meas_number;
 reg [9:0] meas_count;
 reg [9:0] request_count;
 reg [3:0] int_mask;
+reg [31:0] tick_count;
 reg ae_int_flag, request_int_flag, meas_int_flag, data_ready_int_flag;
 wire [3:0] int_flag;
 assign int_flag = {ae_int_flag, request_int_flag, meas_int_flag, data_ready_int_flag};
@@ -391,8 +392,11 @@ memory_code_rom_12800x32_wrapper memory_code_rom
 //----------------------------------------------------------
 // measurement count
 wire [9:0] meas_count_next;
+wire [31:0] tick_count_next;
 assign meas_count_next = meas_count + 1;
+assign tick_count_next = tick_count + 1;
 
+// measurement count
 always @(posedge clk or negedge rst_b)
 	if (!rst_b)
 		meas_count <= 'd0;
@@ -400,6 +404,13 @@ always @(posedge clk or negedge rst_b)
 		meas_count <= host_d4wt[9:0];
 	else if (te_over)
 		meas_count <= (meas_count_next == meas_number) ? 'd0 : meas_count_next;
+
+// tick count
+always @(posedge clk or negedge rst_b)
+	if (!rst_b)
+		tick_count <= 'd0;
+	else if (te_over)
+		tick_count <= tick_count_next;
 
 // request count
 always @(posedge clk or negedge rst_b)

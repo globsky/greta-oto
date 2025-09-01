@@ -19,7 +19,7 @@
 #include <math.h>
 #include <stdio.h>
 
-static int PvtFix(int MsInterval);
+static int PvtFix(int MsInterval, int ClockAdjust);
 static PositionType GetPosMethod(PCHANNEL_STATUS ObservationList[], int *Count, PositionType PrevPosType);
 
 // in order to adapt to multiple system, state placement in core data is as following:
@@ -58,6 +58,7 @@ void PvtProcInit(PRECEIVER_INFO pReceiverInfo)
 	memset(&g_PvtCoreData, 0, sizeof(g_PvtCoreData));
 
 	g_ReceiverInfo.ReceiverTime = &GnssTime;
+	g_PvtConfig.PvtConfigFlags |= ENABLE_KALMAN_FILTER ? PVT_CONFIG_USE_KF : 0;
 
 	if (!pReceiverInfo)	// if initialize structure is NULL
 		return;
@@ -88,14 +89,15 @@ void PvtProcInit(PRECEIVER_INFO pReceiverInfo)
 //*************** Do position fix and update corresponding variables ****************
 // Parameters:
 //   CurMsInterval: actual time interval between current epoch and previous epoch
+//   ClockAdjust: clock adjustment (in millisecond) to local receiver time
 // Return value:
 //   none
-void PvtProc(int CurMsInterval)
+void PvtProc(int CurMsInterval, int ClockAdjust)
 {
 	int PosFixResult;
 	SYSTEM_TIME UtcTime;
 
-	PosFixResult = PvtFix(CurMsInterval);
+	PosFixResult = PvtFix(CurMsInterval, ClockAdjust);
 	// TODO: update satellite in view list, adjust observation time etc.
 	if (1 && PosFixResult >= 0)
 	{
@@ -116,13 +118,41 @@ PRECEIVER_INFO GetReceiverInfo()
 	return &g_ReceiverInfo;
 }
 
+//*************** get clock error ****************
+// return the clock error of corresponding system
+// if not available, other system will be used at priority of GPS > BDS > Galileo
+// Parameters:
+//   FirstPriorityFreq defined as FREQ_XXX
+// Return value:
+//   clock error of corresponding system
+//   or 0.0 if clock error of either system is not available
+double GetClockError(int FirstPriorityFreq)
+{
+	PRECEIVER_TIME GnssTime = g_ReceiverInfo.ReceiverTime;
+
+	// check first priority system
+	if ((FREQ_ID_IS_L1CA(FirstPriorityFreq) || FREQ_ID_IS_L1C(FirstPriorityFreq)) && (GnssTime->TimeFlag & GPS_CLK_ERR_VALID))
+		return GnssTime->GpsClkError;
+	else if (FREQ_ID_IS_B1C(FirstPriorityFreq) && (GnssTime->TimeFlag & BDS_CLK_ERR_VALID))
+		return GnssTime->BdsClkError;
+	else if (FREQ_ID_IS_E1(FirstPriorityFreq) && (GnssTime->TimeFlag & GAL_CLK_ERR_VALID))
+		return GnssTime->GalClkError;
+	else if (GnssTime->TimeFlag & GPS_CLK_ERR_VALID)
+		return GnssTime->GpsClkError;
+	else if (GnssTime->TimeFlag & BDS_CLK_ERR_VALID)
+		return GnssTime->BdsClkError;
+	else if (GnssTime->TimeFlag & GAL_CLK_ERR_VALID)
+		return GnssTime->GalClkError;
+	else
+		return 0.0;
+}
 
 //*************** Position fix core function ****************
 // Parameters:
 //   MsInterval: actual time interval between current epoch and previous epoch
 // Return value:
 //   none
-int PvtFix(int MsInterval)
+int PvtFix(int MsInterval, int ClockAdjust)
 {
 	int i, PosResult;
 	int SatCount = 0;
@@ -190,6 +220,12 @@ int PvtFix(int MsInterval)
 	STATE_DT_GPS += STATE_TDOT * DeltaT;
 	STATE_DT_BDS += STATE_TDOT * DeltaT;
 	STATE_DT_GAL += STATE_TDOT * DeltaT;
+	if (ClockAdjust != 0)	// adjustment to local receiver time
+	{
+		STATE_DT_GPS -= ClockAdjust * LIGHT_SPEED_MS;
+		STATE_DT_BDS -= ClockAdjust * LIGHT_SPEED_MS;
+		STATE_DT_GAL -= ClockAdjust * LIGHT_SPEED_MS;
+	}
 
 	// doing PVT
 	if (g_ReceiverInfo.CurrentPosType == PosTypeNone)	// cannot do PVT
@@ -204,11 +240,11 @@ int PvtFix(int MsInterval)
 		}
 		g_ReceiverInfo.PosQuality = AccuratePos;
 		if (PosResult & PVT_USE_GPS)
-			g_ReceiverInfo.ReceiverTime->TimeQuality |= GPS_CLK_ERR_VALID;
+			g_ReceiverInfo.ReceiverTime->TimeFlag |= GPS_CLK_ERR_VALID;
 		if (PosResult & PVT_USE_BDS)
-			g_ReceiverInfo.ReceiverTime->TimeQuality |= BDS_CLK_ERR_VALID;
+			g_ReceiverInfo.ReceiverTime->TimeFlag |= BDS_CLK_ERR_VALID;
 		if (PosResult & PVT_USE_GAL)
-			g_ReceiverInfo.ReceiverTime->TimeQuality |= GAL_CLK_ERR_VALID;
+			g_ReceiverInfo.ReceiverTime->TimeFlag |= GAL_CLK_ERR_VALID;
 		g_ReceiverInfo.PosFlag |= PosResult;
 	}
 	else if (g_ReceiverInfo.CurrentPosType == PosTypeLSQ)	// normal LSQ PVT
@@ -219,11 +255,11 @@ int PvtFix(int MsInterval)
 		}
 		g_ReceiverInfo.PosQuality = AccuratePos;
 		if (PosResult & PVT_USE_GPS)
-			g_ReceiverInfo.ReceiverTime->TimeQuality |= GPS_CLK_ERR_VALID;
+			g_ReceiverInfo.ReceiverTime->TimeFlag |= GPS_CLK_ERR_VALID;
 		if (PosResult & PVT_USE_BDS)
-			g_ReceiverInfo.ReceiverTime->TimeQuality |= BDS_CLK_ERR_VALID;
+			g_ReceiverInfo.ReceiverTime->TimeFlag |= BDS_CLK_ERR_VALID;
 		if (PosResult & PVT_USE_GAL)
-			g_ReceiverInfo.ReceiverTime->TimeQuality |= GAL_CLK_ERR_VALID;
+			g_ReceiverInfo.ReceiverTime->TimeFlag |= GAL_CLK_ERR_VALID;
 		g_ReceiverInfo.PosFlag |= PosResult;
 	}
 	else if (g_ReceiverInfo.CurrentPosType == PosTypeFlexTime)	// unknown transmit time PVT

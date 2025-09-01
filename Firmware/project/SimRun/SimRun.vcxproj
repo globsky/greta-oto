@@ -76,7 +76,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;_CRT_SECURE_NO_WARNINGS;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>..\..\Abstract;..\..\common;..\..\Baseband\inc;..\..\PVT\inc;..\..\PVT\frontend\inc;..\..\PVT\backend\inc;SignalSim\inc;SimModel\inc</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>.\;..\..\Abstract;..\..\common;..\..\Baseband\inc;..\..\PVT\inc;..\..\PVT\frontend\inc;..\..\PVT\backend\inc;SignalSim\inc;SimModel\inc</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -91,7 +91,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;_CRT_SECURE_NO_WARNINGS;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>..\..\Abstract;..\..\common;..\..\Baseband\inc;..\..\PVT\inc;..\..\PVT\frontend\inc;..\..\PVT\backend\inc;SignalSim\inc;SimModel\inc</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>.\;..\..\Abstract;..\..\common;..\..\Baseband\inc;..\..\PVT\inc;..\..\PVT\frontend\inc;..\..\PVT\backend\inc;SignalSim\inc;SimModel\inc</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -191,6 +191,7 @@
     <ClInclude Include="SimModel\inc\TeFifoSim.h" />
     <ClInclude Include="SimModel\inc\TrackingChannel.h" />
     <ClInclude Include="SimModel\inc\TrackingEngine.h" />
+    <ClInclude Include="SystemConfig.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\Abstract\HWCtrl_Model.cpp" />

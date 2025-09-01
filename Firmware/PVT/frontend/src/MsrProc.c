@@ -10,6 +10,7 @@
 #include "PlatformCtrl.h"
 #include "ChannelManager.h"
 #include "TEManager.h"
+#include "TaskManager.h"
 #include "TimeManager.h"
 #include "PvtConst.h"
 #include "DataTypes.h"
@@ -18,14 +19,19 @@
 #include "GpsFrame.h"
 #include "BdsFrame.h"
 #include "GalFrame.h"
+#include "PvtEntry.h"
+#include "ComposeOutput.h"
 
 #include <string.h>
 #include <math.h>
 #include <stdio.h>
 
 U32 EphAlmMutex;
+static int AdjustIntervalDelay;
 
+static void MsrProc(PBB_MEAS_PARAM MeasParam);
 static void CalculateRawMsr(PCHANNEL_STATUS pChannelStatus, PBB_MEASUREMENT pMsr, int MsInterval, int TimeAdjust);
+static int AlignObsTime(PRECEIVER_INFO ReceiverInfo);
 
 static void InitFrame(int ch_num)
 {
@@ -57,6 +63,7 @@ void MsrProcInit()
 	// clear channel status buffer
 	memset(g_ChannelStatus, 0, sizeof(g_ChannelStatus));
 	TimeInitialize();
+	AdjustIntervalDelay = 0;
 	EphAlmMutex = MutexCreate();
 }
 
@@ -68,19 +75,17 @@ void MsrProcInit()
 //   none
 int DoDataDecode(void* Param)
 {
-	int i;
 	PDATA_FOR_DECODE DataForDecode = (PDATA_FOR_DECODE)Param;
 	PCHANNEL_STATE ChannelState = DataForDecode->ChannelState;
 	PFRAME_INFO pFrameInfo = &(g_ChannelStatus[ChannelState->LogicChannel].FrameInfo);
 	int WeekMs = -1, WeekNumber = -1, CurTimeMs;
-	S8 Svid = ChannelState->Svid;
 
-	DEBUG_OUTPUT(OUTPUT_CONTROL(DATA_DECODE, INFO), "channel%2d svid%2d decode data %08x start index%4d at time%8d\n", ChannelState->LogicChannel, Svid, DataForDecode->DataStream, DataForDecode->StartIndex, DataForDecode->TickCount);
-	for (i = 31; i >= 0; i--)
-		DEBUG_OUTPUT(OUTPUT_CONTROL(DATA_DECODE, INFO), "%1d", (DataForDecode->DataStream & (1 << i)) ? 1 : 0);
-	DEBUG_OUTPUT(OUTPUT_CONTROL(DATA_DECODE, INFO), "\n");
+	DEBUG_OUTPUT(OUTPUT_CONTROL(DATA_DECODE, INFO), "Ch%02d %c%02d decode data %08x start index%4d at time%8d\n", ChannelState->LogicChannel, "GECG"[ChannelState->FreqID], ChannelState->Svid, DataForDecode->DataStream, DataForDecode->SymbolIndex, DataForDecode->TickCount);
+//	for (i = 31; i >= 0; i--)
+//		DEBUG_OUTPUT(OUTPUT_CONTROL(DATA_DECODE, INFO), "%1d", (DataForDecode->DataStream & (1 << i)) ? 1 : 0);
+//	DEBUG_OUTPUT(OUTPUT_CONTROL(DATA_DECODE, INFO), "\n");
 //	if (OutputBasebandDataPort >= 0)
-//		AddToTask(TASK_INOUT, BasebandDataOutput, DataForDecode, sizeof(DATA_FOR_DECODE));
+		AddToTask(TASK_INOUT, BasebandDataOutput, DataForDecode, sizeof(DATA_FOR_DECODE));
 
 	switch (ChannelState->FreqID)
 	{
@@ -111,6 +116,46 @@ int DoDataDecode(void* Param)
 			SetReceiverTime(ChannelState->FreqID, WeekNumber, CurTimeMs, DataForDecode->TickCount);
 		}
 	}
+
+	return 0;
+}
+
+//*************** Task to process baseband measurements ****************
+//* This task is added to and called within PostMeasTask queue
+// Parameters:
+//   Param: Pointer to measurement parameter structure
+// Return value:
+//   0
+int MeasProcTask(void *Param)
+{
+	int OutputBasebandMeas = 1;
+	PBB_MEAS_PARAM MeasParam = (PBB_MEAS_PARAM)Param;
+	PBB_MEASUREMENT Msr = BasebandMeasurement;
+
+#if !defined USE_PRE_ASSIGNED_TIME	// realtime process (baseband observation post-process will skip receiver time calculation and uses input data)
+	PRECEIVER_INFO ReceiverInfo;
+
+	if ((ReceiverInfo = GetReceiverInfo()) != NULL && ReceiverInfo->PosQuality > CoarsePos)
+	{
+		if (AdjustIntervalDelay)
+			AdjustIntervalDelay --;
+		else
+			AlignObsTime(ReceiverInfo);
+	}
+	// update receiver time to current epoch
+	UpdateReceiverTime(MeasParam->TickCount, MeasParam->Interval + MeasParam->ClockAdjust);
+#endif
+	// calculate raw measurement
+	MsrProc(MeasParam);
+	if (OutputBasebandMeas)
+	{
+		MeasParam->TimeQuality = GnssTime.TimeQuality;
+		MeasParam->GpsMsCount = GnssTime.GpsMsCount;
+		MeasParam->BdsMsCount = GnssTime.BdsMsCount;
+		AddToTask(TASK_INOUT, MeasPrintTask, Param, sizeof(BB_MEAS_PARAM));
+	}
+	// do PVT
+	PvtProc(MeasParam->Interval, MeasParam->ClockAdjust);
 
 	return 0;
 }
@@ -162,7 +207,8 @@ void MsrProc(PBB_MEAS_PARAM MeasParam)
 
 	// loop to do measurement calculation if receiver time determined
 	meas_num = 0;
-	if (ReceiverWeekMsValid())
+	if (GnssTime.TimeQuality >= ExtSetTime)
+//	if (ReceiverWeekMsValid())
 	{
 		for (ch_num = 0; ch_num < TOTAL_CHANNEL_NUMBER; ch_num ++)
 		{
@@ -267,4 +313,39 @@ void CalculateRawMsr(PCHANNEL_STATUS pChannelStatus, PBB_MEASUREMENT pMsr, int M
 	pChannelStatus->CarrierCountOld = pMsr->CarrierCount;
 
 	pChannelStatus->ChannelFlag |= MEASUREMENT_VALID;
+}
+
+int AlignObsTime(PRECEIVER_INFO ReceiverInfo)
+{
+	double ClockError;
+	int ObsInterval;
+	int ObsTimeAlign = 0;
+	int LocalTimeAdjust = 0;
+	int IntervalAdjustment[2];
+	int MsCount = ReceiverInfo->ReceiverTime->GpsMsCount;
+
+	if (MsCount < 0)	// time not valid, do not adjust obs time
+		return 0;
+	ClockError = GetClockError(FREQ_L1CA) * 1000;	// convert to ms
+	if (fabs(ClockError) > 1.1)	// adjust clock error first, do not adjust measurement interval
+	{
+		LocalTimeAdjust = (int)(fabs(ClockError / 2) + 0.5); // LocalTimeAdjust = +-2n for +-2n-1<ClockError<+-2n+1
+		LocalTimeAdjust = (ClockError < 0) ? (-LocalTimeAdjust * 2) : (LocalTimeAdjust * 2);
+	}
+	ObsInterval = NominalMeasInterval;
+	ObsTimeAlign = (MsCount + ObsInterval + LocalTimeAdjust) % ObsInterval;
+	if (ObsTimeAlign != 0 || LocalTimeAdjust != 0)	// observation time not aligned to nominal interval edge
+	{
+		// next interval range from 0.5*ObsInterval~1.5*ObsInterval
+		if (ObsTimeAlign < ObsInterval / 2)
+			ObsTimeAlign = ObsInterval - ObsTimeAlign;
+		else
+			ObsTimeAlign = ObsInterval * 2 - ObsTimeAlign;
+		IntervalAdjustment[0] = ObsTimeAlign;
+		IntervalAdjustment[1] = LocalTimeAdjust;
+		AdjustIntervalDelay = 3;	// prevent this function called at next MeasInt (at least two interval period delay for Meas ISR to complete adjust)
+		AddToTask(TASK_REQUEST, AdjustMeasInterval, IntervalAdjustment, sizeof(int) * 2);
+	}
+
+	return LocalTimeAdjust;
 }

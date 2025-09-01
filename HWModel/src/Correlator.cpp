@@ -457,7 +457,7 @@ void CCorrelator::DecodeDataAcc(unsigned int DataAcc)
 
 	// bit select adjust according to shift bits and accumulation length
 	LengthIndex = (BitLength >= 16) ? 2 : ((BitLength >= 8) ? 1 : 0);
-	BitSelect = PreShiftBits + PostShiftBits - LengthIndex;
+	BitSelect = PreShiftBits + PostShiftBits + 1 - LengthIndex;
 	if (BitSelect < 0)
 		BitSelect = 0;
 
@@ -470,8 +470,7 @@ void CCorrelator::DecodeDataAcc(unsigned int DataAcc)
 		DecodeData = (DecodeData << 1) | ((DataValue & 0x80000000) ? 1 : 0);
 		break;
 	case 1:	// 2bit
-		DataValue >>= (13 - BitSelect);
-		DataValue = (DataValue >> 1) + (DataValue & 1);	// round
+		DataValue >>= (14 - BitSelect);
 		if (DataValue > 1)
 			DataValue  = 1;
 		else if (DataValue < -2)
@@ -479,8 +478,7 @@ void CCorrelator::DecodeDataAcc(unsigned int DataAcc)
 		DecodeData = (DecodeData << 2) | (DataValue & 0x3);
 		break;
 	case 2:	// 4bit
-		DataValue >>= (11 - BitSelect);
-		DataValue = (DataValue >> 1) + (DataValue & 1);	// round
+		DataValue >>= (12 - BitSelect);
 		if (DataValue > 7)
 			DataValue  = 7;
 		else if (DataValue < -8)

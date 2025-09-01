@@ -40,7 +40,6 @@ typedef struct
 	int TotalAccTime;		// total accumulation period in millisecond
 	int CurrentAccTime;		// current accumulated time in millisecond
 	int BitCount;			// number of bits in Symbols, symbol count depend on bits per symbol
-	int StartIndex;			// index of the first data symbol within a frame
 	U32 Symbols;			// store symbols up to 32bits (32 1bit symbols, 8 4bit symbols or 4 8bit symbols)
 } DATA_STREAM, *PDATA_STREAM;
 
@@ -114,7 +113,7 @@ typedef struct
 {
 	PCHANNEL_STATE ChannelState;	// pointer to channel sending navigation data
 	unsigned int TickCount;			// baseband tick count of current time
-	int StartIndex;					// index of first symbol within current frame/page, -1 if unknown
+	int SymbolIndex;				// number of symbols elapsed till the last symbol within current frame/page, -1 if unknown
 	U32 DataStream;					// 32bit navigation data stream
 } DATA_FOR_DECODE, *PDATA_FOR_DECODE;
 

@@ -13,14 +13,14 @@
 
 // basic PVT entry functions
 void MsrProcInit();
-void MsrProc(PBB_MEAS_PARAM MeasParam);
 void PvtProcInit(PRECEIVER_INFO pReceiverInfo);
-void PvtProc(int CurMsInterval);
+void PvtProc(int CurMsInterval, int ClockAdjust);
 void GpsDecodeInit();
 void BdsDecodeInit();
 int BdsDecodeTask(void *Param);
 void BdsFrameDecode(int LogicChannel, unsigned short *FrameBuffer, int ResiduleBits);
 PRECEIVER_INFO GetReceiverInfo();
+double GetClockError(int FirstPriorityFreq);
 int GetSatelliteInView(SAT_PREDICT_PARAM SatList[32]);
 
 #endif //__PVT_ENTRY_H__

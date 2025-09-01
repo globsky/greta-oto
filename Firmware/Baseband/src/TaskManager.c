@@ -6,7 +6,6 @@
 //
 //----------------------------------------------------------------------
 #include "TaskQueue.h"
-#include "RegAddress.h"
 #include "HWCtrl.h"
 #include "PlatformCtrl.h"
 #include "TaskManager.h"
@@ -72,7 +71,7 @@ int AddToTask(int TaskType, TaskFunction TaskFunc, void *Param, int ParamSize)
 	{
 	case TASK_REQUEST:
 		ReturnValue = AddTaskToQueue(&RequestTask, TaskFunc, Param, ParamSize);
-		SetRegValue(ADDR_REQUEST_COUNT, 1);	// set request count to 1 to enable an immediate request interrupt
+		SetRequestCount(1);	// set request count to 1 to enable an immediate request interrupt
 		break;
 	case TASK_BASEBAND:
 		ReturnValue = AddTaskToQueue(&BasebandTask, TaskFunc, Param, ParamSize);
@@ -102,8 +101,8 @@ int AddWaitRequest(int TaskType, int WaitDelayMs)
 	ENTER_CRITICAL();
 	ReqPendingFlag |= (1 << TaskType);	// set enable flag
 	EXIT_CRITICAL();
-	if (!GetRegValue(ADDR_REQUEST_COUNT))	// if request count not set, set a counter
-		SetRegValue(ADDR_REQUEST_COUNT, WaitDelayMs);
+	if (!GetRequestCount())	// if request count not set, set a counter
+		SetRequestCount(WaitDelayMs);
 
 	return 0;
 }
@@ -137,7 +136,7 @@ void DoRequestTask()
 		}
 	}
 	if (SetNewRequest)
-		SetRegValue(ADDR_REQUEST_COUNT, REQUEST_SCAN_INTERVAL);
+		SetRequestCount(REQUEST_SCAN_INTERVAL);
 	DoTaskQueue(&RequestTask);	// process immediate request
 }
 
@@ -156,4 +155,17 @@ void TaskProcThread(void *Param)
 		EventWait(TaskQueue->Event);
 		DoTaskQueue(TaskQueue);
 	}
+}
+
+//*************** Do all tasks ****************
+//* this function only called in PC platform
+// Parameters:
+//   none
+// Return value:
+//   none
+void DoAllTasks()
+{
+	DoTaskQueue(&BasebandTask);
+	DoTaskQueue(&PostMeasTask);
+	DoTaskQueue(&InputOutputTask);
 }

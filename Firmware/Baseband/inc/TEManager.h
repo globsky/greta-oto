@@ -12,6 +12,7 @@
 #include "CommonDefines.h"
 #include "ChannelManager.h"
 
+extern int NominalMeasInterval;
 extern int MeasurementInterval;
 extern unsigned int MeasIntCounter;
 extern unsigned int BasebandTickCount;
@@ -24,5 +25,6 @@ PCHANNEL_STATE GetAvailableChannel();
 void ReleaseChannel(int ChannelID);
 void CohSumInterruptProc();
 void MeasurementProc();
+int AdjustMeasInterval(void* Param);
 
 #endif // __TE_MANAGER_H__

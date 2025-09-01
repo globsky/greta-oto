@@ -7,6 +7,7 @@
 //----------------------------------------------------------------------
 
 #include "GnssTop.h"
+#include "RegAddress.h"
 #include "HWCtrl.h"
 extern "C" {
 #include "TaskQueue.h"
@@ -54,6 +55,22 @@ U32 GetRegValue(int Address)
 void SetRegValue(int Address, U32 Value)
 {
 	Baseband.SetRegValue(Address, Value);
+}
+
+//*************** Host get request count ****************
+// Return value:
+//   value in REQUEST_COUNT register
+U32 GetRequestCount()
+{
+	return Baseband.GetRegValue(ADDR_REQUEST_COUNT);
+}
+
+//*************** Host set request count ****************
+// Parameters:
+//   Count: value to set to REQUEST_COUNT register
+void SetRequestCount(U32 Count)
+{
+	Baseband.SetRegValue(ADDR_REQUEST_COUNT, Count);
 }
 
 //*************** Copy baseband memory out to system memory ****************

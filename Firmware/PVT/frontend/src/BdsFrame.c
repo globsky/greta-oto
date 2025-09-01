@@ -48,15 +48,16 @@ int BdsNavDataProc(PFRAME_INFO pFrameInfo, PDATA_FOR_DECODE DataForDecode)
 	if (pFrameInfo->FrameStatus < 0)
 	{
 		// set SymbolNumber according to current data StartIndex
-		if (DataForDecode->StartIndex < 72)	// in the middle of subframe1, next will decode subframe2/3
+		if (DataForDecode->SymbolIndex < (72 + 4))	// in the middle of subframe1, next will decode subframe2/3
 		{
 			pFrameInfo->FrameStatus = 1;
-			pFrameInfo->SymbolNumber = DataForDecode->StartIndex - 72;
+			pFrameInfo->SymbolNumber = DataForDecode->SymbolIndex - (72 + 4);
 		}
 		else	// in the middle of subframe2/3, next will decode subframe1
 		{
 			pFrameInfo->FrameStatus = 0;
-			pFrameInfo->SymbolNumber = DataForDecode->StartIndex - 1800;
+			pFrameInfo->SymbolNumber = (DataForDecode->SymbolIndex <= 4) ? (DataForDecode->SymbolIndex - 4) : (DataForDecode->SymbolIndex - (1800 + 4));
+//			pFrameInfo->SymbolNumber = DataForDecode->SymbolIndex - 1800;
 		}
 	}
 	while (data_count > 0)

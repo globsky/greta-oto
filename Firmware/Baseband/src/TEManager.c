@@ -14,9 +14,8 @@
 #include "ChannelManager.h"
 #include "TEManager.h"
 #include "TimeManager.h"
-#include "PvtEntry.h"
-#include "ComposeOutput.h"
 
+int NominalMeasInterval;	// interval to previous measurement int, MUST be multiple of 2
 int MeasurementInterval;
 unsigned int MeasIntCounter;
 unsigned int BasebandTickCount;
@@ -24,7 +23,10 @@ U32 ChannelOccupation;
 BB_MEASUREMENT BasebandMeasurement[TOTAL_CHANNEL_NUMBER];
 BB_MEAS_PARAM MeasurementParam;
 
-int MeasProcTask(void *Param);
+static unsigned int NextInterval;	// interval in tick count to be used once (set by request task and reset to NominalMeasInterval by measurement ISR)
+static int ClockAdjustment;	// extra receiver clock adjustment in ms to real interval (set by request task and clear to 0 by measurement ISR)
+
+extern int MeasProcTask(void *Param);
 
 //*************** Initialize TE manager ****************
 //* this function is called at initialization stage
@@ -36,6 +38,8 @@ void TEInitialize()
 {
 	int i;
 
+	NextInterval = MeasurementInterval = NominalMeasInterval;
+	ClockAdjustment = 0;
 	MeasIntCounter = BasebandTickCount = 0;
 	ChannelOccupation = 0;
 	memset(ChannelStateArray, 0, sizeof(ChannelStateArray));
@@ -151,53 +155,53 @@ void MeasurementProc()
 	// assign measurement parameter structure and add process task to PostMeasTask queue
 	MeasurementParam.MeasMask = ChannelOccupation;
 	MeasurementParam.Interval = MeasurementInterval;
-/*	if (ClockAdjustment != 0)	// there is receiver clock adjustment
+	if (ClockAdjustment != 0)	// there is receiver clock adjustment
 	{
-		if (MeasInterval != NominalMeasInterval)	// To3 epoch with interval adjustment
+		if (MeasurementInterval != NominalMeasInterval)	// To3 epoch with interval adjustment
 		{
-			MeasurementData.ClockAdjust = ClockAdjustment;
+			MeasurementParam.ClockAdjust = ClockAdjustment;
 			ClockAdjustment = 0;	// clear to 0 to be sure adjustment to be used once
 		}
 		else if (NextInterval == NominalMeasInterval)	// To2 epoch with clock adjustment only
 		{
-			MeasurementData.ClockAdjust = ClockAdjustment;
+			MeasurementParam.ClockAdjust = ClockAdjustment;
 			ClockAdjustment = 0;	// clear to 0 to be sure adjustment to be used once
 		}
 		else	// To2 epoch with interval adjustment
-			MeasurementData.ClockAdjust = 0;
+			MeasurementParam.ClockAdjust = 0;
 	}
-	else*/
+	else
 		MeasurementParam.ClockAdjust = 0;
 	MeasurementParam.TickCount = BasebandTickCount;
 	AddToTask(TASK_POSTMEAS, MeasProcTask, &MeasurementParam, sizeof(BB_MEAS_PARAM));
 //	printf("MSR %d\n", MeasurementParam.RunTimeAcc);
+	// check whether need to restore measurement interval
+	if (MeasurementInterval != NominalMeasInterval)	// restore measurement interval
+	{
+		SetRegValue(ADDR_MEAS_NUMBER, NominalMeasInterval);
+		MeasurementInterval = NominalMeasInterval;	// restore MeasInterval to nominal value
+	}
+	// check whether need to adjust measurement interval
+	if (NextInterval != NominalMeasInterval)	// set next measurement interval one time
+	{
+		SetRegValue(ADDR_MEAS_NUMBER, NextInterval);
+		MeasurementInterval = NextInterval;
+		NextInterval = NominalMeasInterval;	// restore NextInterval to nominal value
+	}
 }
 
-//*************** Task to process baseband measurements ****************
-//* This task is added to and called within PostMeasTask queue
+//*************** request task to adjust measurement interval ****************
 // Parameters:
-//   Param: Pointer to measurement parameter structure
+//   Param: pointer to int array with length 2
+//          first parameter is next measurement interval
+//          second parameter is local observation time adjust together with interval adjustment
 // Return value:
 //   0
-int MeasProcTask(void *Param)
+int AdjustMeasInterval(void* Param)
 {
-	int OutputBasebandMeas = 1;
-	PBB_MEAS_PARAM MeasParam = (PBB_MEAS_PARAM)Param;
-	PBB_MEASUREMENT Msr = BasebandMeasurement;
+	unsigned int *Interval = (unsigned int *)Param;
 
-	// update receiver time to current epoch
-	UpdateReceiverTime(MeasParam->TickCount, MeasParam->Interval - MeasParam->ClockAdjust);
-	// calculate raw measurement
-	MsrProc(MeasParam);
-	// do PVT
-	PvtProc(MeasParam->Interval);
-	if (OutputBasebandMeas)
-	{
-		MeasParam->TimeQuality = GnssTime.TimeQuality;
-		MeasParam->GpsMsCount = GnssTime.GpsMsCount;
-		MeasParam->BdsMsCount = GnssTime.BdsMsCount;
-		AddToTask(TASK_INOUT, MeasPrintTask, Param, sizeof(BB_MEAS_PARAM));
-	}
-
+	NextInterval = Interval[0] & ~1;	// force to be multiple of 2 (multiple of 2ms)
+	ClockAdjustment = (int)Interval[1];
 	return 0;
 }

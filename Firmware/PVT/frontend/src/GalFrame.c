@@ -105,7 +105,7 @@ int GalNavDataProc(PFRAME_INFO pFrameInfo, PDATA_FOR_DECODE DataForDecode)
 			{
 				if ((pFrameInfo->SymbolData[0] & 0x3ff) == 0x160)	// sync pattern match
 				{
-					if (((DataForDecode->StartIndex + 8 - data_count) % 25) == 10)	// check sync pattern align to NH boundary, add 25 to avoid negative value
+					if (((DataForDecode->SymbolIndex - data_count) % 25) == 10)	// check sync pattern align to NH boundary, add 25 to avoid negative value
 					{
 						// sync pattern found, change frame status to 2
 						pFrameInfo->FrameStatus = 2;

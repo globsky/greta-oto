@@ -249,6 +249,7 @@
     <ClInclude Include="..\..\PVT\frontend\inc\TimeManager.h">
       <Filter>PVT\frontend\inc</Filter>
     </ClInclude>
+    <ClInclude Include="SystemConfig.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="SignalSim\src\FNavBit.cpp">

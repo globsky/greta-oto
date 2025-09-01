@@ -29,6 +29,8 @@ void AttachDebugFunc(DebugFunction Function);
 // host read/write
 U32 GetRegValue(int Address);
 void SetRegValue(int Address, U32 Value);
+U32 GetRequestCount();
+void SetRequestCount(U32 Count);
 // baseband memory load/save functions
 void LoadMemory(U32 *DestAddr, U32 *BasebandAddr, int Size);
 void SaveMemory(U32 *BasebandAddr, U32 *SrcAddr, int Size);

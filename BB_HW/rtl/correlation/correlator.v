@@ -423,11 +423,17 @@ assign q_acc_shift = ($signed(q_acc_result_sel) >>> post_shift_bits);
 wire [2:0] length_index;
 wire [2:0] shift_bits, bit_select;
 assign length_index = bit_length[4] ? 3'd2 : (bit_length[3] ? 3'd1 : 3'd0);
-assign shift_bits = {1'b0, pre_shift_bits} + {1'b0, post_shift_bits};
+assign shift_bits = {1'b0, pre_shift_bits} + {1'b0, post_shift_bits} + 1;
 assign bit_select = (shift_bits >= length_index) ? (shift_bits - length_index) : 3'd0;
 
 wire [15:0] data_select;
 assign data_select = data_in_q ? coh_acc_data[15:0] : coh_acc_data[31:16];
+
+// force bit select to 7 if decode_bit not match to avoid unnecessory gate toggle
+wire [2:0] bit_select2, bit_select4, bit_select8;
+assign bit_select2 = bit_select | ((decode_bit == 2'd1) ? 3'b000 : 3'b111);
+assign bit_select4 = bit_select | ((decode_bit == 2'd2) ? 3'b000 : 3'b111);
+assign bit_select8 = bit_select | ((decode_bit == 2'd3) ? 3'b000 : 3'b111);
 
 // 1bit data
 wire data_dec1;
@@ -436,15 +442,15 @@ assign data_dec1 = data_select[15];
 // 2bit data
 reg [7:0] data_dec2_sel;
 always @ (*)
-	case (bit_select)
-	    3'd0:  data_dec2_sel = {{6{data_select[15]}}, data_select[15:14]} + data_select[13];
-	    3'd1:  data_dec2_sel = {{5{data_select[15]}}, data_select[15:13]} + data_select[12];
-	    3'd2:  data_dec2_sel = {{4{data_select[15]}}, data_select[15:12]} + data_select[11];
-	    3'd3:  data_dec2_sel = {{3{data_select[15]}}, data_select[15:11]} + data_select[10];
-	    3'd4:  data_dec2_sel = {{2{data_select[15]}}, data_select[15:10]} + data_select[9];
-	    3'd5:  data_dec2_sel = {data_select[15], data_select[15:9]} + data_select[8];
-	    3'd6:  data_dec2_sel = data_select[15:8] + data_select[7];
-	    default: data_dec2_sel = data_select[15:8] + data_select[7];
+	case (bit_select2)
+	    3'd0:  data_dec2_sel = {{6{data_select[15]}}, data_select[15:14]};
+	    3'd1:  data_dec2_sel = {{5{data_select[15]}}, data_select[15:13]};
+	    3'd2:  data_dec2_sel = {{4{data_select[15]}}, data_select[15:12]};
+	    3'd3:  data_dec2_sel = {{3{data_select[15]}}, data_select[15:11]};
+	    3'd4:  data_dec2_sel = {{2{data_select[15]}}, data_select[15:10]};
+	    3'd5:  data_dec2_sel = {data_select[15], data_select[15:9]};
+	    3'd6:  data_dec2_sel = data_select[15:8];
+	    3'd7: data_dec2_sel = 8'h0;
 	endcase
 
 wire [1:0] data_dec2;	// clip
@@ -453,15 +459,15 @@ assign data_dec2 = ((data_dec2_sel[7:1] == 7'h0) || (data_dec2_sel[7:1] == 7'h7f
 // 4bit data
 reg [9:0] data_dec4_sel;
 always @ (*)
-	case (bit_select)
-	    3'd0:  data_dec4_sel = {{6{data_select[15]}}, data_select[15:12]} + data_select[11];
-	    3'd1:  data_dec4_sel = {{5{data_select[15]}}, data_select[15:11]} + data_select[10];
-	    3'd2:  data_dec4_sel = {{4{data_select[15]}}, data_select[15:10]} + data_select[9];
-	    3'd3:  data_dec4_sel = {{3{data_select[15]}}, data_select[15:9]} + data_select[8];
-	    3'd4:  data_dec4_sel = {{2{data_select[15]}}, data_select[15:8]} + data_select[7];
-	    3'd5:  data_dec4_sel = {data_select[15], data_select[15:7]} + data_select[6];
+	case (bit_select4)
+	    3'd0:  data_dec4_sel = {{6{data_select[15]}}, data_select[15:12]};
+	    3'd1:  data_dec4_sel = {{5{data_select[15]}}, data_select[15:11]};
+	    3'd2:  data_dec4_sel = {{4{data_select[15]}}, data_select[15:10]};
+	    3'd3:  data_dec4_sel = {{3{data_select[15]}}, data_select[15:9]};
+	    3'd4:  data_dec4_sel = {{2{data_select[15]}}, data_select[15:8]};
+	    3'd5:  data_dec4_sel = {data_select[15], data_select[15:7]};
 	    3'd6:  data_dec4_sel = data_select[15:6] + data_select[5];
-	    default: data_dec4_sel = data_select[15:6] + data_select[5];
+	    3'd7: data_dec4_sel = 10'h0;
 	endcase
 
 wire [3:0] data_dec4;	// clip
@@ -470,7 +476,7 @@ assign data_dec4 = ((data_dec4_sel[9:3] == 7'h0) || (data_dec4_sel[9:3] == 7'h7f
 // 8bit data
 reg [13:0] data_dec8_sel;
 always @ (*)
-	case (bit_select)
+	case (bit_select8)
 	    3'd0:  data_dec8_sel = {{6{data_select[15]}}, data_select[15:8]};
 	    3'd1:  data_dec8_sel = {{5{data_select[15]}}, data_select[15:7]};
 	    3'd2:  data_dec8_sel = {{4{data_select[15]}}, data_select[15:6]};
@@ -478,7 +484,7 @@ always @ (*)
 	    3'd4:  data_dec8_sel = {{2{data_select[15]}}, data_select[15:4]};
 	    3'd5:  data_dec8_sel = {data_select[15], data_select[15:3]};
 	    3'd6:  data_dec8_sel = data_select[15:2];
-	    default: data_dec8_sel = data_select[15:2];
+	    3'd7: data_dec8_sel = 14'h0;
 	endcase
 
 wire [7:0] data_dec8;	// clip
@@ -491,7 +497,6 @@ always @ (*)
 	    2'd1:  decode_data = {decode_data_o[29:0], data_dec2};
 	    2'd2:  decode_data = {decode_data_o[28:0], data_dec4};
 	    2'd3:  decode_data = {decode_data_o[24:0], data_dec8};
-	    default: decode_data = decode_data_o;
 	endcase
 
 always @(posedge clk or negedge rst_b)

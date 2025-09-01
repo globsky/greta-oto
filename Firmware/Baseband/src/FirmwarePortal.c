@@ -18,6 +18,7 @@
 #include "PvtEntry.h"
 #include "SupportPackage.h"
 #include "GlobalVar.h"
+#include "SystemConfig.h"
 
 #define PARAM_OFFSET_CONFIG		1024*0
 #define PARAM_OFFSET_RCVRINFO	1024*1
@@ -102,14 +103,14 @@ void FirmwareInitialize(StartType Start, PSYSTEM_TIME CurTime, LLH *CurPosition)
 
 	fp_debug = stdout;
 
-	MeasurementInterval = 100;
+	NominalMeasInterval = DEFAULT_MEAS_INTERVAL;
 
 	AttachBasebandISR(InterruptService);
 
 	// initial baseband hardware
 	SetRegValue(ADDR_BB_ENABLE, 0x00000100);		// enable TE
 	SetRegValue(ADDR_FIFO_CLEAR, 0x00000100);		// clear FIFO
-	SetRegValue(ADDR_MEAS_NUMBER, MeasurementInterval);	// measurement number
+	SetRegValue(ADDR_MEAS_NUMBER, NominalMeasInterval);	// measurement number
 	SetRegValue(ADDR_MEAS_COUNT, 0);				// measurement count
 //	SetRegValue(ADDR_REQUEST_COUNT, 8);				// request count
 	SetRegValue(ADDR_INTERRUPT_MASK, 0x00000f00);	// enable all interrupts
@@ -144,7 +145,6 @@ void FirmwareInitialize(StartType Start, PSYSTEM_TIME CurTime, LLH *CurPosition)
 			sv_list[i] = FREQ_SVID(SatList[i].FreqID, SatList[i].Svid);
 		sv_list[i] = 0;
 	}
-	g_PvtConfig.PvtConfigFlags |= PVT_CONFIG_USE_KF;
 
 	// start acquisition
 	// first task search L1C/A signal

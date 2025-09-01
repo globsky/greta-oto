@@ -24,7 +24,7 @@ int MeasPrintTask(void *Param)
 	PBB_MEASUREMENT Msr = BasebandMeasurement;
 	U32 ChannelMask;
 
-	DEBUG_OUTPUT(OUTPUT_CONTROL(OUTPUT, INFO), "$PMSRP,%d,%d,%d,%d\r\n", __builtin_popcount(MeasParam->MeasMask), MeasParam->TickCount, MeasParam->Interval, MeasParam->ClockAdjust);
+	DEBUG_OUTPUT(OUTPUT_CONTROL(OUTPUT, INFO), "$PMSRP,%d,%d,%d,%d\n", __builtin_popcount(MeasParam->MeasMask), MeasParam->TickCount, MeasParam->Interval, MeasParam->ClockAdjust);
 	for (i = 0, ChannelMask = 1; i < TOTAL_CHANNEL_NUMBER; i ++, ChannelMask <<= 1)
 	{
 		if ((MeasParam->MeasMask & ChannelMask) == 0)
@@ -34,6 +34,16 @@ int MeasPrintTask(void *Param)
 			Msr[i].CarrierFreq, Msr[i].CarrierPhase, Msr[i].CarrierCount, Msr[i].CodeCount, Msr[i].CodePhase, 2046,
 			Msr[i].WeekMsCount, Msr[i].ChannelState->State, Msr[i].ChannelState->CN0, Msr[i].ChannelState->TrackingTime);
 	}
-	DEBUG_OUTPUT(OUTPUT_CONTROL(OUTPUT, INFO), "$PMSRE,%c,%d,%d\r\n", "UECKA"[MeasParam->TimeQuality], MeasParam->GpsMsCount, MeasParam->BdsMsCount);
+	DEBUG_OUTPUT(OUTPUT_CONTROL(OUTPUT, INFO), "$PMSRE,%c,%d,%d\n", "UECKA"[MeasParam->TimeQuality], MeasParam->GpsMsCount, MeasParam->BdsMsCount);
+	return 0;
+}
+
+int BasebandDataOutput(void* Param)
+{
+	PDATA_FOR_DECODE DataForDecode = (PDATA_FOR_DECODE)Param;
+
+	DEBUG_OUTPUT(OUTPUT_CONTROL(OUTPUT, INFO), "$PDATA,%2d,%2d,%2d,%5d,%10d,%08x\n",
+		DataForDecode->ChannelState->LogicChannel, DataForDecode->ChannelState->Svid, DataForDecode->ChannelState->FreqID,
+		DataForDecode->SymbolIndex, DataForDecode->TickCount, DataForDecode->DataStream);
 	return 0;
 }

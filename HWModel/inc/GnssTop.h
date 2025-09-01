@@ -41,6 +41,7 @@ public:
 	reg_uint ReqCount;					// 10bit
 	reg_uint InterruptFlag;				// 4bit, bit8~11
 	reg_uint IntMask;					// 4bit, bit8~11
+	reg_uint TickCount;					// 32bit
 
 	unsigned int MemCodeBuffer[128*100];
 	CIfFile IfFile;

@@ -21,6 +21,7 @@ CGnssTop::CGnssTop() : TeFifo(0, 10240), TrackingEngine(&TeFifo, MemCodeBuffer),
 	MeasurementCount = 0;
 	ReqCount = 0;
 	InterruptFlag = 0;
+	TickCount = 0;
 
 	memcpy(MemCodeBuffer, GalE1Code, sizeof(GalE1Code));	// memory code put in MemCodeBuffer as ROM
 	FileData = (complex_int *)malloc(MAX_BLOCK_SIZE * sizeof(complex_int));
@@ -41,6 +42,7 @@ void CGnssTop::Reset(U32 ResetMask)
 		TrackingEngine.Reset();
 	if (ResetMask & 0x100)
 		TeFifo.Reset();
+	TickCount = 0;
 }
 
 void CGnssTop::Clear(U32 ClearMask)
@@ -149,6 +151,8 @@ U32 CGnssTop::GetRegValue(int Address)
 			return ReqCount;
 		case ADDR_OFFSET_INTERRUPT_MASK:
 			return IntMask;
+		case ADDR_OFFSET_TICK_COUNT:
+			return TickCount;
 		default:
 			return 0;
 		}
@@ -200,6 +204,7 @@ int CGnssTop::Process(int ReadBlockSize)
 			MeasurementCount = 0;
 			InterruptFlag |= (1 << 9);
 		}
+		TickCount ++;
 	}
 	if (ReqCount)
 	{

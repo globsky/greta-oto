@@ -161,7 +161,6 @@ void SwitchTrackingStage(PCHANNEL_STATE ChannelState, unsigned int TrackingStage
 			SetNHConfig(ChannelState, Time, B1CSecondCode[ChannelState->Svid-1]);
 			ChannelState->BitSyncResult = 0;
 			ChannelState->DataStream.BitCount = ChannelState->DataStream.CurrentAccTime = 0;	// reset data count for data stream decode
-			ChannelState->DataStream.StartIndex = ChannelState->FrameCounter;
 		}
 	}
 	// set coherent/FFT/non-coherent number
