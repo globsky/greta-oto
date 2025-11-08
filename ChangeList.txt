@@ -227,3 +227,7 @@
 		Rewrite the baseband observation post process project
 	Bug fix
 		Fix the bug that signal power is 3dB higher than configured value in behavior model
+11/8/2025
+	Function and feature change
+		Adding almanac pages in GNSS behavior model broadcast data generation
+		Improvements on BDS B1C data decode by adding CRC check

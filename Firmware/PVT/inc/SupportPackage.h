@@ -33,6 +33,7 @@ double ScaleDoubleU(unsigned int value, int scale);
 double ScaleDoubleLong(long long value, int scale);
 double ScaleDoubleULong(unsigned long long value, int scale);
 BOOL GpsParityCheck(unsigned int word);
+unsigned int Crc24qEncode(unsigned int *BitStream, int Length);
 
 // conversion functions
 void EcefToLlh(const KINEMATIC_INFO *ecef_pos, LLH *llh_pos);

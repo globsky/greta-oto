@@ -206,6 +206,12 @@ void CGnssTop::SetInputFile(char *FileName)
 		GalEph[i-1] = NavData.FindEphemeris(GalileoSystem, CurTime, i);
 		GalBits.SetEphemeris(i, GalEph[i-1]);
 	}
+	NavData.CompleteAlmanac(GpsSystem, UtcTime);
+	NavData.CompleteAlmanac(BdsSystem, UtcTime);
+	NavData.CompleteAlmanac(GalileoSystem, UtcTime);
+	GpsBits.SetAlmanac(NavData.GetGpsAlmanac());
+	BdsBits.SetAlmanac(NavData.GetBdsAlmanac());
+	GalBits.SetAlmanac(NavData.GetGalileoAlmanac());
 	GpsBits.SetIonoUtc(NavData.GetGpsIono(), NavData.GetGpsUtcParam());
 	GalBits.SetIonoUtc(NavData.GetGalileoIono(), NavData.GetGalileoUtcParam());
 	// calculate visible satellite at start time and calculate satellite parameters

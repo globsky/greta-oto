@@ -182,7 +182,6 @@
     <ClInclude Include="SignalSim\inc\SignalSim.h" />
     <ClInclude Include="SignalSim\inc\Trajectory.h" />
     <ClInclude Include="SimModel\inc\AcqEngineFast.h" />
-    <ClInclude Include="SimModel\inc\ComplexNumber.h" />
     <ClInclude Include="SimModel\inc\GaussNoise.h" />
     <ClInclude Include="SimModel\inc\GnssTop.h" />
     <ClInclude Include="SimModel\inc\InitSet.h" />
@@ -239,6 +238,7 @@
     <ClCompile Include="SignalSim\src\JsonInterpreter.cpp" />
     <ClCompile Include="SignalSim\src\JsonParser.cpp" />
     <ClCompile Include="SignalSim\src\LNavBit.cpp" />
+    <ClCompile Include="SignalSim\src\MessageOutput.cpp" />
     <ClCompile Include="SignalSim\src\NavBit.cpp" />
     <ClCompile Include="SignalSim\src\NavData.cpp" />
     <ClCompile Include="SignalSim\src\PilotBit.cpp" />

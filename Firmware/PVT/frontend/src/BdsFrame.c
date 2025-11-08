@@ -17,15 +17,18 @@
 #include "GlobalVar.h"
 #include "SupportPackage.h"
 
-#define PAYLOAD_LENGTH (19 + 9)	// 19 DWORD for subframe2 and 9 DWORD for subframe3
-#define PACKAGE_LENGTH (sizeof(SYMBOL_PACKAGE) + sizeof(unsigned int)*(PAYLOAD_LENGTH))	// 3 variables + 28 payload
+#define SUBFRAME2_LENGTH 18
+#define SUBFRAME3_LENGTH 8
+#define PAYLOAD_LENGTH (SUBFRAME2_LENGTH + SUBFRAME3_LENGTH)	// 18 DWORD for subframe2 and 8 DWORD for subframe3
+#define PACKAGE_LENGTH (sizeof(SYMBOL_PACKAGE) + sizeof(unsigned int)*(PAYLOAD_LENGTH))	// 3 variables + 26 payload
 
 extern U32 EphAlmMutex;
 
 static void PutColumnData(unsigned int ColumnData[9], int ColumnIndex, U16 Subframe23Data[]);
 static int BdsFrameProc(PFRAME_INFO BdsFrameInfo, PDATA_FOR_DECODE DataForDecode);
 static int BdsFrameDecode(void* Param);
-static int DecodeBdsEphemeris(int svid, const unsigned int data[19]);
+static int DecodeBdsEphemeris(int svid, const unsigned int data[SUBFRAME2_LENGTH]);
+static int DecodeBdsMidiAlm(const unsigned int data[SUBFRAME3_LENGTH]);
 
 //*************** BDS navigation data process ****************
 //* do BDS CNAV1 frame process
@@ -47,18 +50,8 @@ int BdsNavDataProc(PFRAME_INFO pFrameInfo, PDATA_FOR_DECODE DataForDecode)
 	pFrameInfo->TimeTag = -1;	// reset decoded week number to invalid
 	if (pFrameInfo->FrameStatus < 0)
 	{
-		// set SymbolNumber according to current data StartIndex
-		if (DataForDecode->SymbolIndex < (72 + 4))	// in the middle of subframe1, next will decode subframe2/3
-		{
-			pFrameInfo->FrameStatus = 1;
-			pFrameInfo->SymbolNumber = DataForDecode->SymbolIndex - (72 + 4);
-		}
-		else	// in the middle of subframe2/3, next will decode subframe1
-		{
-			pFrameInfo->FrameStatus = 0;
-			pFrameInfo->SymbolNumber = (DataForDecode->SymbolIndex <= 4) ? (DataForDecode->SymbolIndex - 4) : (DataForDecode->SymbolIndex - (1800 + 4));
-//			pFrameInfo->SymbolNumber = DataForDecode->SymbolIndex - 1800;
-		}
+		pFrameInfo->FrameStatus = 0;
+		pFrameInfo->SymbolNumber = (DataForDecode->SymbolIndex <= 4) ? (DataForDecode->SymbolIndex - 4) : (DataForDecode->SymbolIndex - (1800 + 4));
 	}
 	while (data_count > 0)
 	{
@@ -149,40 +142,57 @@ int BdsFrameProc(PFRAME_INFO BdsFrameInfo, PDATA_FOR_DECODE DataForDecode)
 	U16 *SubFrame3Data = SubFrame2Data + 75;
 	unsigned int Data, Package[PACKAGE_LENGTH];
 	PSYMBOL_PACKAGE SymbolPackage = (PSYMBOL_PACKAGE)Package;
+	unsigned int *Symbols = SymbolPackage->Symbols;
+	unsigned int crc;
 
 	// decode subframe 1
 	svid = (int)(BdsFrameInfo->FrameData[0] >> 26);	// TODO: BCH decode
 	soh = (int)((BdsFrameInfo->FrameData[0] >> 3) & 0xff);	// TODO: BCH decode
 
-	// TODO: first check CRC, if success, no LDPC decode needed
 	SymbolPackage->ChannelState = DataForDecode->ChannelState;
 	SymbolPackage->FrameInfo = BdsFrameInfo;
-	SymbolPackage->PayloadLength = PAYLOAD_LENGTH;
-	// put two 16bit DOWRD together to form 19 DWORD for subframe2
-	for (i = 0; i < 19; i ++)
+	SymbolPackage->PayloadLength = 0;
+	// put two 16bit DOWRD together to form 18 DWORD (576bits) for subframe2
+ 	for (i = 0; i < 18; i ++)
 	{
 		Data = (((unsigned int)(*SubFrame2Data)) << 16) + (*(SubFrame2Data + 1));
-		SymbolPackage->Symbols[i] = Data;
+		(*Symbols ++) = Data;
 		SubFrame2Data += 2;
 	}
-	// put two 16bit DOWRD together to form 9 DWORD for subframe3
-	for (i = 0; i < 9; i ++)
+	crc = (((unsigned int)(*SubFrame2Data)) << 16) + (*(SubFrame2Data + 1));
+	crc >>= 8;
+	if (Crc24qEncode(SymbolPackage->Symbols, 576) == crc)	// CRC check successfully
+		SymbolPackage->PayloadLength += SUBFRAME2_LENGTH;
+	else
+		Symbols = SymbolPackage->Symbols;	// discard subframe2
+	// put two 16bit DOWRD together to form 8 DWORD (240bits plus 16 leading 0s) for subframe3
+	(*Symbols ++) = (unsigned int)(*SubFrame3Data ++);
+	for (i = 0; i < 7; i ++)
 	{
 		Data = (((unsigned int)(*SubFrame3Data)) << 16) + (*(SubFrame3Data + 1));
-		SymbolPackage->Symbols[i + 19] = Data;
+		(*Symbols ++) = Data;
 		SubFrame3Data += 2;
 	}
-	AddToTask(TASK_POSTMEAS, BdsFrameDecode, SymbolPackage, PACKAGE_LENGTH);
+	crc = (((unsigned int)(*SubFrame3Data)) << 16) + (*(SubFrame3Data + 1));
+	crc >>= 8;
+	if (Crc24qEncode(Symbols - 8, 240) == crc)	// CRC check successfully
+		SymbolPackage->PayloadLength += SUBFRAME3_LENGTH;
+	if (SymbolPackage->PayloadLength != 0)
+		AddToTask(TASK_POSTMEAS, BdsFrameDecode, SymbolPackage, PACKAGE_LENGTH);
 	// decode week number and HOW
-	BdsFrameInfo->TimeTag = GET_UBITS(SymbolPackage->Symbols[0], 19, 13);	// set week number into TimeTag
-	how = GET_UBITS(SymbolPackage->Symbols[0], 11, 8);
-
-	SymbolCount = (how * 200 + soh + 1) * 1800;	// start of frame plus one whole frame length
+	if (SymbolPackage->PayloadLength >= SUBFRAME2_LENGTH)	// subframe2 decode OK
+	{
+		BdsFrameInfo->TimeTag = GET_UBITS(SymbolPackage->Symbols[0], 19, 13);	// set week number into TimeTag
+		how = GET_UBITS(SymbolPackage->Symbols[0], 11, 8);
+		SymbolCount = (how * 200 + soh + 1) * 1800;	// start of frame plus one whole frame length
+	}
 
 	return SymbolCount;
 }
 
 //*************** Task function to process one BDS CNAV1 frame ****************
+// PayloadLength is either SUBFRAME2_LENGTH or SUBFRAME3_LENGTH or SUBFRAME2_LENGTH+SUBFRAME3_LENGTH
+// indicating the contents has subframe2 or subframe3 or both
 // Parameters:
 //   Param: pointer to structure holding one subframe data
 // Return value:
@@ -191,9 +201,20 @@ int BdsFrameDecode(void* Param)
 {
 	PSYMBOL_PACKAGE SymbolPackage = (PSYMBOL_PACKAGE)Param;
 	int svid = SymbolPackage->ChannelState->Svid;
+	int PageNumber = -1;
+	unsigned int *Symbols = SymbolPackage->Symbols + SUBFRAME2_LENGTH;
 
 	// decode subframe2 for ephemeris
-	DecodeBdsEphemeris(svid, SymbolPackage->Symbols);
+	if (SymbolPackage->PayloadLength >= SUBFRAME2_LENGTH)
+		DecodeBdsEphemeris(svid, SymbolPackage->Symbols);
+
+	if (SymbolPackage->PayloadLength == SUBFRAME3_LENGTH)	// contents have only subframe3
+		PageNumber = SymbolPackage->Symbols[0] >> 26;
+	else if (SymbolPackage->PayloadLength == PAYLOAD_LENGTH)	// contents have both subframe2 and subframe3
+		PageNumber = SymbolPackage->Symbols[SUBFRAME2_LENGTH] >> 26;
+
+	if (PageNumber == 4)
+		DecodeBdsMidiAlm(&SymbolPackage->Symbols[19]);
 	return 0;
 }
 
@@ -203,7 +224,7 @@ int BdsFrameDecode(void* Param)
 //   data: Subframe2 data, totally 600bit
 // Return value:
 //   1 if decode success or 0 if decode fail
-int DecodeBdsEphemeris(int svid, const unsigned int data[19])
+int DecodeBdsEphemeris(int svid, const unsigned int data[SUBFRAME2_LENGTH])
 {
 	PGNSS_EPHEMERIS pEph = &g_BdsEphemeris[svid-1];
 	unsigned short iodc;
@@ -283,4 +304,52 @@ int DecodeBdsEphemeris(int svid, const unsigned int data[19])
 	pEph->omega_t = pEph->omega0 - WGS_OMEGDOTE * pEph->toe;
 	pEph->omega_delta = pEph->omega_dot - WGS_OMEGDOTE;
 	return 1;
+}
+
+int DecodeBdsMidiAlm(const unsigned int data[SUBFRAME3_LENGTH])
+{
+	int svid, week;
+	unsigned int type, toa;
+	PMIDI_ALMANAC pAlm;
+	int idata;
+
+	svid = (int)GET_UBITS(data[1], 5, 6);
+	pAlm = &g_BdsAlmanac[svid - 1];
+	type = GET_UBITS(data[1], 3, 2);
+	week = (int)((GET_UBITS(data[1], 0, 3) << 10) | GET_UBITS(data[2], 22, 10));
+	toa = GET_UBITS(data[2], 14, 8) << 12;
+
+	if (pAlm->week == week && pAlm->toa == toa)	// repeat almanac
+		return svid;
+
+	MutexTake(EphAlmMutex);
+
+	pAlm->week = week;
+	pAlm->toa = toa;
+	pAlm->ecc = ScaleDoubleU(GET_UBITS(data[2], 3, 11), 16);
+	idata = (GET_BITS(data[2], 0, 3) << 8) | GET_UBITS(data[3], 24, 8);
+	pAlm->i0 = (((type == 1) ? 0 : 0.3) + ScaleDouble(idata, 14)) * PI;
+	pAlm->sqrtA = ScaleDoubleU(GET_UBITS(data[3], 7, 17), 4);
+	idata = (GET_BITS(data[3], 0, 7) << 9) | GET_UBITS(data[4], 23, 9);
+	pAlm->omega0 = ScaleDouble(idata, 15) * PI;
+	pAlm->omega_dot = ScaleDouble(GET_BITS(data[4], 12, 11), 33) * PI;
+	idata = (GET_BITS(data[4], 0, 12) << 4) | GET_UBITS(data[5], 28, 4);
+	pAlm->w = ScaleDouble(idata, 15) * PI;
+	pAlm->M0 = ScaleDouble(GET_BITS(data[5], 12, 16), 15) * PI;
+	pAlm->af0 = ScaleDouble(GET_BITS(data[5], 1, 11), 20);
+	idata = (GET_BITS(data[5], 0, 1) << 9) | GET_UBITS(data[6], 23, 9);
+	pAlm->af1 = ScaleDouble(idata, 37);
+	pAlm->health = GET_UBITS(data[6], 21, 2);	// clock+B1C
+
+	pAlm->flag = 1;
+
+	// calculate derived variables
+	pAlm->axis = pAlm->sqrtA * pAlm->sqrtA;
+	pAlm->n = WGS_SQRT_GM / (pAlm->sqrtA * pAlm->axis);
+	pAlm->root_ecc = sqrt(1.0 - pAlm->ecc * pAlm->ecc);
+	pAlm->omega_t = pAlm->omega0 - WGS_OMEGDOTE * (pAlm->toa);
+	pAlm->omega_delta = pAlm->omega_dot - WGS_OMEGDOTE;
+
+	MutexGive(EphAlmMutex);
+	return svid;
 }

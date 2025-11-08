@@ -150,9 +150,6 @@
     <ClInclude Include="SignalSim\inc\GnssTime.h">
       <Filter>SignalSim\inc</Filter>
     </ClInclude>
-    <ClInclude Include="SimModel\inc\ComplexNumber.h">
-      <Filter>SignalSim\inc</Filter>
-    </ClInclude>
     <ClInclude Include="SimModel\inc\GnssTop.h">
       <Filter>SimModel\inc</Filter>
     </ClInclude>
@@ -438,6 +435,9 @@
     </ClCompile>
     <ClCompile Include="..\..\PVT\frontend\src\TimeManager.c">
       <Filter>PVT\frontend\src</Filter>
+    </ClCompile>
+    <ClCompile Include="SignalSim\src\MessageOutput.cpp">
+      <Filter>SignalSim\src</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>
