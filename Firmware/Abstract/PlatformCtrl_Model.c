@@ -7,10 +7,12 @@
 //----------------------------------------------------------------------
 
 #include <stdio.h>
+#include <stdarg.h>
 #include <string.h>
 #include "PlatformCtrl.h"
 
-FILE *fp_debug = (FILE *)0;
+static FILE *fp_debug = (FILE *)0;
+static FILE *SreamFile[MAX_STREAM_ID] = { 0 };
 
 void CreateThread(ThreadFunction Thread, int Priority, void *Param) {}
 void ENTER_CRITICAL() {}
@@ -84,4 +86,44 @@ void SaveParameters(int Offset, void *Buffer, int Size)
 	fseek(fp, Offset, SEEK_SET);
 	fwrite(Buffer, 1, Size, fp);
 	fclose(fp);
+}
+
+void DebugPrintf(const char *format, ...)
+{
+	va_list args;
+	va_start(args, format);
+    
+	if (fp_debug != NULL)
+		vfprintf(fp_debug, format, args);
+    
+	va_end(args);
+}
+
+void InitStreamPorts()
+{
+	int i;
+	char StreamFileName[32];
+
+	for (i = 0; i < MAX_STREAM_ID; i ++)
+	{
+		sprintf(StreamFileName, STREAM_FILE_PREFIX, i);
+		SreamFile[i] = (USE_STDOUT_AS_STREAM0 && (i == 0)) ? stdout : fopen(StreamFileName, "wb");
+	}
+	fp_debug = (DEFAULT_DEBUG_OUTPUT_PORT < 0) ? stdout : SreamFile[DEFAULT_DEBUG_OUTPUT_PORT];
+}
+
+int WriteStreamPort(int PortNumber, unsigned char *Stream, int Length)
+{
+	if (PortNumber >= 0 && PortNumber < MAX_STREAM_ID)
+		return fwrite(Stream, sizeof(unsigned char), Length, SreamFile[PortNumber]);
+	else
+		return -1;
+}
+
+int PortOpened(int PortNumber)
+{
+	if (PortNumber >= 0 && PortNumber < MAX_STREAM_ID)
+		return SreamFile[PortNumber] != NULL;
+	else
+		return 0;
 }

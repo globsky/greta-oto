@@ -62,9 +62,10 @@ void SwitchTrackingStage(PCHANNEL_STATE ChannelState, unsigned int TrackingStage
 	PSTATE_BUFFER StateBuffer = &(ChannelState->StateBufferCache);
 
 	DEBUG_OUTPUT(OUTPUT_CONTROL(TRACKING_SWITCH, INFO), "SV%02d switch to %d\n", ChannelState->Svid, TrackingStage);
+	SET_STAGE(ChannelState, TrackingStage);
 	ChannelState->TrackingTime = 0;		// reset tracking time
-	ChannelState->State &= ~STAGE_MASK;
-	ChannelState->State |= TrackingStage;
+	if (TrackingStage == STAGE_RELEASE)		// next acc interrupt will do release operation
+		return;
 
 	ChannelState->FftCount = 0;
 	ChannelState->NonCohCount = 0;

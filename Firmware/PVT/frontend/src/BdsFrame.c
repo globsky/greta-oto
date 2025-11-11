@@ -209,19 +209,19 @@ int BdsFrameDecode(void* Param)
 		DecodeBdsEphemeris(svid, SymbolPackage->Symbols);
 
 	if (SymbolPackage->PayloadLength == SUBFRAME3_LENGTH)	// contents have only subframe3
-		PageNumber = SymbolPackage->Symbols[0] >> 26;
+		PageNumber = (*(Symbols = &SymbolPackage->Symbols[0])) >> 10;
 	else if (SymbolPackage->PayloadLength == PAYLOAD_LENGTH)	// contents have both subframe2 and subframe3
-		PageNumber = SymbolPackage->Symbols[SUBFRAME2_LENGTH] >> 26;
+		PageNumber = (*(Symbols = &SymbolPackage->Symbols[SUBFRAME2_LENGTH])) >> 10;
 
 	if (PageNumber == 4)
-		DecodeBdsMidiAlm(&SymbolPackage->Symbols[19]);
+		DecodeBdsMidiAlm(Symbols);
 	return 0;
 }
 
 //*************** Decode BDS frame data to get ephemeris ****************
 // Parameters:
 //   svid: GPS SVID ranging from 1 to 32
-//   data: Subframe2 data, totally 600bit
+//   data: Subframe2 data, totally 576bits (exclude CRC)
 // Return value:
 //   1 if decode success or 0 if decode fail
 int DecodeBdsEphemeris(int svid, const unsigned int data[SUBFRAME2_LENGTH])
@@ -306,6 +306,11 @@ int DecodeBdsEphemeris(int svid, const unsigned int data[SUBFRAME2_LENGTH])
 	return 1;
 }
 
+//*************** Decode BDS Subframe3 page 4 to get midi-almanac ****************
+// Parameters:
+//   data: Subframe3 data, totally 240bits with 16MSB of first DWORD filled with 0
+// Return value:
+//   svid if decode success or 0 if decode fail
 int DecodeBdsMidiAlm(const unsigned int data[SUBFRAME3_LENGTH])
 {
 	int svid, week;
@@ -319,11 +324,14 @@ int DecodeBdsMidiAlm(const unsigned int data[SUBFRAME3_LENGTH])
 	week = (int)((GET_UBITS(data[1], 0, 3) << 10) | GET_UBITS(data[2], 22, 10));
 	toa = GET_UBITS(data[2], 14, 8) << 12;
 
+	if (svid <= 0 || svid > 63)
+		return 0;
 	if (pAlm->week == week && pAlm->toa == toa)	// repeat almanac
 		return svid;
 
 	MutexTake(EphAlmMutex);
 
+	pAlm->svid = svid;
 	pAlm->week = week;
 	pAlm->toa = toa;
 	pAlm->ecc = ScaleDoubleU(GET_UBITS(data[2], 3, 11), 16);

@@ -73,12 +73,7 @@ void UpdateChannels()
 	for (i = 0, ChannelMask = 1; i < TOTAL_CHANNEL_NUMBER; i ++, ChannelMask <<= 1)
 	{
 		if (ChannelOccupation & ChannelMask)
-		{
-			if ((ChannelStateArray[i].State & STAGE_MASK) == STAGE_RELEASE)
-				ReleaseChannel(i);
-			else
-				SyncCacheWrite(ChannelStateArray + i);
-		}
+			SyncCacheWrite(ChannelStateArray + i);
 	}
 }
 
@@ -127,7 +122,12 @@ void CohSumInterruptProc()
 	for (i = 0, ChannelMask = 1; i < TOTAL_CHANNEL_NUMBER; i ++, ChannelMask <<= 1)
 	{
 		if (CohDataReady & ChannelMask)
-			ProcessCohSum(i, OverwriteProtectChannel & ChannelMask);
+		{
+			if ((ChannelStateArray[i].State & STAGE_MASK) == STAGE_RELEASE)
+				ReleaseChannel(i);
+			else
+				ProcessCohSum(i, OverwriteProtectChannel & ChannelMask);
+		}
 	}
 	UpdateChannels();
 }

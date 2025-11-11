@@ -101,8 +101,6 @@ void FirmwareInitialize(StartType Start, PSYSTEM_TIME CurTime, LLH *CurPosition)
 	SAT_PREDICT_PARAM SatList[32];
 	PACQ_CONFIG pAcqConfig = NULL;
 
-	fp_debug = stdout;
-
 	NominalMeasInterval = DEFAULT_MEAS_INTERVAL;
 
 	AttachBasebandISR(InterruptService);
@@ -123,6 +121,7 @@ void FirmwareInitialize(StartType Start, PSYSTEM_TIME CurTime, LLH *CurPosition)
 	SetRegValue(ADDR_TE_NOISE_FLOOR, 784 >> PRE_SHIFT_BITS);	// set initial noise floor
 
 	// initialize firmware modules
+	InitStreamPorts();
 	TaskInitialize();
 	TEInitialize();
 	AEInitialize();

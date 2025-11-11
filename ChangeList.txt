@@ -231,3 +231,10 @@
 	Function and feature change
 		Adding almanac pages in GNSS behavior model broadcast data generation
 		Improvements on BDS B1C data decode by adding CRC check
+11/11/2025
+	Function and feature change
+		Add streaming port support to enable output different messages (debug message, raw measurements, NMEA etc.) to different port
+		Remove fp_debug from platform independent part
+	Bug fix
+		Fix the bug in the process of release channel to avoid access out of array boundary
+		Bug fix in BCNAV1 subframe 3 decode

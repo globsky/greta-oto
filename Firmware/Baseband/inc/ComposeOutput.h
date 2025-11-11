@@ -9,6 +9,9 @@
 #if !defined __COMPOSE_OUTPUT_H__
 #define __COMPOSE_OUTPUT_H__
 
+extern int OutputBasebandMeasPort;
+extern int OutputBasebandDataPort;
+
 int MeasPrintTask(void *Param);
 int BasebandDataOutput(void *Param);
 

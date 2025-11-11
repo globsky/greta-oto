@@ -16,8 +16,7 @@
 #define OUTPUT_CONTROL(type, level) (OUTPUT_MASK_##type <= OUTPUT_LEVEL_##level)
 
 // debug output control
-extern FILE *fp_debug;
-#define DEBUG_OUTPUT(enable, ...) if(enable&&fp_debug) fprintf(fp_debug, __VA_ARGS__)
+#define DEBUG_OUTPUT(enable, ...) if(enable) DebugPrintf(__VA_ARGS__)
 
 #ifdef __cplusplus
 extern "C" {
@@ -43,6 +42,12 @@ int __builtin_clz(unsigned int data);
 // saved parameter read/write
 int LoadParameters(int Offset, void *Buffer, int Size);
 void SaveParameters(int Offset, void *Buffer, int Size);
+
+// supporting functions for debug output and streaming ports (can be either UART/SPI/I2C)
+void DebugPrintf(const char *format, ...);
+void InitStreamPorts();
+int WriteStreamPort(int PortNumber, unsigned char *Stream, int Length);
+int PortOpened(int PortNumber);
 
 #ifdef __cplusplus
 }

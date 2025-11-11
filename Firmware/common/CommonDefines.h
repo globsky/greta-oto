@@ -104,6 +104,7 @@ do \
 #define STAGE_TRACK2   (STAGE_TRACK + 2)
 
 #define STAGE_MASK          0xf
+#define SET_STAGE(ChannelState, Stage) do { (ChannelState)->State &= ~STAGE_MASK; (ChannelState)->State |= Stage; } while(0)
 #define GET_STAGE(ChannelState) ((ChannelState)->State & STAGE_MASK)
 #define STAGE_CONFIG_INDEX(stage) (((stage) & 0x8) ? ((stage)-5) : ((stage)-3))
 
