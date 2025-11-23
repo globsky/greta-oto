@@ -12,7 +12,8 @@
 #include "CommonDefines.h"
 #include "DataTypes.h"
 
-void CalcSatelliteInfo(PCHANNEL_STATUS ObservationList[], int ObsCount);
+void CalcSatInfo(PCHANNEL_STATUS ObservationList[], int ObsCount);
+void CalcSatellitesInfo(PCHANNEL_STATUS ObservationList[], int ObsCount);
 int FilterObservation(PCHANNEL_STATUS ObservationList[], int ObsCount);
 void ApplyCorrection(PCHANNEL_STATUS ObservationList[], int ObsCount);
 

@@ -39,35 +39,56 @@ static PositionType GetPosMethod(PCHANNEL_STATUS ObservationList[], int *Count, 
 //*************** PVT process initialization ****************
 //* This task is called once at startup to do initialization
 // Parameters:
-//   pReceiverInfo: pointer to receiver infomation to give initial position
+//   Start: receiver start type ColdStart/WarmStart/HotStart
+//   CurTime: pointer to SYSTEM_TIME get from RTC or NULL if no valid time
+//   CurPosition: pointer to LLH receiver position if force set else NULL
 // Return value:
 //   none
-void PvtProcInit(PRECEIVER_INFO pReceiverInfo)
+void PvtProcInit(StartType Start, PSYSTEM_TIME CurTime, LLH *CurPosition)
 {
 	// clear Ionosphere and UTC parameters
-	memset(&g_GpsIonoParam, 0, sizeof(GPS_IONO_PARAM));
-	memset(&g_BdsIonoParam, 0, sizeof(BDS_IONO_PARAM));
-	memset(&g_GpsUtcParam, 0, sizeof(UTC_PARAM));
-	memset(&g_BdsUtcParam, 0, sizeof(UTC_PARAM));
+//	memset(&g_GpsIonoParam, 0, sizeof(GPS_IONO_PARAM));
+//	memset(&g_BdsIonoParam, 0, sizeof(BDS_IONO_PARAM));
+//	memset(&g_GpsUtcParam, 0, sizeof(UTC_PARAM));
+//	memset(&g_BdsUtcParam, 0, sizeof(UTC_PARAM));
 	// clear satellite info structure
 	memset(g_GpsSatelliteInfo, 0, sizeof(g_GpsSatelliteInfo));
 	memset(g_GalileoSatelliteInfo, 0, sizeof(g_GalileoSatelliteInfo));
 	memset(g_BdsSatelliteInfo, 0, sizeof(g_BdsSatelliteInfo));
+	// clear satellite predict structure
+	memset(g_GpsSatParam, 0, sizeof(g_GpsSatParam));
+	memset(g_GalileoSatParam, 0, sizeof(g_GalileoSatParam));
+	memset(g_BdsSatParam, 0, sizeof(g_BdsSatParam));
 	// clear PVT receiver info and core data structure
 	memset(&g_ReceiverInfo, 0, sizeof(RECEIVER_INFO));
 	memset(&g_PvtCoreData, 0, sizeof(g_PvtCoreData));
 
 	g_ReceiverInfo.ReceiverTime = &GnssTime;
-	g_PvtConfig.PvtConfigFlags |= ENABLE_KALMAN_FILTER ? PVT_CONFIG_USE_KF : 0;
-
-	if (!pReceiverInfo)	// if initialize structure is NULL
-		return;
+	if (CurTime == NULL)	// which means no valid time (eg. get time from RTC fail)
+		Start = ColdStart;
 	else
 	{
-		memcpy(&g_ReceiverInfo, pReceiverInfo, sizeof(RECEIVER_INFO));
-		if (g_ReceiverInfo.PosQuality > ExtSetPos)
-			g_ReceiverInfo.PosQuality = ExtSetPos;
+		GnssTime.TimeQuality = ExtSetTime;
+		UtcToGpsTime(CurTime, &(GnssTime.GpsWeekNumber), &(GnssTime.GpsMsCount), &g_GpsUtcParam);
+		GnssTime.BdsWeekNumber = GnssTime.GpsWeekNumber - 1356;
+		GnssTime.BdsMsCount = GnssTime.GpsMsCount - 14000;
+		if (GnssTime.BdsMsCount < 0)
+		{
+			GnssTime.BdsMsCount += MS_IN_WEEK;
+			GnssTime.BdsWeekNumber --;
+		}
 	}
+
+	if (CurPosition == NULL && g_ReceiverInfo.PosQuality == UnknownPos)
+		Start = ColdStart;
+	else if (CurPosition)	// force to use input position as receiver position
+	{
+		g_ReceiverInfo.PosQuality = ExtSetPos;
+		memcpy(&(g_ReceiverInfo.PosLLH), CurPosition, sizeof(LLH));
+	}
+	g_ReceiverInfo.PosVel.vx = g_ReceiverInfo.PosVel.vy = g_ReceiverInfo.PosVel.vz = 0.0;
+
+	g_PvtConfig.PvtConfigFlags |= ENABLE_KALMAN_FILTER ? PVT_CONFIG_USE_KF : 0;
 
 	// initialize state with input parameter
 	g_PvtCoreData.StateVector[0] = g_ReceiverInfo.PosVel.vx;
@@ -79,7 +100,6 @@ void PvtProcInit(PRECEIVER_INFO pReceiverInfo)
 
 	if (g_ReceiverInfo.PosQuality > UnknownPos)
 	{
-		memcpy(&(g_ReceiverInfo.PosVel), &(pReceiverInfo->PosVel), sizeof(KINEMATIC_INFO));
 		LlhToEcef(&g_ReceiverInfo.PosLLH, &g_ReceiverInfo.PosVel);
 		CalcConvMatrix(&g_ReceiverInfo.PosVel, &g_ReceiverInfo.ConvertMatrix);
 		g_ReceiverInfo.PosQuality = ExtSetPos;
@@ -201,7 +221,7 @@ int PvtFix(int MsInterval, int ClockAdjust)
 	}
 
 	// calculate satellite information (pos. vel. el/az etc.)
-	CalcSatelliteInfo(ObservationList, SatCount);
+	CalcSatellitesInfo(ObservationList, SatCount);
 
 	// filter raw measurements
 	SatCount = FilterObservation(ObservationList, SatCount);

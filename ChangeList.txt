@@ -238,3 +238,17 @@
 	Bug fix
 		Fix the bug in the process of release channel to avoid access out of array boundary
 		Bug fix in BCNAV1 subframe 3 decode
+11/22/2025
+	Function and feature change
+		Remove FrameCounter member in CHANNEL_STATE, uses NHIndex to maintain B1C NH code update
+		Move LoadAllParameters() and SaveAllParameters() to PvtBasicFunc.c
+		Move PVT related initialization code to PvtProcInit()
+		Change definition of SAT_PREDICT_PARAM as signal transmiting time at given receiver time
+		Add a function to initialize SAT_PREDICT_PARAM stucture for future satellite in view prediction
+		Optimize Galileo I/NAV data decode process (place symbols in deinterleaved order directly)
+		Add Galileo I/NAV almanac decode
+		Update PostProc.c to adapt interface function change
+	Bug fix
+		Fix bug that SymbolIndex assigned incorrect value using hardware data decode
+		Fix bug that GetReceiverWeekNumber() returns incorrect Galileo week number
+		Fix bug that function SatPosSpeedAlm() uses incorrect name in implementation

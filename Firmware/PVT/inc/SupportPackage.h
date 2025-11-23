@@ -67,4 +67,8 @@ void KFPrediction(double *PMatrix, double DeltaT);
 void KFAddQMatrix(double *PMatrix, const double *QConfig, PCONVERT_MATRIX pConvertMatrix, double DeltaT);
 int KFPosition(PCHANNEL_STATUS ObservationList[], int ObsCount, int PosUseSatCount[PVT_MAX_SYSTEM_ID]);
 
+// parameter load/save functions
+void LoadAllParameters();
+void SaveAllParameters();
+
 #endif //__SUPPORT_PKG_H__

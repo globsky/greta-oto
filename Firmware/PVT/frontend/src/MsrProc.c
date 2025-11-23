@@ -98,7 +98,7 @@ int DoDataDecode(void* Param)
 			break;
 		case FREQ_E1:
 			WeekMs = GalNavDataProc(pFrameInfo, DataForDecode);
-			WeekNumber = pFrameInfo->TimeTag;
+//			WeekNumber = pFrameInfo->TimeTag;
 			break;
 		default:
 			WeekMs = -1;

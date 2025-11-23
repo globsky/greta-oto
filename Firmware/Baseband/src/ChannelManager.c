@@ -47,7 +47,7 @@ static const unsigned int GalInvPos[25] = {
 0x240fb, 0x481f6, 0x903ed, 0x207da, 0x40fb5, 
 };
 
-void SetNHConfig(PCHANNEL_STATE ChannelState, int NHPos, const unsigned int *NHCode);
+void SetNHConfig(PCHANNEL_STATE ChannelState, int NHIndex, int NHPos, const unsigned int *NHCode);
 
 //*************** Initialize channel state structure ****************
 // Parameters:
@@ -246,7 +246,11 @@ void ProcessCohSum(int ChannelID, unsigned int OverwriteProtect)
 	{
 		StateValue = GetRegValue((U32)(&(ChannelState->StateBufferHW->CorrState)));
 		if ((StateValue >> 27) >= 20)
-			SetNHConfig(ChannelState, ChannelState->FrameCounter, B1CSecondCode[ChannelState->Svid-1]);
+		{
+			if (++ChannelState->NHIndex == 90)
+				ChannelState->NHIndex = 0;
+			SetNHConfig(ChannelState, ChannelState->NHIndex, 0, B1CSecondCode[ChannelState->Svid-1]);
+		}
 	}
 }
 
@@ -424,35 +428,25 @@ void DecodeDataStream(PCHANNEL_STATE ChannelState)
 		else
 			SymbolCount = ChannelState->CoherentNumber / DataStream->TotalAccTime;	// coherent length must be multiple of symbol length
 
-		// update FrameCounter
-		if (ChannelState->FrameCounter >= 0)
-			ChannelState->FrameCounter += SymbolCount;
-		if (FREQ_ID_IS_L1CA(ChannelState->FreqID) && ChannelState->FrameCounter >= 1500)	// 1500bit for each round of subframe 1-5
-			ChannelState->FrameCounter -= 1500;
-		else if (FREQ_ID_IS_E1(ChannelState->FreqID) && ChannelState->FrameCounter >= 500)	// 500bit for each round of even/odd
-			ChannelState->FrameCounter -= 500;
-		else if (ChannelState->FrameCounter >= 1800)	// 1800bit for B1C or L1C
-			ChannelState->FrameCounter -= 1800;
-
 		Data = GetRegValue((U32)(&(ChannelState->StateBufferHW->DecodeData)));
 		if (FREQ_ID_IS_B1C(ChannelState->FreqID) || FREQ_ID_IS_E1(ChannelState->FreqID))	// B1C/E1 has negative data
 			Data ^= 0xffffffff;
-		for (i = 0; i < SymbolCount; i ++)
+		for (i = SymbolCount - 1; i >= 0; i --)
 		{
 			switch (ChannelState->State & DATA_STREAM_MASK)
 			{
 			case DATA_STREAM_1BIT:
-				DataSymbol = (Data >> (SymbolCount - i - 1)) & 1;
+				DataSymbol = (Data >> i) & 1;
 				DataStream->Symbols <<= 1;
 				DataStream->BitCount ++;
 				break;
 			case DATA_STREAM_4BIT:
-				DataSymbol = (Data >> ((SymbolCount - i - 1) * 4)) & 0xf;
+				DataSymbol = (Data >> (i * 4)) & 0xf;
 				DataStream->Symbols <<= 4;
 				DataStream->BitCount += 4;
 				break;
 			case DATA_STREAM_8BIT:
-				DataSymbol = (Data >> ((SymbolCount - i - 1) * 8)) & 0xff;
+				DataSymbol = (Data >> (i * 8)) & 0xff;
 				DataStream->Symbols <<= 8;
 				DataStream->BitCount += 8;
 				break;
@@ -462,8 +456,10 @@ void DecodeDataStream(PCHANNEL_STATE ChannelState)
 			{
 				DataForDecode.ChannelState = ChannelState;
 				DataForDecode.DataStream = DataStream->Symbols;
-				DataForDecode.SymbolIndex = ChannelState->FrameCounter;
-				DataForDecode.TickCount = BasebandTickCount - DataStream->TotalAccTime * (SymbolCount - 1 - i);	// minus decoded symbols not yet put in DataStream
+				DataForDecode.SymbolIndex = ChannelState->NHIndex * 20 + (ChannelState->StateBufferCache.CorrState >> 27) - i;
+				if (DataForDecode.SymbolIndex < 0)
+					DataForDecode.SymbolIndex += FREQ_ID_IS_L1CA(ChannelState->FreqID) ? 0 : FREQ_ID_IS_E1(ChannelState->FreqID) ? 25 : 1800;
+				DataForDecode.TickCount = BasebandTickCount - DataStream->TotalAccTime * i;	// minus decoded symbols not yet put in DataStream
 				DataStream->BitCount = 0;
 				AddToTask(TASK_BASEBAND, DoDataDecode, &DataForDecode, sizeof(DATA_FOR_DECODE));
 			}
@@ -596,27 +592,26 @@ void CalcCN0(PCHANNEL_STATE ChannelState)
 //   NHCode: 1800bit NH code stream (LSB first in each DWORD)
 // Return value:
 //   none
-void SetNHConfig(PCHANNEL_STATE ChannelState, int NHPos, const unsigned int *NHCode)
+void SetNHConfig(PCHANNEL_STATE ChannelState, int NHIndex, int NHPos, const unsigned int *NHCode)
 {
 	unsigned int SegmentCode, StateValue;
-	int Segment, NHCount;
+	int Segment;
 
 	// calculate 20bit NH code from 1800bit secondary code stream
-	NHCount = NHPos % 20;
-	NHPos -= NHCount;
-	Segment = NHPos / 32;
-	NHPos &= 0x1f;
+	NHIndex *= 20;
+	Segment = NHIndex / 32;
+	NHIndex &= 0x1f;
 	SegmentCode = NHCode[Segment];
-	SegmentCode >>= NHPos;
-	if (NHPos > 8)	// 24bit code not within one DWORD
-		SegmentCode |= (NHCode[Segment+1] << (32 - NHPos));
+	SegmentCode >>= NHIndex;
+	if (NHIndex > 8)	// 24bit code not within one DWORD
+		SegmentCode |= (NHCode[Segment+1] << (32 - NHIndex));
 	SegmentCode &= 0xffffff;
 	// write to state buffer
 	STATE_BUF_SET_NH_CONFIG(&(ChannelState->StateBufferCache), 24, SegmentCode);
 	SetRegValue((U32)(&(ChannelState->StateBufferHW->NHConfig)),  ChannelState->StateBufferCache.NHConfig);
 	// set current NH count
 	StateValue = GetRegValue((U32)(&(ChannelState->StateBufferHW->CorrState)));
-	SET_FIELD(StateValue, 27, 5, NHCount);
+	SET_FIELD(StateValue, 27, 5, NHPos);
 	SetRegValue((U32)(&(ChannelState->StateBufferHW->CorrState)), StateValue);
 }
 

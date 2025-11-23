@@ -13,6 +13,9 @@
 typedef void (*InterruptFunction)();
 typedef void (*DebugFunction)(void *DebugParam, int DebugValue);
 
+SYSTEM_TIME InitTime;
+LLH InitPosition;
+
 // functions for GNSS hardware access
 void AttachBasebandISR(InterruptFunction ISR) {}
 void AttachDebugFunc(DebugFunction Function) {}

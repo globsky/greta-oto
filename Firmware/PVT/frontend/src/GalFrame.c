@@ -15,15 +15,17 @@
 #include "TaskManager.h"
 #include "GlobalVar.h"
 #include "SupportPackage.h"
+#include "TimeManager.h"
 
 #define PAYLOAD_LENGTH 4	// 128bit page contents
 #define PACKAGE_LENGTH (sizeof(SYMBOL_PACKAGE) + sizeof(unsigned int)*(PAYLOAD_LENGTH))	// 3 variables + 4 payload
 
 extern U32 EphAlmMutex;
 
-static int GalPageProc(PFRAME_INFO GalFrameInfo, PDATA_FOR_DECODE DataForDecode);
+static int GalPageProc(PFRAME_INFO GalFrameInfo, PDATA_FOR_DECODE DataForDecode, unsigned int PageData[4]);
 static int INavPageDecode(void* Param);
 static int DecodeGalileoEphemeris(int svid, const unsigned int data[20]);
+static int DecodeGalileoAlmanac(int AllocationType, const unsigned int Page1[4], const unsigned int Page2[4]);
 
 // for Viterbi decode
 static int Distance[64], DistanceNew[64];
@@ -48,9 +50,9 @@ int GalNavDataProc(PFRAME_INFO pFrameInfo, PDATA_FOR_DECODE DataForDecode)
 	int data_count = 8;	// DataStream contais 8 4bit data
 	int SymbolCount = -1;
 	U32 DataStream = DataForDecode->DataStream;
-	unsigned int *pBuffer;
 	int PosIndex;
-	pFrameInfo->TimeTag = -1;	// reset decoded week number to invalid
+//	pFrameInfo->TimeTag = -1;	// reset decoded week number to invalid
+	unsigned int PageData[4];
 
 	// meaning of FrameState:
 	// -1: frame sync not completed
@@ -69,7 +71,7 @@ int GalNavDataProc(PFRAME_INFO pFrameInfo, PDATA_FOR_DECODE DataForDecode)
 			{
 				if ((pFrameInfo->SymbolData[0] & 0x3ff) == 0x160)	// sync pattern match
 				{
-					if (((DataForDecode->SymbolIndex - data_count) % 25) == 10)	// check sync pattern align to NH boundary, add 25 to avoid negative value
+					if (((DataForDecode->SymbolIndex + 25 - data_count) % 25) == 10)	// check sync pattern align to NH boundary, add 25 to avoid negative value
 					{
 						// sync pattern found, change frame status to 2
 						pFrameInfo->FrameStatus = 2;
@@ -85,7 +87,6 @@ int GalNavDataProc(PFRAME_INFO pFrameInfo, PDATA_FOR_DECODE DataForDecode)
 	// put data in FrameData
 	if (pFrameInfo->FrameStatus >= 0)
 	{
-		pBuffer = &(pFrameInfo->FrameData[0]);
 		while (data_count > 0)
 		{
 			if (pFrameInfo->SymbolNumber < 0)	// sync pattern
@@ -107,9 +108,9 @@ int GalNavDataProc(PFRAME_INFO pFrameInfo, PDATA_FOR_DECODE DataForDecode)
 			}
 			else
 			{
-				PosIndex = (pFrameInfo->SymbolNumber & 7) * 4;
-				pBuffer[pFrameInfo->SymbolNumber / 8] &= ~(0xf0000000 >> PosIndex);	// clear 4bit to put symbol
-				pBuffer[pFrameInfo->SymbolNumber / 8] |= ((DataStream & 0xf0000000) >> PosIndex);	// put symbol (in 4MSB of DataStream) in
+				PosIndex = pFrameInfo->SymbolNumber % 30;
+				pFrameInfo->FrameData[PosIndex] <<= 4;
+				pFrameInfo->FrameData[PosIndex] |= (DataStream >> 28);
 			}
 			DataStream <<= 4;
 			data_count --;
@@ -117,9 +118,10 @@ int GalNavDataProc(PFRAME_INFO pFrameInfo, PDATA_FOR_DECODE DataForDecode)
 			if (pFrameInfo->SymbolNumber == 240)	// one page completed
 			{
 				// do Viterbi decode on page data
-				GalViterbiDecode(pBuffer, pFrameInfo->FrameData);
+				GalViterbiDecode(pFrameInfo->FrameData, PageData);
 				pFrameInfo->SymbolNumber = -10;	// skip first 10 symbols for next page as sync pattern
-				SymbolCount = GalPageProc(pFrameInfo, DataForDecode) + data_count;
+				pFrameInfo->TickCount = DataForDecode->TickCount - data_count * 4;	// TickCount of current symbol (will not change until next page part)
+				SymbolCount = GalPageProc(pFrameInfo, DataForDecode, PageData) + data_count;
 			}
 		}
 	}
@@ -130,13 +132,11 @@ int GalNavDataProc(PFRAME_INFO pFrameInfo, PDATA_FOR_DECODE DataForDecode)
 //*************** Do Galileo page part process ****************
 // Parameters:
 //   GalFrameInfo: pointer to frame info structure
-//   PageData: 
 //   DataForDecode: pointer to structure of symbols to be decoded
 // Return value:
 //   current symbols within week, <0 if unknown
-int GalPageProc(PFRAME_INFO GalFrameInfo, PDATA_FOR_DECODE DataForDecode)
+int GalPageProc(PFRAME_INFO GalFrameInfo, PDATA_FOR_DECODE DataForDecode, unsigned int PageData[4])
 {
-	unsigned int *PageData = GalFrameInfo->FrameData;
 	unsigned int crc;
 	unsigned int Package[PACKAGE_LENGTH];
 	PSYMBOL_PACKAGE SymbolPackage = (PSYMBOL_PACKAGE)Package;
@@ -185,7 +185,7 @@ int GalPageProc(PFRAME_INFO GalFrameInfo, PDATA_FOR_DECODE DataForDecode)
 			{
 				tow = ((SymbolPackage->Symbols[3] >> 3) & 0xfffff) + 2;	// plus current decoded page
 			}
-			GalFrameInfo->TimeTag = wn;	// set decoded week number to TimeTag
+//			GalFrameInfo->TimeTag = wn;	// set decoded week number to TimeTag
 		}
 	}
 	else	// even page
@@ -214,6 +214,7 @@ int INavPageDecode(void* Param)
 	int Svid = SymbolPackage->ChannelState->Svid;
 	PFRAME_INFO FrameInfo = SymbolPackage->FrameInfo;
 	int WordType = SymbolPackage->Symbols[0] >> 26;
+	int TimeTag = FrameInfo->TickCount / 1000;
 
 	if (WordType >= 1 && WordType <= 5)	// Ephemeris/SISA/Clock/Iono/BGD
 	{
@@ -225,7 +226,39 @@ int INavPageDecode(void* Param)
 	}
 	else if (WordType >= 7 && WordType <= 10)	// Almanac
 	{
-		// TODO: decode E1 almanac
+		switch (WordType)
+		{
+		case 7:	// first part of almanac data set
+			FrameInfo->TimeTag = TimeTag;
+			FrameInfo->FrameData[50] = SymbolPackage->Symbols[0];
+			FrameInfo->FrameData[51] = SymbolPackage->Symbols[1];
+			FrameInfo->FrameData[52] = SymbolPackage->Symbols[2];
+			FrameInfo->FrameData[53] = SymbolPackage->Symbols[3];
+			break;
+		case 8:	// second part of almanac data set
+			if (FrameInfo->TimeTag < 0 || (TimeTag - FrameInfo->TimeTag) != 2)	// not continuous from previous WordType 7
+				break;
+			FrameInfo->TimeTag = TimeTag;
+			DecodeGalileoAlmanac(0, &FrameInfo->FrameData[50], SymbolPackage->Symbols);
+			FrameInfo->FrameData[51] = SymbolPackage->Symbols[1];
+			FrameInfo->FrameData[52] = SymbolPackage->Symbols[2];
+			FrameInfo->FrameData[53] = SymbolPackage->Symbols[3];
+			break;
+		case 9:	// third part of almanac data set
+			if (FrameInfo->TimeTag < 0 || (TimeTag - FrameInfo->TimeTag) != 28)	// not continuous from previous WordType 8
+				break;
+			FrameInfo->TimeTag = TimeTag;
+			DecodeGalileoAlmanac(1, &FrameInfo->FrameData[50], SymbolPackage->Symbols);
+			FrameInfo->FrameData[51] = SymbolPackage->Symbols[1];
+			FrameInfo->FrameData[52] = SymbolPackage->Symbols[2];
+			FrameInfo->FrameData[53] = SymbolPackage->Symbols[3];
+			break;
+		case 10:	// fourth part of almanac data set
+			if (FrameInfo->TimeTag < 0 || (TimeTag - FrameInfo->TimeTag) != 2)	// not continuous from previous WordType 9
+				break;
+			DecodeGalileoAlmanac(2, &FrameInfo->FrameData[50], SymbolPackage->Symbols);
+			break;
+		}
 	}
 
 	if ((FrameInfo->FrameFlag & 0x1f) == 0x1f)	// bit0~4 set, WordType 1~5 completed
@@ -237,6 +270,12 @@ int INavPageDecode(void* Param)
 	return 0;
 }
 
+//*************** Galileo ephemeris decode ****************
+// Parameters:
+//   svid: SVID of corresponding satellite
+//   data: data contents of WordType1~5, each occupies 4 DWORD
+// Return value:
+//   0 if decode unsuccessful, svid otherwise
 int DecodeGalileoEphemeris(int svid, const unsigned int data[20])
 {
 	PGNSS_EPHEMERIS pEph = &g_GalileoEphemeris[svid-1];
@@ -247,7 +286,7 @@ int DecodeGalileoEphemeris(int svid, const unsigned int data[20])
 		return 0;
 	iod = GET_UBITS(data[12], 16, 10);
 	if (pEph->flag == 1 && pEph->iodc == iod)	// do not decode repeat ephemeris
-		return 1;
+		return svid;
 	if (iod != GET_UBITS(data[0], 16, 10) || iod != GET_UBITS(data[4], 16, 10) || iod != GET_UBITS(data[8], 16, 10))
 		return 0;
 
@@ -291,7 +330,121 @@ int DecodeGalileoEphemeris(int svid, const unsigned int data[20])
 	pEph->omega_delta = pEph->omega_dot - WGS_OMEGDOTE;
 
 	MutexGive(EphAlmMutex);
-	return 1;
+	return svid;
+}
+
+//*************** Galileo ephemeris decode ****************
+// Parameters:
+//   AllocationType: indicate contents of Page1 and Page2, 0 for WordType 7/8, 1 for WordType 8/9, 2 for WordType 9/10
+//   Page1: data contents of first word
+//   Page2: data contents of second word
+// Return value:
+//   0 if decode unsuccessful, svid otherwise
+#define SQRT_A0 5440.588203494177338011974948823
+#define NORMINAL_I0 0.97738438111682456307726683035362
+int DecodeGalileoAlmanac(int AllocationType, const unsigned int Page1[4], const unsigned int Page2[4])
+{
+	int week, WNa, toa, svid = 0;
+	PMIDI_ALMANAC pAlm;
+	int idata;
+	unsigned int udata;
+
+	if ((week = GetReceiverWeekNumber(FREQ_E1)) < 0)
+		return 0;
+	// check week number
+	WNa = GET_UBITS(Page1[0], 20, 2);	// last 2bit of almanac week
+	if (((week + 1) & 3) == WNa)
+		week  ++;
+	else if (((week - 1) & 3) == WNa)
+		week  --;
+	else if ((week & 3) != WNa)
+		return 0;
+
+	toa = GET_UBITS(Page1[0], 10, 10) * 600;
+	switch (AllocationType)
+	{
+	case 0:
+		svid = GET_UBITS(Page1[0], 4, 6);
+		break;
+	case 1:
+		svid = GET_UBITS(Page1[1], 15, 6);
+		break;
+	case 2:
+		svid = GET_UBITS(Page1[2], 19, 6);
+		break;
+	}
+	if (svid < 1 || svid > 36)
+		return 0;
+	pAlm = &g_GalileoAlmanac[svid - 1];
+	if (pAlm->week == week && pAlm->toa == toa)	// repeat almanac
+		return svid;
+
+	MutexTake(EphAlmMutex);
+
+	pAlm->svid = svid;
+	pAlm->week = week;
+	pAlm->toa = toa;
+	switch (AllocationType)
+	{
+		case 0:
+			idata = (GET_BITS(Page1[0], 0, 4) << 9) | GET_UBITS(Page1[1], 23, 9);
+			pAlm->sqrtA = ScaleDoubleU(idata, 9) + SQRT_A0;
+			pAlm->ecc = ScaleDoubleU(GET_UBITS(Page1[1], 12, 11), 16);
+			idata = (GET_BITS(Page1[1], 0, 12) << 4) | GET_UBITS(Page1[2], 28, 4);
+			pAlm->w = ScaleDouble(idata, 15) * PI;
+			pAlm->i0 = NORMINAL_I0 + ScaleDouble(GET_BITS(Page1[2], 17, 11), 14) * PI;
+			pAlm->omega0 = ScaleDouble(GET_BITS(Page1[2], 1, 16), 15) * PI;
+			idata = (GET_BITS(Page1[2], 0, 1) << 10) | GET_UBITS(Page1[3], 22, 10);
+			pAlm->omega_dot = ScaleDouble(idata, 33) * PI;
+			pAlm->M0 = ScaleDouble(GET_BITS(Page1[3], 6, 16), 15) * PI;
+			pAlm->af0 = ScaleDouble(GET_BITS(Page2[0], 6, 16), 19);
+			idata = (GET_BITS(Page2[0], 0, 6) << 7) | GET_UBITS(Page2[1], 25, 7);
+			pAlm->af1 = ScaleDouble(idata, 38);
+			pAlm->health = GET_UBITS(Page2[1], 21, 2);
+			break;
+		case 1:
+			pAlm->sqrtA = ScaleDoubleU(GET_BITS(Page1[1], 2, 13), 9) + SQRT_A0;
+			udata = (GET_UBITS(Page1[1], 0, 2) << 9) | GET_UBITS(Page1[2], 23, 9);
+			pAlm->ecc = ScaleDoubleU(udata, 16);
+			pAlm->w = ScaleDouble(GET_BITS(Page1[2], 7, 16), 15) * PI;
+			idata = (GET_BITS(Page1[2], 0, 7) << 4) | GET_UBITS(Page1[3], 28, 4);
+			pAlm->i0 = NORMINAL_I0 + ScaleDouble(idata, 14) * PI;
+			pAlm->omega0 = ScaleDouble(GET_BITS(Page1[3], 12, 16), 15) * PI;
+			pAlm->omega_dot = ScaleDouble(GET_BITS(Page1[3], 1, 11), 33) * PI;
+			idata = (GET_BITS(Page2[0], 0, 10) << 6) | GET_UBITS(Page2[1], 26, 6);
+			pAlm->M0 = ScaleDouble(idata, 15) * PI;
+			pAlm->af0 = ScaleDouble(GET_BITS(Page2[1], 10, 16), 19);
+			idata = (GET_BITS(Page2[1], 0, 10) << 3) | GET_UBITS(Page2[2], 29, 3);
+			pAlm->af1 = ScaleDouble(idata, 38);
+			pAlm->health = GET_UBITS(Page2[2], 25, 2);
+			break;
+		case 2:
+			pAlm->sqrtA = ScaleDoubleU(GET_BITS(Page1[2], 6, 13), 9) + SQRT_A0;
+			udata = (GET_UBITS(Page1[2], 0, 6) << 5) | GET_UBITS(Page1[3], 27, 5);
+			pAlm->ecc = ScaleDoubleU(udata, 16);
+			pAlm->w = ScaleDouble(GET_BITS(Page1[3], 11, 16), 15) * PI;
+			pAlm->i0 = NORMINAL_I0 + ScaleDouble(GET_BITS(Page1[3], 0, 11), 14) * PI;
+			pAlm->omega0 = ScaleDouble(GET_BITS(Page2[0], 6, 16), 15) * PI;
+			idata = (GET_BITS(Page2[0], 0, 6) << 5) | GET_UBITS(Page2[1], 27, 5);
+			pAlm->omega_dot = ScaleDouble(idata, 33) * PI;
+			pAlm->M0 = ScaleDouble(GET_BITS(Page2[1], 11, 16), 15) * PI;
+			idata = (GET_BITS(Page2[1], 0, 11) << 5) | GET_UBITS(Page2[2], 27, 5);
+			pAlm->af0 = ScaleDouble(idata, 19);
+			pAlm->af1 = ScaleDouble(GET_BITS(Page2[2], 14, 13), 38);
+			pAlm->health = GET_UBITS(Page2[2], 10, 2);
+			break;
+	}
+
+	pAlm->flag = 1;
+	// calculate derived variables
+	pAlm->axis = pAlm->sqrtA * pAlm->sqrtA;
+	pAlm->n = WGS_SQRT_GM / (pAlm->sqrtA * pAlm->axis);
+	pAlm->root_ecc = sqrt(1.0 - pAlm->ecc * pAlm->ecc);
+	pAlm->omega_t = pAlm->omega0 - WGS_OMEGDOTE * (pAlm->toa);
+	pAlm->omega_delta = pAlm->omega_dot - WGS_OMEGDOTE;
+
+	MutexGive(EphAlmMutex);
+	return svid;
 }
 
 //*************** Galileo Viterbi decode for one page ****************
@@ -303,27 +456,15 @@ int DecodeGalileoEphemeris(int svid, const unsigned int data[20])
 //   minimum distance
 int GalViterbiDecode(unsigned int SymbolBuffer[30], unsigned int DecodeResult[4])
 {
-	unsigned int Symbols[30], DataWord = SymbolBuffer[0];	// store deinterleaved symbols
-	int i, j, index = 0;
+//	unsigned int Symbols[30], DataWord = SymbolBuffer[0];	// store deinterleaved symbols
+	int i, index = 0;
 	int TotalMinDistance, MinState;
 
 	memset(Distance, 1, sizeof(Distance));
 	Distance[0] = 0;	// set Distance a big value except index 0 to ensure start state is 0
-	// deinterleaving
-	for (i = 0; i < 8; i ++)
-	{
-		for (j = 0; j < 30; j ++)
-		{
-			Symbols[j] = (Symbols[j] << 4) | (DataWord >> 28);
-			DataWord <<= 4;
-			if (((++index) & 7) == 0)
-				DataWord = SymbolBuffer[index >> 3];
-		}
-	}
-
 	for (i = 0; i < 30 * 4; i ++)
 	{
-		ViterbiDecodePair(Symbols[i>>2] >> (24 - (i & 3)*8));
+		ViterbiDecodePair(SymbolBuffer[i>>2] >> (24 - (i & 3)*8));
 		if (i >= 63 && ((i & 7) == 7))	// to reduce the number of comparision, do it every 8 bits
 		{
 			MinState = FindMinIndex();

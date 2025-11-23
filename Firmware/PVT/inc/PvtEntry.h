@@ -13,7 +13,7 @@
 
 // basic PVT entry functions
 void MsrProcInit();
-void PvtProcInit(PRECEIVER_INFO pReceiverInfo);
+void PvtProcInit(StartType Start, PSYSTEM_TIME CurTime, LLH *CurPosition);
 void PvtProc(int CurMsInterval, int ClockAdjust);
 void GpsDecodeInit();
 void BdsDecodeInit();

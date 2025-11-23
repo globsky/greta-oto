@@ -18,18 +18,50 @@ static double GpsIonoDelay(PGPS_IONO_PARAM pIonoParam, LLH *ReceiverPos, int Wee
 static double TropoDelay(double Elevation, PRECEIVER_INFO pReceiverInfo);
 static double GetTropoParam(int ParamIndex, int LatDegree, double SeasonVar);
 
+//*************** Calculate satellite information with ephemeris ****************
+// Parameters:
+//   Observation: pointer to raw measurement
+//   Ephemeris: pointer to ephemeris
+//   SatelliteInfo: pointer to satellite information
+// Return value:
+//   none
+void CalcSatInfo(PCHANNEL_STATUS Observation, PGNSS_EPHEMERIS Ephemeris, PSATELLITE_INFO SatelliteInfo)
+{
+	int sv_index;
+	int EphOK = 1;
+	double Time, Trel;
+
+	sv_index = Observation->svid - 1;
+	// calculate signal transmit time and correct satellite clock error
+	Time = (Observation->TransmitTimeMs + Observation->TransmitTime) * 0.001;
+	Observation->DeltaT = ClockCorrection(&(Ephemeris[sv_index]), Time);
+	Time -= Observation->DeltaT;
+	// use transmit time to calculate satellite position and velocity
+	EphOK = SatPosSpeedEph(Time, &(Ephemeris[sv_index]), &(SatelliteInfo[sv_index].PosVel));
+	// apply relativistic correction to clock
+	Trel = WGS_F_GTR * Ephemeris[sv_index].ecc * Ephemeris[sv_index].sqrtA * sin(Ephemeris[sv_index].Ek);
+	Observation->DeltaT += Trel;
+	// compensate satellite transmit time calculation with Trel difference (before calling SatPosSpeedEph(), Ek is not calculated)
+	// generally this is not necessory because the compensation is very small
+//	SatelliteInfo[sv_index].PosVel.x -= Trel * SatelliteInfo[sv_index].PosVel.vx;
+//	SatelliteInfo[sv_index].PosVel.y -= Trel * SatelliteInfo[sv_index].PosVel.vy;
+//	SatelliteInfo[sv_index].PosVel.z -= Trel * SatelliteInfo[sv_index].PosVel.vz;
+	// The time tag that used to calculate el/az and set flag assigned with GPS/BDS receiver time
+	SatelliteInfo[sv_index].Time = FREQ_ID_IS_B1C(Observation->FreqID) ? GnssTime.BdsMsCount : GnssTime.GpsMsCount;
+	SatelliteInfo[sv_index].SatInfoFlag = SAT_INFO_POSVEL_VALID | SAT_INFO_BY_EPH | (EphOK ? 0 : SAT_INFO_EPH_EXPIRE);
+	if (g_ReceiverInfo.PosQuality > ExtSetPos)
+		SatElAz(&(g_ReceiverInfo.PosVel), &(SatelliteInfo[sv_index]));
+}
+
 //*************** Calculate satellite information of given satellite list ****************
 // Parameters:
 //   ObservationList: raw measurement pointer array
 //   ObsCount: number of observations
 // Return value:
 //   none
-void CalcSatelliteInfo(PCHANNEL_STATUS ObservationList[], int ObsCount)
+void CalcSatellitesInfo(PCHANNEL_STATUS ObservationList[], int ObsCount)
 {
 	int i;
-	int sv_index;
-	int EphOK = 1;
-	double Time, Trel;
 	PGNSS_EPHEMERIS Ephemeris = g_GpsEphemeris;
 	PSATELLITE_INFO SatelliteInfo = g_GpsSatelliteInfo;
 
@@ -55,27 +87,7 @@ void CalcSatelliteInfo(PCHANNEL_STATUS ObservationList[], int ObsCount)
 			// will not go here
 			break;
 		}
-
-		sv_index = ObservationList[i]->svid - 1;
-		// calculate signal transmit time and correct satellite clock error
-		Time = (ObservationList[i]->TransmitTimeMs + ObservationList[i]->TransmitTime) * 0.001;
-		ObservationList[i]->DeltaT = ClockCorrection(&(Ephemeris[sv_index]), Time);
-		Time -= ObservationList[i]->DeltaT;
-		// use transmit time to calculate satellite position and velocity
-		EphOK = SatPosSpeedEph(Time, &(Ephemeris[sv_index]), &(SatelliteInfo[sv_index].PosVel));
-		// apply relativistic correction to clock
-		Trel = WGS_F_GTR * Ephemeris[sv_index].ecc * Ephemeris[sv_index].sqrtA * sin(Ephemeris[sv_index].Ek);
-		ObservationList[i]->DeltaT += Trel;
-		// compensate satellite transmit time calculation with Trel difference (before calling SatPosSpeedEph(), Ek is not calculated)
-		// generally this is not necessory because the compensation is very small
-//		SatelliteInfo[sv_index].PosVel.x -= Trel * SatelliteInfo[sv_index].PosVel.vx;
-//		SatelliteInfo[sv_index].PosVel.y -= Trel * SatelliteInfo[sv_index].PosVel.vy;
-//		SatelliteInfo[sv_index].PosVel.z -= Trel * SatelliteInfo[sv_index].PosVel.vz;
-		// this is the time tag that used to calculate el/az and set flag
-		SatelliteInfo[sv_index].Time = ObservationList[i]->TransmitTimeMs;
-		SatelliteInfo[sv_index].SatInfoFlag = SAT_INFO_POSVEL_VALID | SAT_INFO_BY_EPH | (EphOK ? 0 : SAT_INFO_EPH_EXPIRE);
-		if (g_ReceiverInfo.PosQuality >= ExtSetPos)
-			SatElAz(&(g_ReceiverInfo.PosVel), &(SatelliteInfo[sv_index]));
+		CalcSatInfo(ObservationList[i], Ephemeris, SatelliteInfo);
 	}
 }
 

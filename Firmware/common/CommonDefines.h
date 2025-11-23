@@ -197,15 +197,30 @@ typedef struct
 //==========================
 // satellite prediction and aiding
 //==========================
+// satellite prediction and aiding
 typedef struct
 {
-	U8 FreqID;	// system and frequency
-	U8 Svid;	// SVID start from 1
-	U16 TimeTag;
-	unsigned int Flag;
-	double Doppler;			// predicted doppler in Hz
-	double PredictPsr;		// predicted PSR with clock error adjustment
+	U16 Flag;			// flag for Doppler and PSR accuracy
+	S16 Doppler;		// predicted doppler in Hz
+	U32 TickCount;		// baseband tick count for this prediction
+	int WeekMsCounter;	// whole millisecond of transmit time of signal received at epoch TickCount
+	U32 CodePhase;		// code phase within 1ms, in unit of 1/16 chip
 } SAT_PREDICT_PARAM, *PSAT_PREDICT_PARAM;
+
+// Flag to indicate the quality of the predicted observation
+#define PREDICT_FLAG_UNKNOWN	0x00	// no estimation
+#define PREDICT_FLAG_COARSE		0x01	// calculated from almanac and estimated position and time (Doppler accuracy within +-500Hz)
+#define PREDICT_FLAG_FINE		0x02	// calculated from eph/alm and more accurate position and time (Doppler accuracy within 200Hz)
+#define PREDICT_FLAG_ACCURATE	0x03	// calculated from eph and accurate position and time (Doppler accuracy within 10Hz and PSR within 50m)
+#define PREDICT_FLAG_MASK       0x03	// mask for PREDICT_FLAG_XXX
+// Flags of satellite predicted state
+#define PREDICT_STATE_VISIBAL   0x10
+#define PREDICT_STATE_UNHEALTHY 0x20
+// Flags of satellite tracking state
+#define PREDICT_STATE_ALLOCATE  0x40
+#define PREDICT_STATE_TRACKING  0x80
+// number of CodePhase units within 1ms
+#define PREDICT_CODE_UNIT (1023 * 16)
 
 typedef enum
 {
@@ -231,6 +246,19 @@ typedef struct
 	double lon;
 	double hae;
 } LLH;
+
+//==========================
+// offset to store different parameters
+//==========================
+#define PARAM_OFFSET_CONFIG		1024*0
+#define PARAM_OFFSET_RCVRINFO	1024*1
+#define PARAM_OFFSET_IONOUTC	1024*2
+#define PARAM_OFFSET_GPSALM		1024*4
+#define PARAM_OFFSET_BDSALM		1024*8
+#define PARAM_OFFSET_GALALM		1024*16
+#define PARAM_OFFSET_GPSEPH		1024*24
+#define PARAM_OFFSET_BDSEPH		1024*32
+#define PARAM_OFFSET_GALEPH		1024*48
 
 #pragma pack(pop)	//restore original alignment
 

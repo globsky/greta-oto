@@ -136,7 +136,7 @@ void EnableRF()
 		if (DebugFunc)
 			DebugFunc((void *)(&Baseband), ProcessCount);
 		ProcessCount ++;
-		if (ProcessCount == 50000)
-			break;
+//		if (ProcessCount == 50000)
+//			break;
 	}
 }

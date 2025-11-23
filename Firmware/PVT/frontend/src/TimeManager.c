@@ -224,7 +224,7 @@ int GetReceiverWeekMs(U8 FreqID, unsigned int TickCount)
 int GetReceiverWeekNumber(U8 FreqID)
 {
 	if (GnssTime.TimeFlag & TIME_WEEK_NUM_VALID)
-		return FREQ_ID_IS_B1C(FreqID) ? GnssTime.BdsWeekNumber : GnssTime.GpsWeekNumber;
+		return FREQ_ID_IS_B1C(FreqID) ? GnssTime.BdsWeekNumber : FREQ_ID_IS_E1(FreqID) ? GnssTime.GpsWeekNumber - 1024 : GnssTime.GpsWeekNumber;
 	else
 		return -1;
 }

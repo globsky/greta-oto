@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "HWCtrl.h"
+#include "PlatformCtrl.h"
 #include "ConstTable.h"
 #include "TaskManager.h"
 #include "TEManager.h"
@@ -20,6 +22,7 @@ DATA_FOR_DECODE DataForDecode;
 extern int DoDataDecode(void* Param);
 extern int MeasProcTask(void *Param);
 extern void DoAllTasks();
+extern void SaveAllParameters();
 
 enum TimeAccuracy GetTimeQuality(char TimeQuanlity);
 
@@ -49,10 +52,10 @@ int main(int argc, char *argv[])
 		ChannelStateArray[i].LogicChannel = i;
 		BasebandMeasurement[i].ChannelState = &ChannelStateArray[i];
 	}
+	InitStreamPorts();
 	TaskInitialize();
 	MsrProcInit();
-	PvtProcInit(NULL);
-	fp_debug = stdout;
+	PvtProcInit(ColdStart, &InitTime, &InitPosition);
 	NominalMeasInterval = DEFAULT_MEAS_INTERVAL;
 
 	while (!feof(fp_bbmsg))
@@ -98,6 +101,7 @@ int main(int argc, char *argv[])
 		}
 		DoAllTasks();
 	}
+	SaveAllParameters();
 }
 
 PCHANNEL_STATE GetChannelStateArray(int Group)

@@ -35,5 +35,12 @@ EXTERN PVT_CORE_DATA g_PvtCoreData;
 EXTERN unsigned int g_GpsSatInView;
 EXTERN unsigned long long g_GalileoSatInView;
 EXTERN unsigned long long g_BdsSatInView;
+// parameters of satellite prediction
+EXTERN SAT_PREDICT_PARAM g_GpsSatParam[TOTAL_GPS_SAT_NUMBER];
+EXTERN SAT_PREDICT_PARAM g_GalileoSatParam[TOTAL_GAL_SAT_NUMBER];
+EXTERN SAT_PREDICT_PARAM g_BdsSatParam[TOTAL_BDS_SAT_NUMBER];
+
+// following macro used to get corresponding array with give System
+#define GET_SYSTEM_ARRAY(System, GpsArray, BdsArray, GalileoArray) ((System == SYSTEM_GPS) ? GpsArray : (System == SYSTEM_BDS) ? BdsArray : GalileoArray)
 
 #endif //__GLOBAL_VAR_H__

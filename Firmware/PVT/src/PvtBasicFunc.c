@@ -7,7 +7,9 @@
 //----------------------------------------------------------------------
 
 #include <math.h>
+#include "PlatformCtrl.h"
 #include "DataTypes.h"
+#include "GlobalVar.h"
 
 static unsigned int GetParity(unsigned int word);
 
@@ -206,4 +208,36 @@ unsigned int Crc24qEncode(unsigned int *BitStream, int Length)
 	}
 
 	return crc_result & 0xffffff;
+}
+
+void LoadAllParameters()
+{
+	LoadParameters(PARAM_OFFSET_CONFIG, &g_PvtConfig, sizeof(g_PvtConfig));
+	LoadParameters(PARAM_OFFSET_RCVRINFO, &g_ReceiverInfo, sizeof(g_ReceiverInfo));
+	LoadParameters(PARAM_OFFSET_IONOUTC, &g_GpsIonoParam, sizeof(g_GpsIonoParam));
+	LoadParameters(PARAM_OFFSET_IONOUTC+sizeof(g_GpsIonoParam), &g_BdsIonoParam, sizeof(g_BdsIonoParam));
+	LoadParameters(PARAM_OFFSET_IONOUTC+sizeof(g_GpsIonoParam)+sizeof(g_BdsIonoParam), &g_GpsUtcParam, sizeof(g_GpsUtcParam));
+	LoadParameters(PARAM_OFFSET_IONOUTC+sizeof(g_GpsIonoParam)+sizeof(g_BdsIonoParam)+sizeof(g_GpsUtcParam), &g_BdsUtcParam, sizeof(g_BdsUtcParam));
+	LoadParameters(PARAM_OFFSET_GPSALM, &g_GpsAlmanac, sizeof(g_GpsAlmanac));
+	LoadParameters(PARAM_OFFSET_BDSALM, &g_BdsAlmanac, sizeof(g_BdsAlmanac));
+	LoadParameters(PARAM_OFFSET_GALALM, &g_GalileoAlmanac, sizeof(g_GalileoAlmanac));
+	LoadParameters(PARAM_OFFSET_GPSEPH, &g_GpsEphemeris, sizeof(g_GpsEphemeris));
+	LoadParameters(PARAM_OFFSET_BDSEPH, &g_BdsEphemeris, sizeof(g_BdsEphemeris));
+	LoadParameters(PARAM_OFFSET_GALEPH, &g_GalileoEphemeris, sizeof(g_GalileoEphemeris));
+}
+
+void SaveAllParameters()
+{
+	SaveParameters(PARAM_OFFSET_CONFIG, &g_PvtConfig, sizeof(g_PvtConfig));
+	SaveParameters(PARAM_OFFSET_RCVRINFO, &g_ReceiverInfo, sizeof(g_ReceiverInfo));
+	SaveParameters(PARAM_OFFSET_IONOUTC, &g_GpsIonoParam, sizeof(g_GpsIonoParam));
+	SaveParameters(PARAM_OFFSET_IONOUTC+sizeof(g_GpsIonoParam), &g_BdsIonoParam, sizeof(g_BdsIonoParam));
+	SaveParameters(PARAM_OFFSET_IONOUTC+sizeof(g_GpsIonoParam)+sizeof(g_BdsIonoParam), &g_GpsUtcParam, sizeof(g_GpsUtcParam));
+	SaveParameters(PARAM_OFFSET_IONOUTC+sizeof(g_GpsIonoParam)+sizeof(g_BdsIonoParam)+sizeof(g_GpsUtcParam), &g_BdsUtcParam, sizeof(g_BdsUtcParam));
+	SaveParameters(PARAM_OFFSET_GPSALM, &g_GpsAlmanac, sizeof(g_GpsAlmanac));
+	SaveParameters(PARAM_OFFSET_BDSALM, &g_BdsAlmanac, sizeof(g_BdsAlmanac));
+	SaveParameters(PARAM_OFFSET_GALALM, &g_GalileoAlmanac, sizeof(g_GalileoAlmanac));
+	SaveParameters(PARAM_OFFSET_GPSEPH, &g_GpsEphemeris, sizeof(g_GpsEphemeris));
+	SaveParameters(PARAM_OFFSET_BDSEPH, &g_BdsEphemeris, sizeof(g_BdsEphemeris));
+	SaveParameters(PARAM_OFFSET_GALEPH, &g_GalileoEphemeris, sizeof(g_GalileoEphemeris));
 }

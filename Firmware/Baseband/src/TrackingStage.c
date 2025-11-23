@@ -43,7 +43,7 @@ PTRACKING_CONFIG TrackingConfig[][4] = {	// pointer to TrackingConfigTable for d
 	&TrackingConfigTable[5], &TrackingConfigTable[5], &TrackingConfigTable[5], &TrackingConfigTable[5],	// track 2
 };
 
-void SetNHConfig(PCHANNEL_STATE ChannelState, int NHPos, const unsigned int *NHCode);
+void SetNHConfig(PCHANNEL_STATE ChannelState, int NHIndex, int NHPos, const unsigned int *NHCode);
 void CalculateLoopCoefficients(PCHANNEL_STATE ChannelState, PTRACKING_CONFIG CurTrackingConfig);
 static int StageSwitchCondition(PCHANNEL_STATE ChannelState);
 
@@ -127,10 +127,8 @@ void SwitchTrackingStage(PCHANNEL_STATE ChannelState, unsigned int TrackingStage
 				ChannelState->TrackingTime = ChannelState->BitSyncResult % 20;		// reset tracking time from previous 20ms boundary
 				STATE_BUF_SET_COH_COUNT(&(ChannelState->StateBufferCache), CohCount);
 				STATE_BUF_SET_NH_COUNT(&(ChannelState->StateBufferCache), ChannelState->BitSyncResult / 4);
-				ChannelState->FrameCounter = ChannelState->BitSyncResult / 4;
 				ChannelState->State |= STATE_CACHE_STATE_DIRTY;
 				ChannelState->DataStream.BitCount = ChannelState->DataStream.CurrentAccTime = 0;	// reset data count for data stream decode
-//				ChannelState->DataStream.StartIndex = ChannelState->FrameCounter;
 			}
 		}
 	}
@@ -158,8 +156,8 @@ void SwitchTrackingStage(PCHANNEL_STATE ChannelState, unsigned int TrackingStage
 			SetRegValue((U32)(&(ChannelState->StateBufferHW->CarrierPhase)), StateValue);
 			// enable NH
 			Time %= 1800;	// determine bit position at current time
-			ChannelState->FrameCounter = Time;
-			SetNHConfig(ChannelState, Time, B1CSecondCode[ChannelState->Svid-1]);
+			ChannelState->NHIndex = Time / 20;
+			SetNHConfig(ChannelState, ChannelState->NHIndex, Time - ChannelState->NHIndex * 20, B1CSecondCode[ChannelState->Svid-1]);
 			ChannelState->BitSyncResult = 0;
 			ChannelState->DataStream.BitCount = ChannelState->DataStream.CurrentAccTime = 0;	// reset data count for data stream decode
 		}

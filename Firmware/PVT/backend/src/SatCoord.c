@@ -158,7 +158,7 @@ int SatPosSpeedEph(double TransmitTime, PGNSS_EPHEMERIS pEph, PKINEMATIC_INFO pP
 //   pointer to satellite position and velocity
 // Return value:
 //   none
-void GpsSatPosSpeedAlm(int WeekNumber, int TransmitTime, PMIDI_ALMANAC pAlm, PKINEMATIC_INFO pPosVel)
+void SatPosSpeedAlm(int WeekNumber, int TransmitTime, PMIDI_ALMANAC pAlm, PKINEMATIC_INFO pPosVel)
 {
 	int i;
 	int delta_t;

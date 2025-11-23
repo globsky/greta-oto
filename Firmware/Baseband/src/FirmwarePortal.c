@@ -20,20 +20,8 @@
 #include "GlobalVar.h"
 #include "SystemConfig.h"
 
-#define PARAM_OFFSET_CONFIG		1024*0
-#define PARAM_OFFSET_RCVRINFO	1024*1
-#define PARAM_OFFSET_IONOUTC	1024*2
-#define PARAM_OFFSET_GPSALM		1024*4
-#define PARAM_OFFSET_BDSALM		1024*8
-#define PARAM_OFFSET_GALALM		1024*16
-#define PARAM_OFFSET_GPSEPH		1024*24
-#define PARAM_OFFSET_BDSEPH		1024*32
-#define PARAM_OFFSET_GALEPH		1024*48
-
-void LoadAllParameters();
-
 //*************** Baseband interrupt service routine ****************
-//* this function is a task function
+//* this function is a ISR function
 // Parameters:
 //   none
 // Return value:
@@ -63,9 +51,10 @@ void InterruptService()
 }
 
 //*************** firmware initialization ****************
-//* this function is a task function
 // Parameters:
-//   none
+//   Start: receiver start type ColdStart/WarmStart/HotStart
+//   CurTime: pointer to SYSTEM_TIME get from RTC or NULL if no valid time
+//   CurPosition: pointer to LLH receiver position if force set else NULL
 // Return value:
 //   none
 void FirmwareInitialize(StartType Start, PSYSTEM_TIME CurTime, LLH *CurPosition)
@@ -104,6 +93,7 @@ void FirmwareInitialize(StartType Start, PSYSTEM_TIME CurTime, LLH *CurPosition)
 	NominalMeasInterval = DEFAULT_MEAS_INTERVAL;
 
 	AttachBasebandISR(InterruptService);
+	LoadAllParameters();
 
 	// initial baseband hardware
 	SetRegValue(ADDR_BB_ENABLE, 0x00000100);		// enable TE
@@ -126,10 +116,9 @@ void FirmwareInitialize(StartType Start, PSYSTEM_TIME CurTime, LLH *CurPosition)
 	TEInitialize();
 	AEInitialize();
 	MsrProcInit();
-	PvtProcInit((PRECEIVER_INFO)0);
+	PvtProcInit(Start, CurTime, CurPosition);
 	if (Start != ColdStart)
 	{
-		LoadAllParameters();
 /*		if (Start == HotStart)
 		{
 			UtcToGpsTime(CurTime, &(g_ReceiverInfo.WeekNumber), &(g_ReceiverInfo.GpsMsCount), &g_GpsUtcParam);
@@ -137,12 +126,10 @@ void FirmwareInitialize(StartType Start, PSYSTEM_TIME CurTime, LLH *CurPosition)
 		}
 		else
 			g_ReceiverInfo.GpsTimeQuality = g_ReceiverInfo.BdsTimeQuality = g_ReceiverInfo.GalileoTimeQuality = UnknownTime;*/
-		g_ReceiverInfo.PosQuality = ExtSetPos;
-		g_ReceiverInfo.PosVel.vx = g_ReceiverInfo.PosVel.vy = g_ReceiverInfo.PosVel.vz = 0.0;
-		SatNumber = GetSatelliteInView(SatList);
-		for (i = 0; i < SatNumber; i ++)
-			sv_list[i] = FREQ_SVID(SatList[i].FreqID, SatList[i].Svid);
-		sv_list[i] = 0;
+//		SatNumber = GetSatelliteInView(SatList);
+//		for (i = 0; i < SatNumber; i ++)
+//			sv_list[i] = FREQ_SVID(SatList[i].FreqID, SatList[i].Svid);
+//		sv_list[i] = 0;
 	}
 
 	// start acquisition
@@ -196,36 +183,4 @@ void FirmwareInitialize(StartType Start, PSYSTEM_TIME CurTime, LLH *CurPosition)
 		if (pAcqConfig->AcqChNumber > 0)
 			AddAcqTask(pAcqConfig);
 	}
-}
-
-void LoadAllParameters()
-{
-	LoadParameters(PARAM_OFFSET_CONFIG, &g_PvtConfig, sizeof(g_PvtConfig));
-	LoadParameters(PARAM_OFFSET_RCVRINFO, &g_ReceiverInfo, sizeof(g_ReceiverInfo));
-	LoadParameters(PARAM_OFFSET_IONOUTC, &g_GpsIonoParam, sizeof(g_GpsIonoParam));
-	LoadParameters(PARAM_OFFSET_IONOUTC+sizeof(g_GpsIonoParam), &g_BdsIonoParam, sizeof(g_BdsIonoParam));
-	LoadParameters(PARAM_OFFSET_IONOUTC+sizeof(g_GpsIonoParam)+sizeof(g_BdsIonoParam), &g_GpsUtcParam, sizeof(g_GpsUtcParam));
-	LoadParameters(PARAM_OFFSET_IONOUTC+sizeof(g_GpsIonoParam)+sizeof(g_BdsIonoParam)+sizeof(g_GpsUtcParam), &g_BdsUtcParam, sizeof(g_BdsUtcParam));
-	LoadParameters(PARAM_OFFSET_GPSALM, &g_GpsAlmanac, sizeof(g_GpsAlmanac));
-	LoadParameters(PARAM_OFFSET_BDSALM, &g_BdsAlmanac, sizeof(g_BdsAlmanac));
-	LoadParameters(PARAM_OFFSET_GALALM, &g_GalileoAlmanac, sizeof(g_GalileoAlmanac));
-	LoadParameters(PARAM_OFFSET_GPSEPH, &g_GpsEphemeris, sizeof(g_GpsEphemeris));
-	LoadParameters(PARAM_OFFSET_BDSEPH, &g_BdsEphemeris, sizeof(g_BdsEphemeris));
-	LoadParameters(PARAM_OFFSET_GALEPH, &g_GalileoEphemeris, sizeof(g_GalileoEphemeris));
-}
-
-void SaveAllParameters()
-{
-	SaveParameters(PARAM_OFFSET_CONFIG, &g_PvtConfig, sizeof(g_PvtConfig));
-	SaveParameters(PARAM_OFFSET_RCVRINFO, &g_ReceiverInfo, sizeof(g_ReceiverInfo));
-	SaveParameters(PARAM_OFFSET_IONOUTC, &g_GpsIonoParam, sizeof(g_GpsIonoParam));
-	SaveParameters(PARAM_OFFSET_IONOUTC+sizeof(g_GpsIonoParam), &g_BdsIonoParam, sizeof(g_BdsIonoParam));
-	SaveParameters(PARAM_OFFSET_IONOUTC+sizeof(g_GpsIonoParam)+sizeof(g_BdsIonoParam), &g_GpsUtcParam, sizeof(g_GpsUtcParam));
-	SaveParameters(PARAM_OFFSET_IONOUTC+sizeof(g_GpsIonoParam)+sizeof(g_BdsIonoParam)+sizeof(g_GpsUtcParam), &g_BdsUtcParam, sizeof(g_BdsUtcParam));
-	SaveParameters(PARAM_OFFSET_GPSALM, &g_GpsAlmanac, sizeof(g_GpsAlmanac));
-	SaveParameters(PARAM_OFFSET_BDSALM, &g_BdsAlmanac, sizeof(g_BdsAlmanac));
-	SaveParameters(PARAM_OFFSET_GALALM, &g_GalileoAlmanac, sizeof(g_GalileoAlmanac));
-	SaveParameters(PARAM_OFFSET_GPSEPH, &g_GpsEphemeris, sizeof(g_GpsEphemeris));
-	SaveParameters(PARAM_OFFSET_BDSEPH, &g_BdsEphemeris, sizeof(g_BdsEphemeris));
-	SaveParameters(PARAM_OFFSET_GALEPH, &g_GalileoEphemeris, sizeof(g_GalileoEphemeris));
 }

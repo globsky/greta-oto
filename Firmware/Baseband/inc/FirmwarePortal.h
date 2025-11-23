@@ -17,8 +17,7 @@ extern TASK_QUEUE BasebandTask;
 extern TASK_QUEUE PostMeasTask;
 extern TASK_QUEUE InputOutputTask;
 
+void InterruptService();
 void FirmwareInitialize(StartType Start, PSYSTEM_TIME CurTime, LLH *CurPosition);
-void LoadAllParameters();
-void SaveAllParameters();
 
 #endif // __FIRMWARE_PORTAL_H__
