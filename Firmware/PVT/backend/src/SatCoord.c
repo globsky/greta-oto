@@ -175,9 +175,7 @@ void SatPosSpeedAlm(int WeekNumber, int TransmitTime, PMIDI_ALMANAC pAlm, PKINEM
 	delta_t += (WeekNumber - pAlm->week) * 604800;
 
 	// get Ek from Mk with recursive algorithm
-	// here pAlm->M0 and pAlm->n with unit of cycle/second
-	Mk = pAlm->M0 + (pAlm->n * delta_t);
-	Ek1 = Ek = Mk = (Mk - (int)Mk) * 2 * PI;
+	Ek1 = Ek = Mk = pAlm->M0 + (pAlm->n * delta_t);
 	for (i = 0; i < 10; i ++)
 	{
 		Ek = Mk + pAlm->ecc * sin(Ek);
@@ -194,8 +192,8 @@ void SatPosSpeedAlm(int WeekNumber, int TransmitTime, PMIDI_ALMANAC pAlm, PKINEM
 	uk = phi;
 	rk = pAlm->axis * Ek1;
 	ik = pAlm->i0;
-	rk_dot = (2 * PI) * pAlm->axis * pAlm->ecc * sin(Ek) * pAlm->n / Ek1;
-	uk_dot = (2 * PI) * pAlm->n * pAlm->root_ecc / (Ek1 * Ek1);
+	rk_dot = pAlm->axis * pAlm->ecc * sin(Ek) * pAlm->n / Ek1;
+	uk_dot = pAlm->n * pAlm->root_ecc / (Ek1 * Ek1);
 
 	// calculate Xp and Yp and corresponding derivatives
 	sin_temp = sin(uk);
@@ -205,10 +203,7 @@ void SatPosSpeedAlm(int WeekNumber, int TransmitTime, PMIDI_ALMANAC pAlm, PKINEM
 	xp_dot = rk_dot * cos_temp - yp * uk_dot;
 	yp_dot = rk_dot * sin_temp + xp * uk_dot;
 
-	// get omega, pAlm->omega_t in cycle and pAlm->omega_delta in cycle/second
 	omega = pAlm->omega_t + pAlm->omega_delta * delta_t;
-	omega -= (int)omega;
-	omega *= (2 * PI);
 	sin_temp = sin(omega);
 	cos_temp = cos(omega);
 	// get final position and speed in ECEF coordinate
@@ -217,10 +212,8 @@ void SatPosSpeedAlm(int WeekNumber, int TransmitTime, PMIDI_ALMANAC pAlm, PKINEM
 	pPosVel->y = xp * sin_temp + yp * ik * cos_temp;
 	pPosVel->vx = xp_dot * cos_temp - ik * yp_dot * sin_temp;
 	pPosVel->vy = xp_dot * sin_temp + ik * yp_dot * cos_temp;
-	sin_temp *= pAlm->omega_delta * (2 * PI);
-	cos_temp *= pAlm->omega_delta * (2 * PI);
-	pPosVel->vx -= xp * sin_temp + ik * yp * cos_temp;
-	pPosVel->vy += xp * cos_temp - ik * yp * sin_temp;
+	pPosVel->vx -= pPosVel->y * pAlm->omega_delta;
+	pPosVel->vy += pPosVel->x * pAlm->omega_delta;
 	ik = sin(pAlm->i0);
 	pPosVel->z = yp * ik;
 	pPosVel->vz = yp_dot * ik;

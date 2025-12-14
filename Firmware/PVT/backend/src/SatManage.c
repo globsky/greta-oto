@@ -47,7 +47,7 @@ void CalcSatInfo(PCHANNEL_STATUS Observation, PGNSS_EPHEMERIS Ephemeris, PSATELL
 //	SatelliteInfo[sv_index].PosVel.y -= Trel * SatelliteInfo[sv_index].PosVel.vy;
 //	SatelliteInfo[sv_index].PosVel.z -= Trel * SatelliteInfo[sv_index].PosVel.vz;
 	// The time tag that used to calculate el/az and set flag assigned with GPS/BDS receiver time
-	SatelliteInfo[sv_index].Time = FREQ_ID_IS_B1C(Observation->FreqID) ? GnssTime.BdsMsCount : GnssTime.GpsMsCount;
+	SatelliteInfo[sv_index].Time = SIGNAL_IS_B1C(Observation->Signal) ? GnssTime.BdsMsCount : GnssTime.GpsMsCount;
 	SatelliteInfo[sv_index].SatInfoFlag = SAT_INFO_POSVEL_VALID | SAT_INFO_BY_EPH | (EphOK ? 0 : SAT_INFO_EPH_EXPIRE);
 	if (g_ReceiverInfo.PosQuality > ExtSetPos)
 		SatElAz(&(g_ReceiverInfo.PosVel), &(SatelliteInfo[sv_index]));
@@ -68,18 +68,18 @@ void CalcSatellitesInfo(PCHANNEL_STATUS ObservationList[], int ObsCount)
 	// calculate satellite position and velocity
 	for (i = 0; i < ObsCount; i ++)
 	{
-		switch (ObservationList[i]->FreqID)
+		switch (ObservationList[i]->Signal)
 		{
-		case FREQ_L1CA:
-		case FREQ_L1C:
+		case SIGNAL_L1CA:
+		case SIGNAL_L1C:
 			Ephemeris = g_GpsEphemeris;
 			SatelliteInfo = g_GpsSatelliteInfo;
 			break;
-		case FREQ_B1C:
+		case SIGNAL_B1C:
 			Ephemeris = g_BdsEphemeris;
 			SatelliteInfo = g_BdsSatelliteInfo;
 			break;
-		case FREQ_E1:
+		case SIGNAL_E1:
 			Ephemeris = g_GalileoEphemeris;
 			SatelliteInfo = g_GalileoSatelliteInfo;
 			break;
@@ -99,7 +99,7 @@ void CalcSatellitesInfo(PCHANNEL_STATUS ObservationList[], int ObsCount)
 //   none
 int FilterObservation(PCHANNEL_STATUS ObservationList[], int ObsCount)
 {
-	int i, sv_index, PrevFreqID = -1, index = 0;
+	int i, sv_index, PrevSignal = -1, index = 0;
 	unsigned long long GpsInUseMask = g_PvtConfig.GpsSatMaskOut, BdsInUseMask = g_PvtConfig.BdsSatMaskOut, GalileoInUseMask = g_PvtConfig.GalileoSatMaskOut;
 	unsigned long long *pInUseMask = &GpsInUseMask;
 	PSATELLITE_INFO SatelliteInfo = g_GpsSatelliteInfo;
@@ -109,15 +109,15 @@ int FilterObservation(PCHANNEL_STATUS ObservationList[], int ObsCount)
 	for (i = 0; i < ObsCount; i ++)
 	{
 		// observations are arranged to put same system together and with order GPS, BDS, Galileo
-		if (ObservationList[i]->FreqID == FREQ_B1C && PrevFreqID != FREQ_B1C)
+		if (ObservationList[i]->Signal == SIGNAL_B1C && PrevSignal != SIGNAL_B1C)
 		{
-			PrevFreqID = FREQ_B1C;
+			PrevSignal = SIGNAL_B1C;
 			pInUseMask = &BdsInUseMask;
 			SatelliteInfo = g_BdsSatelliteInfo;
 		}
-		else if (ObservationList[i]->FreqID == FREQ_E1 && PrevFreqID != FREQ_E1)
+		else if (ObservationList[i]->Signal == SIGNAL_E1 && PrevSignal != SIGNAL_E1)
 		{
-			PrevFreqID = FREQ_E1;
+			PrevSignal = SIGNAL_E1;
 			pInUseMask = &GalileoInUseMask;
 			SatelliteInfo = g_GalileoSatelliteInfo;
 		}
@@ -164,14 +164,14 @@ void ApplyCorrection(PCHANNEL_STATUS ObservationList[], int ObsCount)
 		sv_index = ObservationList[i]->svid - 1;
 
 		// group delay
-		if (ObservationList[i]->FreqID == FREQ_L1CA || ObservationList[i]->FreqID == FREQ_L1C)
+		if (ObservationList[i]->Signal == SIGNAL_L1CA || ObservationList[i]->Signal == SIGNAL_L1C)
 			ObservationList[i]->DeltaT -= g_GpsEphemeris[sv_index].tgd;
-		else if (ObservationList[i]->FreqID == FREQ_B1C)
+		else if (ObservationList[i]->Signal == SIGNAL_B1C)
 		{
 			ObservationList[i]->DeltaT -= g_BdsEphemeris[sv_index].tgd;
 			SatelliteInfo = g_BdsSatelliteInfo;
 		}
-		else if (ObservationList[i]->FreqID == FREQ_E1)
+		else if (ObservationList[i]->Signal == SIGNAL_E1)
 		{
 			ObservationList[i]->DeltaT -= g_GalileoEphemeris[sv_index].tgd;
 			SatelliteInfo = g_GalileoSatelliteInfo;

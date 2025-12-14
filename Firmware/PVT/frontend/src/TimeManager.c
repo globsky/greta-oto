@@ -107,13 +107,13 @@ void PredictReceiverTime(unsigned int TickCount, int RcvrIntervalMs)
 //* This funcvtion will be called when week ms of receiver time is initialize
 //* usually when TOW first get in frame process
 // Parameters:
-//   FreqID: Frequency ID of the week ms belongs
+//   Signal: Signal ID of the week ms belongs
 //   WeekNumber: week number, -1 if parameter invalid
 //   CurTimeMs: week milliseond, -1 if parameter invalid
 //   TickCount: baseband tick count coincide to current epoch
 // Return value:
 //   0
-int SetReceiverTime(U8 FreqID, int WeekNumber, int CurWeekMs, unsigned int TickCount)
+int SetReceiverTime(U8 Signal, int WeekNumber, int CurWeekMs, unsigned int TickCount)
 {
 	MutexTake(TimeMutex);
 
@@ -125,7 +125,7 @@ int SetReceiverTime(U8 FreqID, int WeekNumber, int CurWeekMs, unsigned int TickC
 			if (WeekNumber >= 0)
 				WeekNumber ++;
 		}
-		if (FREQ_ID_IS_B1C(FreqID))	// BDS time
+		if (SIGNAL_IS_B1C(Signal))	// BDS time
 		{
 			GnssTime.BdsMsCount = CurWeekMs;
 			GnssTime.GpsMsCount = CurWeekMs + 14000;
@@ -154,10 +154,10 @@ int SetReceiverTime(U8 FreqID, int WeekNumber, int CurWeekMs, unsigned int TickC
 		return 0;
 	}
 
-	if (FREQ_ID_IS_E1(FreqID))	// Galileo week is 1024 smaller than GPS week
+	if (SIGNAL_IS_E1(Signal))	// Galileo week is 1024 smaller than GPS week
 		WeekNumber += 1024;
 
-	if (FREQ_ID_IS_B1C(FreqID))
+	if (SIGNAL_IS_B1C(Signal))
 	{
 		if (GnssTime.BdsWeekNumber < 0 || GnssTime.BdsWeekNumber != WeekNumber)	// BDS week not valid or does not match
 		{
@@ -185,18 +185,18 @@ int SetReceiverTime(U8 FreqID, int WeekNumber, int CurWeekMs, unsigned int TickC
 
 //*************** Get week millisecond of at specified epoch ****************
 // Parameters:
-//   FreqID: Frequency ID of the week ms to be get
+//   Signal: Frequency ID of the week ms to be get
 //   TickCount: baseband tick count indicating the time of epoch
 // Return value:
 //   Week ms at the epoch or -1 if week ms is invalid
-int GetReceiverWeekMs(U8 FreqID, unsigned int TickCount)
+int GetReceiverWeekMs(U8 Signal, unsigned int TickCount)
 {
 	int WeekMs = -1;
 
 	if (GnssTime.TimeQuality < CoarseTime)
 		return -1;
 
-	if (FREQ_ID_IS_B1C(FreqID))
+	if (SIGNAL_IS_B1C(Signal))
 	{
 		WeekMs = GnssTime.BdsMsCount + (int)(TickCount - GnssTime.TickCount);
 		if (WeekMs < 0)
@@ -218,13 +218,13 @@ int GetReceiverWeekMs(U8 FreqID, unsigned int TickCount)
 
 //*************** Get current week number ****************
 // Parameters:
-//   FreqID: Frequency ID of the week ms to be get
+//   Signal: Signal ID of the week ms to be get
 // Return value:
 //   Current week number or -1 if week number is invalid
-int GetReceiverWeekNumber(U8 FreqID)
+int GetReceiverWeekNumber(U8 Signal)
 {
 	if (GnssTime.TimeFlag & TIME_WEEK_NUM_VALID)
-		return FREQ_ID_IS_B1C(FreqID) ? GnssTime.BdsWeekNumber : FREQ_ID_IS_E1(FreqID) ? GnssTime.GpsWeekNumber - 1024 : GnssTime.GpsWeekNumber;
+		return SIGNAL_IS_B1C(Signal) ? GnssTime.BdsWeekNumber : SIGNAL_IS_E1(Signal) ? GnssTime.GpsWeekNumber - 1024 : GnssTime.GpsWeekNumber;
 	else
 		return -1;
 }

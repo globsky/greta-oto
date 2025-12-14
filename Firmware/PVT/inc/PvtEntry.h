@@ -20,7 +20,7 @@ void BdsDecodeInit();
 int BdsDecodeTask(void *Param);
 void BdsFrameDecode(int LogicChannel, unsigned short *FrameBuffer, int ResiduleBits);
 PRECEIVER_INFO GetReceiverInfo();
-double GetClockError(int FirstPriorityFreq);
-int GetSatelliteInView(SAT_PREDICT_PARAM SatList[32]);
+double GetClockError(int FirstPrioritySignal);
+int GetSatelliteInView(PSAT_PREDICT_PARAM SatList[], U8 SignalSvid[]);
 
 #endif //__PVT_ENTRY_H__

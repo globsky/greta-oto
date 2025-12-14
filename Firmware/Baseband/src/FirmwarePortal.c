@@ -20,6 +20,10 @@
 #include "GlobalVar.h"
 #include "SystemConfig.h"
 
+static void DoAllSearch();
+static void SearchSatelliteRange(U8 Signal, int StartSv, int SatNumber);
+static void SearchSatelliteInView(int SatNumber, PSAT_PREDICT_PARAM SatList[], U8 SignalSvid[]);
+
 //*************** Baseband interrupt service routine ****************
 //* this function is a ISR function
 // Parameters:
@@ -59,35 +63,9 @@ void InterruptService()
 //   none
 void FirmwareInitialize(StartType Start, PSYSTEM_TIME CurTime, LLH *CurPosition)
 {
-	int i, sv_list[32] = {
-#if 1
-		FREQ_SVID(FREQ_L1CA, 3),
-//		FREQ_SVID(FREQ_L1CA, 4),
-		FREQ_SVID(FREQ_L1CA, 7),
-		FREQ_SVID(FREQ_L1CA, 8),
-		FREQ_SVID(FREQ_L1CA, 9),
-//		FREQ_SVID(FREQ_L1CA, 14),
-		FREQ_SVID(FREQ_L1CA, 16),
-		FREQ_SVID(FREQ_L1CA, 27),
-		FREQ_SVID(FREQ_L1CA, 30),
-#endif
-#if 1
-		FREQ_SVID(FREQ_B1C, 8),
-		FREQ_SVID(FREQ_B1C, 19),
-		FREQ_SVID(FREQ_B1C, 21),
-		FREQ_SVID(FREQ_B1C, 22),
-		FREQ_SVID(FREQ_B1C, 26),
-#endif
-#if 1
-		FREQ_SVID(FREQ_E1, 1),
-		FREQ_SVID(FREQ_E1, 4),
-		FREQ_SVID(FREQ_E1, 19),
-		FREQ_SVID(FREQ_E1, 21),
-		FREQ_SVID(FREQ_E1, 27),
-#endif
-	0 };	// for debug use only
 	int SatNumber;
-	SAT_PREDICT_PARAM SatList[32];
+	PSAT_PREDICT_PARAM SatList[AE_CHANNEL_NUMBER];
+	U8 SignalSvid[AE_CHANNEL_NUMBER];
 	PACQ_CONFIG pAcqConfig = NULL;
 
 	NominalMeasInterval = DEFAULT_MEAS_INTERVAL;
@@ -117,70 +95,117 @@ void FirmwareInitialize(StartType Start, PSYSTEM_TIME CurTime, LLH *CurPosition)
 	AEInitialize();
 	MsrProcInit();
 	PvtProcInit(Start, CurTime, CurPosition);
-	if (Start != ColdStart)
+
+	// start acquisition
+	if (Start == ColdStart)
+		DoAllSearch();
+	else
 	{
-/*		if (Start == HotStart)
+		UtcToGpsTime(CurTime, &(g_ReceiverInfo.ReceiverTime->GpsWeekNumber), &(g_ReceiverInfo.ReceiverTime->GpsMsCount), &g_GpsUtcParam);
+		g_ReceiverInfo.ReceiverTime->BdsWeekNumber = g_ReceiverInfo.ReceiverTime->GpsWeekNumber - 1356;
+		g_ReceiverInfo.ReceiverTime->BdsMsCount = g_ReceiverInfo.ReceiverTime->GpsMsCount - 14000;
+		if (g_ReceiverInfo.ReceiverTime->GpsMsCount < 14000)	// BDS at previous week due to leap second difference
 		{
-			UtcToGpsTime(CurTime, &(g_ReceiverInfo.WeekNumber), &(g_ReceiverInfo.GpsMsCount), &g_GpsUtcParam);
-			g_ReceiverInfo.GpsTimeQuality = g_ReceiverInfo.BdsTimeQuality = g_ReceiverInfo.GalileoTimeQuality = ExtSetTime;
+			g_ReceiverInfo.ReceiverTime->BdsWeekNumber --;
+			g_ReceiverInfo.ReceiverTime->BdsMsCount += MS_IN_WEEK;
 		}
-		else
-			g_ReceiverInfo.GpsTimeQuality = g_ReceiverInfo.BdsTimeQuality = g_ReceiverInfo.GalileoTimeQuality = UnknownTime;*/
-//		SatNumber = GetSatelliteInView(SatList);
+		g_ReceiverInfo.ReceiverTime->TimeQuality = ExtSetTime;
+		SatNumber = GetSatelliteInView(SatList, SignalSvid);
+		SearchSatelliteInView(SatNumber, SatList, SignalSvid);
 //		for (i = 0; i < SatNumber; i ++)
 //			sv_list[i] = FREQ_SVID(SatList[i].FreqID, SatList[i].Svid);
 //		sv_list[i] = 0;
 	}
+}
 
-	// start acquisition
-	// first task search L1C/A signal
-	SatNumber = 0;
+//*************** add acquisition tasks for all satellites ****************
+// Parameters:
+//   none
+// Return value:
+//   none
+void DoAllSearch()
+{
+	SearchSatelliteRange(SIGNAL_L1CA, 1, 32);
+	SearchSatelliteRange(SIGNAL_E1, 1, 32);
+	SearchSatelliteRange(SIGNAL_B1C, 1, 32);
+	SearchSatelliteRange(SIGNAL_B1C, 33, 31);
+}
+
+//*************** add an acquisition task for a given of satellites ****************
+// Parameters:
+//   Signal: signal to search
+//   StartSv: first SVID of the search range
+//   SatNumber: number of satellites to search
+// Return value:
+//   none
+void SearchSatelliteRange(U8 Signal, int StartSv, int SatNumber)
+{
+	U8 CodeSpan = SIGNAL_IS_L1CA(Signal) ? 3 : SIGNAL_IS_E1(Signal) ? 12 : 30;
+	int i;
+	PACQ_CONFIG pAcqConfig;
+
 	if ((pAcqConfig = GetFreeAcqTask()) != NULL)
 	{
-		for (i = 0; i < 32; i ++)
+		for (i = 0; i < SatNumber; i ++)
 		{
-			if (sv_list[i] == 0)
-				break;
-			if (GET_FREQ_ID(sv_list[i]) != FREQ_L1CA)
-				continue;
-			pAcqConfig->SatConfig[SatNumber].FreqSvid = (U8)sv_list[i];
-			pAcqConfig->SatConfig[SatNumber].CodeSpan = 3;
-			pAcqConfig->SatConfig[SatNumber].CenterFreq = (Start == ColdStart) ? 0 : (int)SatList[i].Doppler;
-			SatNumber ++;
+			pAcqConfig->SatConfig[i].SignalSvid = SIGNAL_SVID(Signal, (StartSv+i));
+			pAcqConfig->SatConfig[i].CodeSpan = CodeSpan;
+			pAcqConfig->SatConfig[i].CenterFreq = 0;
 		}
-		pAcqConfig->SignalType = 0;	// for BPSK acquisition
+		pAcqConfig->SearchMode = (SIGNAL_IS_L1CA(Signal) ? SEARCH_MODE_TYPE_BPSK : SEARCH_MODE_TYPE_BOC) | SEARCH_MODE_FREQ_FULL | SEARCH_MODE_POWER_HI | SEARCH_MODE_STAGE_ACQ;
 		pAcqConfig->AcqChNumber = SatNumber;
-		pAcqConfig->CohNumber = 4;
-		pAcqConfig->NoncohNumber = 1;
-		pAcqConfig->StrideNumber = (Start == ColdStart) ? 19 : (Start == WarmStart) ? 3 : 1;
-		pAcqConfig->StrideInterval = 500;
-		if (pAcqConfig->AcqChNumber > 0)
+		AddAcqTask(pAcqConfig);
+	}
+}
+
+//*************** Add acquisition task for all satellites in view ****************
+//* assume GPS L1C/A satellites put first and followed by E1/B1C satellites
+// Parameters:
+//   SatNumber: number of satellites in view
+//   SatList: pointer array of predict parameters for valid satellites
+//   SignalSvid: array of signal/svid combination for valid satellites
+// Return value:
+//   none
+void SearchSatelliteInView(int SatNumber, PSAT_PREDICT_PARAM SatList[], U8 SignalSvid[])
+{
+	int i = 0, SatCount;
+	PACQ_CONFIG pAcqConfig;
+
+	// first task search L1C/A signal
+	SatCount = 0;
+	if ((pAcqConfig = GetFreeAcqTask()) != NULL)
+	{
+		for (; i < SatNumber; i ++)
+		{
+			if (!SIGNAL_IS_L1CA(GET_SIGNAL(SignalSvid[i])))
+				break;
+			pAcqConfig->SatConfig[SatCount].SignalSvid = SignalSvid[i];
+			pAcqConfig->SatConfig[SatCount].CodeSpan = 3;
+			pAcqConfig->SatConfig[SatCount].CenterFreq = SatList[i]->Doppler;
+			SatCount ++;
+		}
+		pAcqConfig->SearchMode = SEARCH_MODE_TYPE_BPSK | SEARCH_MODE_FREQ_NARROW | SEARCH_MODE_POWER_HI | SEARCH_MODE_STAGE_ACQ;
+		pAcqConfig->AcqChNumber = SatCount;
+		if (SatCount)
 			AddAcqTask(pAcqConfig);
 	}
-	// second task search BOC signal
-	if (SatNumber != 0)	// first AE task added, get a new task
-		pAcqConfig = GetFreeAcqTask();
-	SatNumber = 0;
+
+	// next task search E1/B1C signal
+	if (SatCount != 0)
+		pAcqConfig = GetFreeAcqTask();	// get new acq task if first task valid
+	SatCount = 0;
 	if (pAcqConfig != NULL)
 	{
-		for (i = 0; i < 32; i ++)
+		for (; i < SatNumber; i ++)
 		{
-			if (sv_list[i] == 0)
-				break;
-			if (GET_FREQ_ID(sv_list[i]) == FREQ_L1CA)
-				continue;
-			pAcqConfig->SatConfig[SatNumber].FreqSvid = (U8)sv_list[i];
-			pAcqConfig->SatConfig[SatNumber].CodeSpan = (GET_FREQ_ID(sv_list[i]) == FREQ_E1) ? 12 : 30;
-			pAcqConfig->SatConfig[SatNumber].CenterFreq = (Start == ColdStart) ? 0 : (int)SatList[i].Doppler;
-			SatNumber ++;
+			pAcqConfig->SatConfig[SatCount].SignalSvid = SignalSvid[i];
+			pAcqConfig->SatConfig[SatCount].CodeSpan = SIGNAL_IS_E1(GET_SIGNAL(SignalSvid[i])) ? 12 : 30;
+			pAcqConfig->SatConfig[SatCount].CenterFreq = SatList[i]->Doppler;
+			SatCount ++;
 		}
-		pAcqConfig->SignalType = 1;	// for BOC acquisition
-		pAcqConfig->AcqChNumber = SatNumber;
-		pAcqConfig->CohNumber = 4;
-		pAcqConfig->NoncohNumber = 2;
-		pAcqConfig->StrideNumber = (Start == ColdStart) ? 19 : (Start == WarmStart) ? 3 : 1;
-		pAcqConfig->StrideInterval = 500;
-		if (pAcqConfig->AcqChNumber > 0)
+		pAcqConfig->SearchMode = SEARCH_MODE_TYPE_BOC | SEARCH_MODE_FREQ_NARROW | SEARCH_MODE_POWER_HI | SEARCH_MODE_STAGE_ACQ;
+		pAcqConfig->AcqChNumber = SatCount;
+		if (SatCount)
 			AddAcqTask(pAcqConfig);
 	}
 }

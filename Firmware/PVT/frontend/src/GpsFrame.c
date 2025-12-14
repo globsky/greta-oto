@@ -402,7 +402,7 @@ int GpsFrameDecode(void* Param)
 		memcpy(FrameInfo->FrameData, data, sizeof(unsigned int) * 10);
 		FrameInfo->FrameFlag |= 1;
 		Week = GET_UBITS(data[7], 20, 10);
-		SetReceiverTime(FREQ_L1CA, Week + 2048, -1, 0);	// only set week number
+		SetReceiverTime(SIGNAL_L1CA, Week + 2048, -1, 0);	// only set week number
 		break;
 	case 2:
 		memcpy(FrameInfo->FrameData + 10, data, sizeof(unsigned int) * 10);

@@ -244,7 +244,7 @@
 		Move LoadAllParameters() and SaveAllParameters() to PvtBasicFunc.c
 		Move PVT related initialization code to PvtProcInit()
 		Change definition of SAT_PREDICT_PARAM as signal transmiting time at given receiver time
-		Add a function to initialize SAT_PREDICT_PARAM stucture for future satellite in view prediction
+		Add a function CalcPredictParam() to calculate SAT_PREDICT_PARAM stucture for future satellite in view prediction
 		Optimize Galileo I/NAV data decode process (place symbols in deinterleaved order directly)
 		Add Galileo I/NAV almanac decode
 		Update PostProc.c to adapt interface function change
@@ -252,3 +252,19 @@
 		Fix bug that SymbolIndex assigned incorrect value using hardware data decode
 		Fix bug that GetReceiverWeekNumber() returns incorrect Galileo week number
 		Fix bug that function SatPosSpeedAlm() uses incorrect name in implementation
+12/14/2025
+	Function and feature change
+		Freq changed to Signal because the meaning of corresponding variable actually means L1CA/E1/B1C
+		AE manager add multi-stage acquisiton support
+		Add verification stage for AE
+		Structure ACQ_CONFIG changed to support easier search configurations
+		ACQ_TASK_NUMBER increase to 4 to support code start satellite complete search
+		Add different strategy for hot/cold start satellite acquisition
+		LoseLockCounter split to CarrLoseLockCounter and CodeLoseLockCounter to prevent counter update confliction
+		CarrLoseLockCounter/CodeLoseLockCounter do not update in first 1s of each stage to prevent update before converge
+		Add function GetSatelliteInView() to support satellite in view calculation at hot start
+		Change return value of PvtFix() to reflect the number of satellites to do PVT
+	Bug fix
+		Fix bug in filling AE buffer that BOC signal need to add 1.023MHz bias to carrier frequency
+		Fix bug that CarrierFreqSave updated without assigning valid value when when BOC signal tracking switch from sideband to dualband
+		Mismatch of angle variables (M0/n/omega0/omega_dot etc.) decode as semi-cycle but used as rad in SatPosSpeedAlm()

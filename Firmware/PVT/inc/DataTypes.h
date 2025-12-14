@@ -104,7 +104,7 @@ typedef struct
 
 typedef struct
 {
-	unsigned char FreqID;			// System ID
+	unsigned char Signal;			// Signal ID
 	unsigned char svid;				// GNSS SVID
 	unsigned char SatID;			// Satellite ID for internal use, different for each satellite
 									// 1 to 32 for GPS

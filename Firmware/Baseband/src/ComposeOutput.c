@@ -38,7 +38,7 @@ int MeasPrintTask(void *Param)
 		if ((MeasParam->MeasMask & ChannelMask) == 0)
 			continue;
 		sprintf(OutputBuffer, "$PBMSR,%2d,%2d,%2d,%10u,%10u,%10u,%5d,%10u,%5d,%9d,%8x,%4d,%8u\r\n",
-			Msr[i].ChannelState->LogicChannel, Msr[i].ChannelState->Svid, Msr[i].ChannelState->FreqID,
+			Msr[i].ChannelState->LogicChannel, Msr[i].ChannelState->Svid, Msr[i].ChannelState->Signal,
 			Msr[i].CarrierFreq, Msr[i].CarrierPhase, Msr[i].CarrierCount, Msr[i].CodeCount, Msr[i].CodePhase, 2046,
 			Msr[i].WeekMsCount, Msr[i].ChannelState->State, Msr[i].ChannelState->CN0, Msr[i].ChannelState->TrackingTime);
 		WriteStreamPort(OutputBasebandMeasPort, OutputBuffer, strlen(OutputBuffer));
@@ -56,7 +56,7 @@ int BasebandDataOutput(void* Param)
 	if (!PortOpened(OutputBasebandDataPort))
 		return 0;
 	sprintf(OutputBuffer, "$PDATA,%2d,%2d,%2d,%5d,%10d,%08x\r\n",
-		DataForDecode->ChannelState->LogicChannel, DataForDecode->ChannelState->Svid, DataForDecode->ChannelState->FreqID,
+		DataForDecode->ChannelState->LogicChannel, DataForDecode->ChannelState->Svid, DataForDecode->ChannelState->Signal,
 		DataForDecode->SymbolIndex, DataForDecode->TickCount, DataForDecode->DataStream);
 	WriteStreamPort(OutputBasebandDataPort, OutputBuffer, strlen(OutputBuffer));
 	return 0;

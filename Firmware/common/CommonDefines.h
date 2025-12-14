@@ -57,35 +57,29 @@ do \
 //==========================
 // baseband configurations
 //==========================
+#define AE_CHANNEL_NUMBER 32
 #define TOTAL_CHANNEL_NUMBER 32
 
 //==========================
-// frequency ID definitions
+// signal ID definitions
 //==========================
-#define FREQ_L1CA 0
-#define FREQ_E1   1
-#define FREQ_B1C  2
-#define FREQ_L1C  3
-// frequency ID compare
-#define FREQ_ID_IS_L1CA(FreqID) ((FreqID) == FREQ_L1CA)
-#define FREQ_ID_IS_E1(FreqID) ((FreqID) == FREQ_E1)
-#define FREQ_ID_IS_B1C(FreqID) ((FreqID) == FREQ_B1C)
-#define FREQ_ID_IS_L1C(FreqID) ((FreqID) == FREQ_L1C)
-#define FREQ_ID_IS_B1C_L1C(FreqID) ((FreqID) & 2)
-// 2MSB mark as data/pilot
+#define SIGNAL_L1CA 0
+#define SIGNAL_E1   1
+#define SIGNAL_B1C  2
+#define SIGNAL_L1C  3
+// signal ID compare
+#define SIGNAL_IS_L1CA(Signal) ((Signal) == SIGNAL_L1CA)
+#define SIGNAL_IS_E1(Signal) ((Signal) == SIGNAL_E1)
+#define SIGNAL_IS_B1C(Signal) ((Signal) == SIGNAL_B1C)
+#define SIGNAL_IS_L1C(Signal) ((Signal) == SIGNAL_L1C)
+#define SIGNAL_IS_B1C_L1C(Signal) ((Signal) & 2)
+// 2MSB reserved as data/pilot
 #define FREQ_DATA_CHANNEL 0x80
 #define FREQ_PILOT_CHANNEL 0x40
-// data/pilot channel of frequency ID
-#define FREQ_E1B  (FREQ_E1  | FREQ_DATA_CHANNEL)
-#define FREQ_B1CD (FREQ_B1C | FREQ_DATA_CHANNEL)
-#define FREQ_L1CD (FREQ_L1C | FREQ_DATA_CHANNEL)
-#define FREQ_E1C  (FREQ_E1  | FREQ_PILOT_CHANNEL)
-#define FREQ_B1CP (FREQ_B1C | FREQ_PILOT_CHANNEL)
-#define FREQ_L1CP (FREQ_L1C | FREQ_PILOT_CHANNEL)
-// combined frequency ID and SVID
-#define FREQ_SVID(freq_id, svid) (((freq_id) << 6) | (svid))
-#define GET_FREQ_ID(freq_svid) (((freq_svid) >> 6) & 3)
-#define GET_SVID(freq_svid) ((freq_svid) & 0x3f)
+// combined signal ID and SVID
+#define SIGNAL_SVID(signal, svid) (((signal) << 6) | (svid))
+#define GET_SIGNAL(signal_svid) (((signal_svid) >> 6) & 3)
+#define GET_SVID(signal_svid) ((signal_svid) & 0x3f)
 #define BDS_GEO_SVID(svid) ((svid < 6) || (svid > 58))
 
 //==========================

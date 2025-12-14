@@ -107,7 +107,7 @@ typedef struct
 #define PRN_COUNT_E1(StartPhase)   (((StartPhase / 1023) << 10) + (StartPhase % 1023))
 #define PRN_COUNT_B1C(StartPhase)  (StartPhase)
 #define PRN_COUNT_L1C(StartPhase)  (StartPhase)
-#define GET_PRN_COUNT(FreqID, PrnCount) (FREQ_ID_IS_L1CA(FreqID) ? ((PrnCount >> 14)) : (FREQ_ID_IS_E1(FreqID) ? ((PrnCount) - ((PrnCount) >> 10)) : (PrnCount)))
+#define GET_PRN_COUNT(Signal, PrnCount) (SIGNAL_IS_L1CA(Signal) ? ((PrnCount >> 14)) : (SIGNAL_IS_E1(Signal) ? ((PrnCount) - ((PrnCount) >> 10)) : (PrnCount)))
 
 // constant settings in baseband
 #define PRE_SHIFT_BITS 1

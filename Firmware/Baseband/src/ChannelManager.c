@@ -57,7 +57,7 @@ void SetNHConfig(PCHANNEL_STATE ChannelState, int NHIndex, int NHPos, const unsi
 void InitChannel(PCHANNEL_STATE pChannel)
 {
 	PSTATE_BUFFER pStateBuffer = &(pChannel->StateBufferCache);
-	PTRACKING_CONFIG CurTrackingConfig = TrackingConfig[0][pChannel->FreqID];
+	PTRACKING_CONFIG CurTrackingConfig = TrackingConfig[0][pChannel->Signal];
 
 	memset(pStateBuffer, 0, sizeof(STATE_BUFFER));
 
@@ -65,25 +65,25 @@ void InitChannel(PCHANNEL_STATE pChannel)
 	STATE_BUF_SET_NH_CONFIG(pStateBuffer, 0, 0);
 	STATE_BUF_SET_DUMP_LENGTH(pStateBuffer, 1023);
 	// PRN config
-	if (FREQ_ID_IS_L1CA(pChannel->FreqID))
+	if (SIGNAL_IS_L1CA(pChannel->Signal))
 	{
 		STATE_BUF_SET_PRN_CONFIG(pStateBuffer, PRN_CONFIG_L1CA(pChannel->Svid));
 		pChannel->DataStream.TotalAccTime = 20;	// 20ms for GPS L1CA
 		pChannel->State |= DATA_STREAM_1BIT;
 	}
-	else if (FREQ_ID_IS_E1(pChannel->FreqID))
+	else if (SIGNAL_IS_E1(pChannel->Signal))
 	{
 		STATE_BUF_SET_PRN_CONFIG(pStateBuffer, PRN_CONFIG_E1(pChannel->Svid));
 		pChannel->DataStream.TotalAccTime = 4;	// 4ms for Galileo E1
 		pChannel->State |= DATA_STREAM_4BIT;
 	}
-	else if (FREQ_ID_IS_B1C(pChannel->FreqID))
+	else if (SIGNAL_IS_B1C(pChannel->Signal))
 	{
 		STATE_BUF_SET_PRN_CONFIG(pStateBuffer, PRN_CONFIG_B1C(pChannel->Svid));
 		pChannel->DataStream.TotalAccTime = 10;	// 10ms for BDS B1C
 		pChannel->State |= DATA_STREAM_8BIT;
 	}
-	else if (FREQ_ID_IS_L1C(pChannel->FreqID))
+	else if (SIGNAL_IS_L1C(pChannel->Signal))
 	{
 		STATE_BUF_SET_PRN_CONFIG(pStateBuffer, PRN_CONFIG_L1C(pChannel->Svid));
 		pChannel->DataStream.TotalAccTime = 10;	// 10ms for GPS L1C
@@ -108,7 +108,7 @@ void ConfigChannel(PCHANNEL_STATE pChannel, int Doppler, int CodePhase16x)
 	int StartPhase = CodePhase16x / 16;
 
 	// config DWORDs
-	if (FREQ_ID_IS_L1CA(pChannel->FreqID))
+	if (SIGNAL_IS_L1CA(pChannel->Signal))
 		pChannel->CarrierFreqBase = CARRIER_FREQ(Doppler);
 	else
 		pChannel->CarrierFreqBase = CARRIER_FREQ_BOC(Doppler);
@@ -116,27 +116,27 @@ void ConfigChannel(PCHANNEL_STATE pChannel, int Doppler, int CodePhase16x)
 	STATE_BUF_SET_CARRIER_FREQ(pStateBuffer, pChannel->CarrierFreqBase);
 	STATE_BUF_SET_CODE_FREQ(pStateBuffer, pChannel->CodeFreqBase);
 	// PRN config
-	if (FREQ_ID_IS_L1CA(pChannel->FreqID))
+	if (SIGNAL_IS_L1CA(pChannel->Signal))
 	{
 		StartPhase %= 1023;	// remnant of code cycle
 		STATE_BUF_SET_PRN_COUNT(pStateBuffer, PRN_COUNT_L1CA(StartPhase));
 		pChannel->SkipCount = 1;	// skip the first coherent sum result (PRN not ready until code edge for L1CA)
 	}
-	else if (FREQ_ID_IS_E1(pChannel->FreqID))
+	else if (SIGNAL_IS_E1(pChannel->Signal))
 	{
 		StartPhase %= 4092;	// remnant of code cycle
 		STATE_BUF_SET_PRN_COUNT(pStateBuffer, PRN_COUNT_E1(StartPhase));
 		pChannel->SkipCount = 4 - StartPhase / 1023;	// align to bit edge
 		pChannel->TrackingTime = StartPhase / 1023;
 	}
-	else if (FREQ_ID_IS_B1C(pChannel->FreqID))
+	else if (SIGNAL_IS_B1C(pChannel->Signal))
 	{
 		StartPhase %= 10230;	// remnant of code cycle
 		STATE_BUF_SET_PRN_COUNT(pStateBuffer, PRN_COUNT_B1C(StartPhase));
 		pChannel->SkipCount = 10 - StartPhase / 1023;	// align to bit edge
 		pChannel->TrackingTime = StartPhase / 1023;
 	}
-	else if (FREQ_ID_IS_L1C(pChannel->FreqID))
+	else if (SIGNAL_IS_L1C(pChannel->Signal))
 	{
 		StartPhase %= 10230;	// remnant of code cycle
 		STATE_BUF_SET_PRN_COUNT(pStateBuffer, PRN_COUNT_L1C(StartPhase));
@@ -341,7 +341,7 @@ int ComposeMeasurement(int ChannelID, PBB_MEASUREMENT Measurement)
 	Measurement->ChannelState = ChannelState;
 
 	Measurement->CodePhase = STATE_BUF_GET_CODE_PHASE(StateBuffer);
-	CodeCount = GET_PRN_COUNT(ChannelState->FreqID, StateBuffer->PrnCount);
+	CodeCount = GET_PRN_COUNT(ChannelState->Signal, StateBuffer->PrnCount);
 	CodeCount %= 1023;	// within 1ms
 	CodeCount = (CodeCount << 1) + STATE_BUF_GET_CODE_SUB_PHASE(StateBuffer) - 4;	// compensate 4 correlator interval to align to COR4
 	CohCount = STATE_BUF_GET_COH_COUNT(StateBuffer);
@@ -356,7 +356,7 @@ int ComposeMeasurement(int ChannelID, PBB_MEASUREMENT Measurement)
 
 	MsCount = (ChannelState->WeekMsCounter < 0) ? -100 : ChannelState->WeekMsCounter;	// -100 make sure negative value after add CohCount
 	// L1CA align to symbol boundary if tracking state go beyond BIT_SYNC and do data decode
-	if (FREQ_ID_IS_L1CA(ChannelState->FreqID) && (GET_STAGE(ChannelState) >= STAGE_TRACK))
+	if (SIGNAL_IS_L1CA(ChannelState->Signal) && (GET_STAGE(ChannelState) >= STAGE_TRACK))
 		DataAccTime = ChannelState->DataStream.CurrentAccTime;
 	else
 		DataAccTime = 0;
@@ -394,7 +394,7 @@ void CollectBitSyncData(PCHANNEL_STATE ChannelState)
 	if (++BitSyncData->CorDataCount == 20)	// 20 correlation result, send to bit sync task
 	{
 		BitSyncData->TimeTag = ChannelState->TrackingTime;
-		AddToTask(TASK_BASEBAND, FREQ_ID_IS_L1CA(ChannelState->FreqID) ? GpsL1CABitSyncTask : GalE1BitSyncTask, BitSyncData, sizeof(BIT_SYNC_DATA));
+		AddToTask(TASK_BASEBAND, SIGNAL_IS_L1CA(ChannelState->Signal) ? GpsL1CABitSyncTask : GalE1BitSyncTask, BitSyncData, sizeof(BIT_SYNC_DATA));
 		BitSyncData->CorDataCount = 0;
 	}
 }
@@ -429,7 +429,7 @@ void DecodeDataStream(PCHANNEL_STATE ChannelState)
 			SymbolCount = ChannelState->CoherentNumber / DataStream->TotalAccTime;	// coherent length must be multiple of symbol length
 
 		Data = GetRegValue((U32)(&(ChannelState->StateBufferHW->DecodeData)));
-		if (FREQ_ID_IS_B1C(ChannelState->FreqID) || FREQ_ID_IS_E1(ChannelState->FreqID))	// B1C/E1 has negative data
+		if (SIGNAL_IS_B1C(ChannelState->Signal) || SIGNAL_IS_E1(ChannelState->Signal))	// B1C/E1 has negative data
 			Data ^= 0xffffffff;
 		for (i = SymbolCount - 1; i >= 0; i --)
 		{
@@ -458,7 +458,7 @@ void DecodeDataStream(PCHANNEL_STATE ChannelState)
 				DataForDecode.DataStream = DataStream->Symbols;
 				DataForDecode.SymbolIndex = ChannelState->NHIndex * 20 + (ChannelState->StateBufferCache.CorrState >> 27) - i;
 				if (DataForDecode.SymbolIndex < 0)
-					DataForDecode.SymbolIndex += FREQ_ID_IS_L1CA(ChannelState->FreqID) ? 0 : FREQ_ID_IS_E1(ChannelState->FreqID) ? 25 : 1800;
+					DataForDecode.SymbolIndex += SIGNAL_IS_L1CA(ChannelState->Signal) ? 0 : SIGNAL_IS_E1(ChannelState->Signal) ? 25 : 1800;
 				DataForDecode.TickCount = BasebandTickCount - DataStream->TotalAccTime * i;	// minus decoded symbols not yet put in DataStream
 				DataStream->BitCount = 0;
 				AddToTask(TASK_BASEBAND, DoDataDecode, &DataForDecode, sizeof(DATA_FOR_DECODE));
@@ -495,7 +495,7 @@ void DecodeDataStream(PCHANNEL_STATE ChannelState)
 		DataStream->CurrentAccTime = 0;
 		DataStream->CurReal = DataStream->CurImag = 0;
 
-		if (FREQ_ID_IS_L1CA(ChannelState->FreqID) && DataStream->BitCount == 32)	// 32bits for L1CA data decode
+		if (SIGNAL_IS_L1CA(ChannelState->Signal) && DataStream->BitCount == 32)	// 32bits for L1CA data decode
 		{
 			DataForDecode.ChannelState = ChannelState;
 			DataForDecode.TickCount = BasebandTickCount;
@@ -504,7 +504,7 @@ void DecodeDataStream(PCHANNEL_STATE ChannelState)
 			AddToTask(TASK_BASEBAND, DoDataDecode, &DataForDecode, sizeof(DATA_FOR_DECODE));
 			DataStream->BitCount = 0;
 		}
-		if (!(FREQ_ID_IS_L1CA(ChannelState->FreqID)) && DataStream->BitCount == 24)	// 24bits for B1C/L1C secondary code sync
+		if (!(SIGNAL_IS_L1CA(ChannelState->Signal)) && DataStream->BitCount == 24)	// 24bits for B1C/L1C secondary code sync
 		{
 			BitSyncData->PolarityToggle = DataStream->Symbols;
 			BitSyncData->TimeTag = ChannelState->TrackingTime;
@@ -523,7 +523,7 @@ void DecodeDataStream(PCHANNEL_STATE ChannelState)
 //   none
 void CalcCN0(PCHANNEL_STATE ChannelState)
 {
-	PTRACKING_CONFIG CurTrackingConfig = TrackingConfig[STAGE_CONFIG_INDEX(ChannelState->State & STAGE_MASK)][ChannelState->FreqID];
+	PTRACKING_CONFIG CurTrackingConfig = TrackingConfig[STAGE_CONFIG_INDEX(ChannelState->State & STAGE_MASK)][ChannelState->Signal];
 	int CohRatio = CurTrackingConfig->CoherentNumber * CurTrackingConfig->FftNumber;
 	int NoncohRatio = CurTrackingConfig->NonCohNumber;
 	int NoiseFloor = GetRegValue(ADDR_TE_NOISE_FLOOR);	// NF get from hardware
@@ -698,12 +698,12 @@ int DataSyncTask(void *Param)
 	unsigned int DataWord = 0;
 
 	PBIT_SYNC_DATA BitSyncData = (PBIT_SYNC_DATA)Param;
-	int FreqID = (int)(BitSyncData->ChannelState->FreqID);
+	int Signal = (int)(BitSyncData->ChannelState->Signal);
 	int Svid = (int)(BitSyncData->ChannelState->Svid);
 
-	if (FREQ_ID_IS_E1(FreqID))
+	if (SIGNAL_IS_E1(Signal))
 		;
-	else if (FREQ_ID_IS_B1C(FreqID))
+	else if (SIGNAL_IS_B1C(Signal))
 	{
 		// revert data order to LSB first
 		for (i = 0; i < 24; i ++)
@@ -715,7 +715,7 @@ int DataSyncTask(void *Param)
 		BitSyncData->ChannelState->BitSyncResult = SyncPilotData(DataWord, B1CSecondCode[Svid-1], BitSyncData->TimeTag / 10 - 24);
 		return 0;
 	}
-	else if (FREQ_ID_IS_L1C(FreqID))
+	else if (SIGNAL_IS_L1C(Signal))
 		;
 	return 0;
 }

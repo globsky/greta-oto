@@ -44,7 +44,7 @@ int PvtLsq(PCHANNEL_STATUS ObservationList[], int ObsCount, int LoopCount)
 	int sv_index;
 	int SystemNumber = 0;
 	int SystemIndex[PVT_MAX_SYSTEM_ID];		// clock error index
-	int PrevFreqID;
+	int PrevSignal;
 	PSATELLITE_INFO SatelliteInfo;
 	double SolutionDelta[PVT_MAX_SYSTEM_ID+3];	// maximum 3 position + clock error
 	double DeltaMsr[DIMENSION_MAX_X];
@@ -59,11 +59,11 @@ int PvtLsq(PCHANNEL_STATUS ObservationList[], int ObsCount, int LoopCount)
 	// LSQ iteration
 	for (iteration = 0; iteration < LoopCount; iteration ++)
 	{
-		PrevFreqID = -1;
+		PrevSignal = -1;
 		SatelliteInfo = g_GpsSatelliteInfo;
 		dT = STATE_DT_GPS;
 		UseSystemMask = 0;
-		if ((ObservationList[0]->FreqID == FREQ_L1CA) || (ObservationList[0]->FreqID == FREQ_L1C))	// whether has GPS observation
+		if ((ObservationList[0]->Signal == SIGNAL_L1CA) || (ObservationList[0]->Signal == SIGNAL_L1C))	// whether has GPS observation
 		{
 			SystemNumber = 1;
 			SystemIndex[0] = 0;
@@ -78,18 +78,18 @@ int PvtLsq(PCHANNEL_STATUS ObservationList[], int ObsCount, int LoopCount)
 		for (i = 0; i < ObsCount; i ++)
 		{
 			// observations are arranged to put same system together and with order GPS, BDS, Galileo
-			if (ObservationList[i]->FreqID == FREQ_B1C && PrevFreqID != FREQ_B1C)
+			if (ObservationList[i]->Signal == SIGNAL_B1C && PrevSignal != SIGNAL_B1C)
 			{
-				PrevFreqID = FREQ_B1C;
+				PrevSignal = SIGNAL_B1C;
 				SatelliteInfo = g_BdsSatelliteInfo;
 				dT = STATE_DT_BDS;
 				SystemIndex[SystemNumber] = 1;
 				SystemNumber ++;
 				UseSystemMask |= PVT_USE_BDS;
 			}
-			else if (ObservationList[i]->FreqID == FREQ_E1 && PrevFreqID != FREQ_E1)
+			else if (ObservationList[i]->Signal == SIGNAL_E1 && PrevSignal != SIGNAL_E1)
 			{
-				PrevFreqID = FREQ_E1;
+				PrevSignal = SIGNAL_E1;
 				SatelliteInfo = g_GalileoSatelliteInfo;
 				dT = STATE_DT_GAL;
 				SystemIndex[SystemNumber] = 2;
@@ -128,19 +128,19 @@ int PvtLsq(PCHANNEL_STATUS ObservationList[], int ObsCount, int LoopCount)
 	for (i = 1; i < SystemNumber; i ++)
 		g_PvtCoreData.h.length[0] += g_PvtCoreData.h.length[i];
 
-	PrevFreqID = FREQ_L1CA;
+	PrevSignal = SIGNAL_L1CA;
 	SatelliteInfo = g_GpsSatelliteInfo;
 	for (i = 0; i < ObsCount; i ++)
 	{
 		// observations are arranged to put same system together and with order GPS, BDS, Galileo
-		if (ObservationList[i]->FreqID == FREQ_B1C && PrevFreqID != FREQ_B1C)
+		if (ObservationList[i]->Signal == SIGNAL_B1C && PrevSignal != SIGNAL_B1C)
 		{
-			PrevFreqID = FREQ_B1C;
+			PrevSignal = SIGNAL_B1C;
 			SatelliteInfo = g_BdsSatelliteInfo;
 		}
-		else if (ObservationList[i]->FreqID == FREQ_E1 && PrevFreqID != FREQ_E1)
+		else if (ObservationList[i]->Signal == SIGNAL_E1 && PrevSignal != SIGNAL_E1)
 		{
-			PrevFreqID = FREQ_E1;
+			PrevSignal = SIGNAL_E1;
 			SatelliteInfo = g_GalileoSatelliteInfo;
 		}
 		sv_index = ObservationList[i]->svid - 1;

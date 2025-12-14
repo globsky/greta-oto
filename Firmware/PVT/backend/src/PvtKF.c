@@ -356,7 +356,7 @@ int KFPosition(PCHANNEL_STATUS ObservationList[], int ObsCount, int PosUseSatCou
 	double H[3];
 	double GeoDistance;
 	double *dT = &STATE_DT_GPS;
-	int PrevFreqID = -1;
+	int PrevSignal = -1;
 	PSATELLITE_INFO SatelliteInfo = g_GpsSatelliteInfo;
 	int UseSystemMask = 0;
 
@@ -366,15 +366,15 @@ int KFPosition(PCHANNEL_STATUS ObservationList[], int ObsCount, int PosUseSatCou
 	for (i = 0; i < ObsCount; i ++)
 	{
 		// observations are arranged to put same system together and with order GPS, BDS, Galileo
-		if (ObservationList[i]->FreqID == FREQ_B1C && PrevFreqID != FREQ_B1C)
+		if (ObservationList[i]->Signal == SIGNAL_B1C && PrevSignal != SIGNAL_B1C)
 		{
-			PrevFreqID = FREQ_B1C;
+			PrevSignal = SIGNAL_B1C;
 			SatelliteInfo = g_BdsSatelliteInfo;
 			SystemIndex = 1;
 		}
-		else if (ObservationList[i]->FreqID == FREQ_E1 && PrevFreqID != FREQ_E1)
+		else if (ObservationList[i]->Signal == SIGNAL_E1 && PrevSignal != SIGNAL_E1)
 		{
-			PrevFreqID = FREQ_E1;
+			PrevSignal = SIGNAL_E1;
 			SatelliteInfo = g_GalileoSatelliteInfo;
 			SystemIndex = 2;
 		}

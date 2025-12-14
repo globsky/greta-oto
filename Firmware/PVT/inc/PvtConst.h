@@ -40,7 +40,7 @@
 
 // universal SatID for GNSS systems
 #define TOTAL_GPS_SAT_NUMBER 32
-#define TOTAL_GAL_SAT_NUMBER 50
+#define TOTAL_GAL_SAT_NUMBER 36
 #define TOTAL_BDS_SAT_NUMBER 63
 
 #define MIN_GPS_SAT_ID 1
@@ -50,6 +50,6 @@
 #define MIN_BDS_SAT_ID 161
 #define MAX_BDS_SAT_ID (MIN_BDS_SAT_ID + TOTAL_BDS_SAT_NUMBER - 1)
 
-#define GET_SAT_ID(FreqID, svid) ((FreqID == FREQ_E1) ? (MIN_GAL_SAT_ID + (svid) - 1) : ((FreqID == FREQ_B1C) ? (MIN_BDS_SAT_ID + (svid) - 1) : (svid)))
+#define GET_SAT_ID(Signal, svid) ((Signal == SIGNAL_E1) ? (MIN_GAL_SAT_ID + (svid) - 1) : ((Signal == SIGNAL_B1C) ? (MIN_BDS_SAT_ID + (svid) - 1) : (svid)))
 
 #endif//__PVT_CONST_H__

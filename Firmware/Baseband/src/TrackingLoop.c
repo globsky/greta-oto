@@ -80,10 +80,13 @@ void CalcDiscriminator(PCHANNEL_STATE ChannelState, unsigned int Method)
 		// lock indicator
 		AdjustLockIndicator(&(ChannelState->FLD), ChannelState->FrequencyDiff >> 10);
 //		printf("FLD=%3d\n", ChannelState->FLD);
-		if (SearchResult.FreqBinDiff)
-			ChannelState->LoseLockCounter += NoncohLength;
-		else
-			ChannelState->LoseLockCounter -= NoncohLength;
+		if (ChannelState->TrackingTime > 1000)	// 1s converge time before update lose lock counter
+		{
+			if (SearchResult.FreqBinDiff)
+				ChannelState->CarrLoseLockCounter += NoncohLength;
+			else
+				ChannelState->CarrLoseLockCounter -= NoncohLength;
+		}
 		ChannelState->State |= TRACKING_UPDATE_FLL;
 	}
 	if ((Method & TRACKING_UPDATE_DLL) && ChannelState->dll_k1 > 0)
@@ -97,10 +100,13 @@ void CalcDiscriminator(PCHANNEL_STATE ChannelState, unsigned int Method)
 		// lock indicator
 		AdjustLockIndicator(&(ChannelState->DLD), ChannelState->DelayDiff >> 11);
 //		printf("DLD=%3d\n", ChannelState->DLD);
-		if (SearchResult.CorDiff)
-			ChannelState->LoseLockCounter += NoncohLength;
-		else
-			ChannelState->LoseLockCounter -= NoncohLength;
+		if (ChannelState->TrackingTime > 1000)	// 1s converge time before update lose lock counter
+		{
+			if (SearchResult.CorDiff)
+				ChannelState->CodeLoseLockCounter += NoncohLength;
+			else
+				ChannelState->CodeLoseLockCounter -= NoncohLength;
+		}
 		ChannelState->State |= TRACKING_UPDATE_DLL;
 	}
 	if ((Method & TRACKING_UPDATE_PLL) && ChannelState->pll_k1 > 0)
@@ -111,16 +117,19 @@ void CalcDiscriminator(PCHANNEL_STATE ChannelState, unsigned int Method)
 		// lock indicator
 		AdjustLockIndicator(&(ChannelState->PLD), ChannelState->PhaseDiff >> 9);
 //		printf("PLD=%3d\n", ChannelState->PLD);
-		if (ChannelState->PhaseDiff > 4096 || ChannelState->PhaseDiff < -4096)
-			ChannelState->LoseLockCounter += CohLength;
-		else
-			ChannelState->LoseLockCounter -= CohLength;
+		if (ChannelState->TrackingTime > 1000)	// 1s converge time before update lose lock counter
+		{
+			if (ChannelState->PhaseDiff > 4096 || ChannelState->PhaseDiff < -4096)
+				ChannelState->CarrLoseLockCounter += CohLength;
+			else
+				ChannelState->CarrLoseLockCounter -= CohLength;
+		}
 		ChannelState->State |= TRACKING_UPDATE_PLL;
 	}
-	if (ChannelState->LoseLockCounter < 0)
-		ChannelState->LoseLockCounter = 0;
-//	if (ChannelState->Svid == 4)
-//		printf("LostCounter=%d\n", ChannelState->LoseLockCounter);
+	if (ChannelState->CarrLoseLockCounter < 0)
+		ChannelState->CarrLoseLockCounter = 0;
+	if (ChannelState->CodeLoseLockCounter < 0)
+		ChannelState->CodeLoseLockCounter = 0;
 }
 
 //*************** Do 8 point FFT on coherent buffer and accumulate to noncoherent buffer ****************
@@ -430,7 +439,7 @@ void DoTrackingLoop(PCHANNEL_STATE ChannelState)
 		ChannelState->FrequencyAcc += ChannelState->FrequencyDiff;
 		ChannelState->CarrierFreqBase += ((k1 * ChannelState->FrequencyDiff + k2 * ChannelState->FrequencyAcc / 4) >> 13);
 		CarrierFreq = ChannelState->CarrierFreqBase;
-		if (ChannelState->FLD == 100 && ChannelState->LoseLockCounter == 0)
+		if (ChannelState->FLD == 100 && ChannelState->CarrLoseLockCounter == 0)
 			ChannelState->CarrierFreqSave = ChannelState->CarrierFreqBase;
 //		printf("SV%02d FLL Doppler = %5d %5d\n", ChannelState->Svid, (int)(((S64)ChannelState->CarrierFreqBase * SAMPLE_FREQ) >> 32) - IF_FREQ, (int)(((S64)CarrierFreq * SAMPLE_FREQ) >> 32) - IF_FREQ);
 	}
@@ -442,7 +451,7 @@ void DoTrackingLoop(PCHANNEL_STATE ChannelState)
 		CodeFreq = ChannelState->CodeFreqBase + ((k1 * ChannelState->DelayDiff + k2 * ChannelState->DelayAcc) >> 15);
 		DEBUG_OUTPUT(OUTPUT_CONTROL(TRACKING_LOOP, INFO), "DelayDiff = %6d Adjust = %8d CodeFreq = %8d\n", ChannelState->DelayDiff, ((k1 * ChannelState->DelayDiff + k2 * ChannelState->DelayAcc) >> 15), CodeFreq - 2136519107);
 		STATE_BUF_SET_CODE_FREQ(StateBuffer, CodeFreq);
-		if (ChannelState->DLD == 100 && ChannelState->LoseLockCounter == 0)
+		if (ChannelState->DLD == 100 && ChannelState->CodeLoseLockCounter == 0)
 			ChannelState->CodeFreqSave = CodeFreq;
 	}
 	// PLL update
@@ -452,7 +461,7 @@ void DoTrackingLoop(PCHANNEL_STATE ChannelState)
 		ChannelState->PhaseAcc += ChannelState->PhaseDiff;
 		ChannelState->CarrierFreqBase += ((k2 * ChannelState->PhaseDiff + k3 * ChannelState->PhaseAcc) >> 15);
 		CarrierFreq = ChannelState->CarrierFreqBase + ((k1 * ChannelState->PhaseDiff) >> 13);
-		if (ChannelState->PLD == 100 && ChannelState->LoseLockCounter == 0)
+		if (ChannelState->PLD == 100 && ChannelState->CarrLoseLockCounter == 0)
 		{
 			ChannelState->CarrierFreqSave = CarrierFreq;//ChannelState->CarrierFreqBase;
 		}

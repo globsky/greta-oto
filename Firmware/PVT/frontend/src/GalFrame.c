@@ -349,7 +349,7 @@ int DecodeGalileoAlmanac(int AllocationType, const unsigned int Page1[4], const 
 	int idata;
 	unsigned int udata;
 
-	if ((week = GetReceiverWeekNumber(FREQ_E1)) < 0)
+	if ((week = GetReceiverWeekNumber(SIGNAL_E1)) < 0)
 		return 0;
 	// check week number
 	WNa = GET_UBITS(Page1[0], 20, 2);	// last 2bit of almanac week

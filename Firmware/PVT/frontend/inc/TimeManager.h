@@ -7,9 +7,9 @@ extern RECEIVER_TIME GnssTime;
 
 void TimeInitialize();
 void UpdateReceiverTime(unsigned int TickCount, int RcvrIntervalMs);
-int SetReceiverTime(U8 FreqID, int WeekNumber, int CurWeekMs, unsigned int TickCount);
-int GetReceiverWeekMs(U8 FreqID, unsigned int TickCount);
-int GetReceiverWeekNumber(U8 FreqID);
+int SetReceiverTime(U8 Signal, int WeekNumber, int CurWeekMs, unsigned int TickCount);
+int GetReceiverWeekMs(U8 Signal, unsigned int TickCount);
+int GetReceiverWeekNumber(U8 Signal);
 int ReceiverWeekMsValid();
 int ReceiverWeekNumberValid();
 

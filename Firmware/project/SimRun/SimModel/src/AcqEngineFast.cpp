@@ -385,7 +385,7 @@ void CAcqEngine::SearchOneChannel(AeBufferSatParam *pSatParam, int Channel)
 	{
 		CurMsCount = pSatParam->MsCount + ReadAddress / 3;
 		CurBitIndex = CurMsCount / pSatParam->BitLength;
-		CurMsCount = (PrnSelect == FREQ_L1CA) ? (CurMsCount % pSatParam->BitLength) : 0;
+		CurMsCount = (PrnSelect == SIGNAL_L1CA) ? (CurMsCount % pSatParam->BitLength) : 0;
 	}
 	else
 	{
@@ -488,10 +488,10 @@ void CAcqEngine::DoAcquisition()
 			{
 				switch (PrnSelect)
 				{
-				case FREQ_L1CA:	PhaseCount = 2046; break;
-				case FREQ_E1:	PhaseCount = 2046 * 4; break;
-				case FREQ_B1C:
-				case FREQ_L1C:	PhaseCount = 2046 * 10; break;
+				case SIGNAL_L1CA:	PhaseCount = 2046; break;
+				case SIGNAL_E1:	PhaseCount = 2046 * 4; break;
+				case SIGNAL_B1C:
+				case SIGNAL_L1C:	PhaseCount = 2046 * 10; break;
 				}
 				pSatParam = &SatParam[j];
 				break;

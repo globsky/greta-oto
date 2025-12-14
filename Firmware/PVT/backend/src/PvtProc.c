@@ -89,6 +89,7 @@ void PvtProcInit(StartType Start, PSYSTEM_TIME CurTime, LLH *CurPosition)
 	g_ReceiverInfo.PosVel.vx = g_ReceiverInfo.PosVel.vy = g_ReceiverInfo.PosVel.vz = 0.0;
 
 	g_PvtConfig.PvtConfigFlags |= ENABLE_KALMAN_FILTER ? PVT_CONFIG_USE_KF : 0;
+	g_PvtConfig.ElevationMask = 5.0;
 
 	// initialize state with input parameter
 	g_PvtCoreData.StateVector[0] = g_ReceiverInfo.PosVel.vx;
@@ -119,12 +120,12 @@ void PvtProc(int CurMsInterval, int ClockAdjust)
 
 	PosFixResult = PvtFix(CurMsInterval, ClockAdjust);
 	// TODO: update satellite in view list, adjust observation time etc.
-	if (1 && PosFixResult >= 0)
+	if (1 && PosFixResult > 0)
 	{
 		GpsTimeToUtc(g_ReceiverInfo.ReceiverTime->GpsWeekNumber, g_ReceiverInfo.ReceiverTime->GpsMsCount, &UtcTime, (PUTC_PARAM)0);
-		DEBUG_OUTPUT(OUTPUT_CONTROL(PVT, INFO), "%04d/%02d/%02d %02d:%02d:%02d.%03d %14.9f %14.9f %10.4f   5   9\n",
+		DEBUG_OUTPUT(OUTPUT_CONTROL(PVT, INFO), "%04d/%02d/%02d %02d:%02d:%02d.%03d %14.9f %14.9f %10.4f   5  %2d\n",
 			UtcTime.Year, UtcTime.Month, UtcTime.Day, UtcTime.Hour, UtcTime.Minute, UtcTime.Second, UtcTime.Millisecond,
-			g_ReceiverInfo.PosLLH.lat * 180 / PI, g_ReceiverInfo.PosLLH.lon * 180 / PI, g_ReceiverInfo.PosLLH.hae);
+			g_ReceiverInfo.PosLLH.lat * 180 / PI, g_ReceiverInfo.PosLLH.lon * 180 / PI, g_ReceiverInfo.PosLLH.hae, PosFixResult);
 	}
 }
 
@@ -142,20 +143,20 @@ PRECEIVER_INFO GetReceiverInfo()
 // return the clock error of corresponding system
 // if not available, other system will be used at priority of GPS > BDS > Galileo
 // Parameters:
-//   FirstPriorityFreq defined as FREQ_XXX
+//   FirstPrioritySignal defined as FREQ_XXX
 // Return value:
 //   clock error of corresponding system
 //   or 0.0 if clock error of either system is not available
-double GetClockError(int FirstPriorityFreq)
+double GetClockError(int FirstPrioritySignal)
 {
 	PRECEIVER_TIME GnssTime = g_ReceiverInfo.ReceiverTime;
 
 	// check first priority system
-	if ((FREQ_ID_IS_L1CA(FirstPriorityFreq) || FREQ_ID_IS_L1C(FirstPriorityFreq)) && (GnssTime->TimeFlag & GPS_CLK_ERR_VALID))
+	if ((SIGNAL_IS_L1CA(FirstPrioritySignal) || SIGNAL_IS_L1C(FirstPrioritySignal)) && (GnssTime->TimeFlag & GPS_CLK_ERR_VALID))
 		return GnssTime->GpsClkError;
-	else if (FREQ_ID_IS_B1C(FirstPriorityFreq) && (GnssTime->TimeFlag & BDS_CLK_ERR_VALID))
+	else if (SIGNAL_IS_B1C(FirstPrioritySignal) && (GnssTime->TimeFlag & BDS_CLK_ERR_VALID))
 		return GnssTime->BdsClkError;
-	else if (FREQ_ID_IS_E1(FirstPriorityFreq) && (GnssTime->TimeFlag & GAL_CLK_ERR_VALID))
+	else if (SIGNAL_IS_E1(FirstPrioritySignal) && (GnssTime->TimeFlag & GAL_CLK_ERR_VALID))
 		return GnssTime->GalClkError;
 	else if (GnssTime->TimeFlag & GPS_CLK_ERR_VALID)
 		return GnssTime->GpsClkError;
@@ -171,7 +172,9 @@ double GetClockError(int FirstPriorityFreq)
 // Parameters:
 //   MsInterval: actual time interval between current epoch and previous epoch
 // Return value:
-//   none
+//   -1: position is not fixed
+//    0: reserved
+//   >0: number of observation for success position fix 
 int PvtFix(int MsInterval, int ClockAdjust)
 {
 	int i, PosResult;
@@ -200,21 +203,21 @@ int PvtFix(int MsInterval, int ClockAdjust)
 	// scan 3 times to put the list in order of GPS, BDS and Galileo respectively
 	for (i = 0; i < TOTAL_CHANNEL_NUMBER && SatCount < DIMENSION_MAX_X; i ++)
 	{
-		if ((g_ChannelStatus[i].FreqID != FREQ_L1CA) && (g_ChannelStatus[i].FreqID != FREQ_L1C))
+		if ((g_ChannelStatus[i].Signal != SIGNAL_L1CA) && (g_ChannelStatus[i].Signal != SIGNAL_L1C))
 			continue;
 		if ((g_ChannelStatus[i].ChannelFlag & MEASUREMENT_VALID) && g_GpsEphemeris[g_ChannelStatus[i].svid-1].flag)
 			ObservationList[SatCount++] = &g_ChannelStatus[i];
 	}
 	for (i = 0; i < TOTAL_CHANNEL_NUMBER && SatCount < DIMENSION_MAX_X; i ++)
 	{
-		if (g_ChannelStatus[i].FreqID != FREQ_B1C)
+		if (g_ChannelStatus[i].Signal != SIGNAL_B1C)
 			continue;
 		if ((g_ChannelStatus[i].ChannelFlag & MEASUREMENT_VALID) && g_BdsEphemeris[g_ChannelStatus[i].svid-1].flag)
 			ObservationList[SatCount++] = &g_ChannelStatus[i];
 	}
 	for (i = 0; i < TOTAL_CHANNEL_NUMBER && SatCount < DIMENSION_MAX_X; i ++)
 	{
-		if (g_ChannelStatus[i].FreqID != FREQ_E1)
+		if (g_ChannelStatus[i].Signal != SIGNAL_E1)
 			continue;
 		if ((g_ChannelStatus[i].ChannelFlag & MEASUREMENT_VALID) && g_GalileoEphemeris[g_ChannelStatus[i].svid-1].flag)
 			ObservationList[SatCount++] = &g_ChannelStatus[i];
@@ -314,7 +317,7 @@ int PvtFix(int MsInterval, int ClockAdjust)
 
 	// convert ECEF coordinate to LLH coordinate
 	EcefToLlh(&(g_ReceiverInfo.PosVel), &(g_ReceiverInfo.PosLLH));
-	return 0;
+	return SatCount;
 }
 
 //*************** Determine method to do position fix ****************
@@ -344,11 +347,11 @@ PositionType GetPosMethod(PCHANNEL_STATUS ObservationList[], int *Count, Positio
 	RedundantSat = SatCount;
 	for (i = 0; i < SatCount; i ++)
 	{
-		if ((g_ChannelStatus[i].FreqID == FREQ_L1CA) || (g_ChannelStatus[i].FreqID == FREQ_L1C))
+		if ((g_ChannelStatus[i].Signal == SIGNAL_L1CA) || (g_ChannelStatus[i].Signal == SIGNAL_L1C))
 			SystemMask |= PVT_USE_GPS;
-		else if (g_ChannelStatus[i].FreqID == FREQ_B1C)
+		else if (g_ChannelStatus[i].Signal == SIGNAL_B1C)
 			SystemMask |= PVT_USE_BDS;
-		else if (g_ChannelStatus[i].FreqID == FREQ_E1)
+		else if (g_ChannelStatus[i].Signal == SIGNAL_E1)
 			SystemMask |= PVT_USE_GAL;
 	}
 	if (SystemMask & PVT_USE_GPS) RedundantSat --;

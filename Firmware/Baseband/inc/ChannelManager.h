@@ -48,7 +48,7 @@ typedef struct tag_CHANNEL_STATE
 {
 	U8 UserChannel;		// user channel number (reserved for future use)
 	U8 LogicChannel;	// physical channel number (map to hardware logic channel)
-	U8 FreqID;	// system and frequency
+	U8 Signal;	// signal type
 	U8 Svid;	// SVID start from 1
 	U32 State;	// bitwise flags and indicators
 	// following variable for tracking stage
@@ -103,7 +103,7 @@ typedef struct tag_CHANNEL_STATE
 	int CN0HighCount, CNOLowCount;	// count for CN0 high and low
 	// lock detector
 	int PLD, FLD, DLD;	// 0 to 100 as indicator of lock quality
-	int LoseLockCounter;
+	int CarrLoseLockCounter, CodeLoseLockCounter;
 } CHANNEL_STATE, *PCHANNEL_STATE;
 
 //==========================

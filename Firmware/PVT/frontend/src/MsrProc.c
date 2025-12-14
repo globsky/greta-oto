@@ -35,8 +35,6 @@ static int AlignObsTime(PRECEIVER_INFO ReceiverInfo);
 
 static void InitFrame(int ch_num)
 {
-	unsigned char FreqID = g_ChannelStatus[ch_num].FreqID;
-
 	g_ChannelStatus[ch_num].LockTime = 0;
 	g_ChannelStatus[ch_num].CarrierCountAcc = 0;
 	g_ChannelStatus[ch_num].CarrierCountOld = 0;
@@ -80,23 +78,23 @@ int DoDataDecode(void* Param)
 	PFRAME_INFO pFrameInfo = &(g_ChannelStatus[ChannelState->LogicChannel].FrameInfo);
 	int WeekMs = -1, WeekNumber = -1, CurTimeMs;
 
-	DEBUG_OUTPUT(OUTPUT_CONTROL(DATA_DECODE, INFO), "Ch%02d %c%02d decode data %08x start index%4d at time%8d\n", ChannelState->LogicChannel, "GECG"[ChannelState->FreqID], ChannelState->Svid, DataForDecode->DataStream, DataForDecode->SymbolIndex, DataForDecode->TickCount);
+	DEBUG_OUTPUT(OUTPUT_CONTROL(DATA_DECODE, INFO), "Ch%02d %c%02d decode data %08x start index%4d at time%8d\n", ChannelState->LogicChannel, "GECG"[ChannelState->Signal], ChannelState->Svid, DataForDecode->DataStream, DataForDecode->SymbolIndex, DataForDecode->TickCount);
 //	for (i = 31; i >= 0; i--)
 //		DEBUG_OUTPUT(OUTPUT_CONTROL(DATA_DECODE, INFO), "%1d", (DataForDecode->DataStream & (1 << i)) ? 1 : 0);
 //	DEBUG_OUTPUT(OUTPUT_CONTROL(DATA_DECODE, INFO), "\n");
 //	if (OutputBasebandDataPort >= 0)
 		AddToTask(TASK_INOUT, BasebandDataOutput, DataForDecode, sizeof(DATA_FOR_DECODE));
 
-	switch (ChannelState->FreqID)
+	switch (ChannelState->Signal)
 	{
-		case FREQ_L1CA:
+		case SIGNAL_L1CA:
 			WeekMs = GpsNavDataProc(pFrameInfo, DataForDecode);
 			break;
-		case FREQ_B1C:
+		case SIGNAL_B1C:
 			WeekMs = BdsNavDataProc(pFrameInfo, DataForDecode);
 			WeekNumber = pFrameInfo->TimeTag;
 			break;
-		case FREQ_E1:
+		case SIGNAL_E1:
 			WeekMs = GalNavDataProc(pFrameInfo, DataForDecode);
 //			WeekNumber = pFrameInfo->TimeTag;
 			break;
@@ -109,11 +107,11 @@ int DoDataDecode(void* Param)
 			DataForDecode->ChannelState->SyncTickCount = DataForDecode->TickCount + (MS_IN_WEEK - WeekMs);	// tick count corresponding to week boundary
 		if (!ReceiverWeekMsValid())
 		{
-//			if (FREQ_ID_IS_B1C(ChannelState->FreqID) && BDS_GEO_SVID(Svid))
+//			if (SIGNAL_IS_B1C(ChannelState->Signal) && BDS_GEO_SVID(Svid))
 //				CurTimeMs = WeekMs + 130;
 //			else
 				CurTimeMs = WeekMs + 80;
-			SetReceiverTime(ChannelState->FreqID, WeekNumber, CurTimeMs, DataForDecode->TickCount);
+			SetReceiverTime(ChannelState->Signal, WeekNumber, CurTimeMs, DataForDecode->TickCount);
 		}
 	}
 
@@ -170,7 +168,8 @@ int MeasProcTask(void *Param)
 //   none
 void MsrProc(PBB_MEAS_PARAM MeasParam)
 {
-	int ch_num, svid, FreqID, SatID, meas_num;
+	int ch_num, svid, SatID, meas_num;
+	U8 Signal;
 	PBB_MEASUREMENT Measurements = BasebandMeasurement;
 	SYSTEM_TIME ReceiverTime;
 	unsigned int ActiveMask = MeasParam->MeasMask;
@@ -187,14 +186,14 @@ void MsrProc(PBB_MEAS_PARAM MeasParam)
 			continue;
 		}
 
-		FreqID = Measurements[ch_num].ChannelState->FreqID;
+		Signal = Measurements[ch_num].ChannelState->Signal;
 		svid = Measurements[ch_num].ChannelState->Svid;
-		SatID = GET_SAT_ID(FreqID, svid);
+		SatID = GET_SAT_ID(Signal, svid);
 		// if SatID changed, initialize channel
 		if (g_ChannelStatus[ch_num].SatID != SatID)
 		{
 			InitChannelStatus(ch_num);
-			g_ChannelStatus[ch_num].FreqID = FreqID;
+			g_ChannelStatus[ch_num].Signal = Signal;
 			g_ChannelStatus[ch_num].svid = svid;
 			g_ChannelStatus[ch_num].SatID = SatID;
 		}
@@ -227,7 +226,7 @@ void MsrProc(PBB_MEAS_PARAM MeasParam)
 		for (ch_num = 0; ch_num < TOTAL_CHANNEL_NUMBER; ch_num ++)
 		{
 			if (g_ChannelStatus[ch_num].ChannelFlag & MEASUREMENT_VALID)
-				DEBUG_OUTPUT(OUTPUT_CONTROL(MEASUREMENT, INFO), "%c%02d %13.3f 8 %13.3f 8 %13.3f          %6.3f\n", FREQ_ID_IS_B1C(g_ChannelStatus[ch_num].FreqID) ? 'C' : FREQ_ID_IS_E1(g_ChannelStatus[ch_num].FreqID) ? 'E' : 'G',
+				DEBUG_OUTPUT(OUTPUT_CONTROL(MEASUREMENT, INFO), "%c%02d %13.3f 8 %13.3f 8 %13.3f          %6.3f\n", "GECG"[g_ChannelStatus[ch_num].Signal],
 					g_ChannelStatus[ch_num].svid, g_ChannelStatus[ch_num].PseudoRangeOrigin, g_ChannelStatus[ch_num].CarrierPhase, g_ChannelStatus[ch_num].DopplerHz, g_ChannelStatus[ch_num].cn0 / 100.);
 		}
 	}
@@ -267,13 +266,13 @@ void CalculateRawMsr(PCHANNEL_STATUS pChannelStatus, PBB_MEASUREMENT pMsr, int M
 	pChannelStatus->TransmitTimeMs = pMsr->WeekMsCount;
 
 	// Doppler is actual carrier frequency minus nominal number
-	if (pChannelStatus->FreqID != FREQ_L1CA && !(pChannelStatus->state & STATE_ENABLE_BOC))
+	if (pChannelStatus->Signal != SIGNAL_L1CA && !(pChannelStatus->state & STATE_ENABLE_BOC))
 		IFFreq += 1023000;
 	pChannelStatus->DopplerHz = (double)pMsr->CarrierFreq * ScaleDoubleU(SAMPLE_FREQ, 32) - IFFreq;
 	pChannelStatus->Doppler = pChannelStatus->DopplerHz * WaveLength;
 
 	// pseudorange = (Tr-Tt) * LIGHT_SPEED
-	Count = FREQ_ID_IS_B1C(pChannelStatus->FreqID) ? GnssTime.BdsMsCount : GnssTime.GpsMsCount;
+	Count = SIGNAL_IS_B1C(pChannelStatus->Signal) ? GnssTime.BdsMsCount : GnssTime.GpsMsCount;
 	Count -= pChannelStatus->TransmitTimeMs;
 	if (Count < -1000)
 		Count += MS_IN_WEEK;
@@ -299,7 +298,7 @@ void CalculateRawMsr(PCHANNEL_STATUS pChannelStatus, PBB_MEASUREMENT pMsr, int M
 	// Step 3: add the fractional part of carrier phase
 	pChannelStatus->CarrierPhase = (double)pChannelStatus->CarrierCountAcc - ScaleDoubleU(pMsr->CarrierPhase, 32);
 	// Step 4: determine whether to add 0.5 cycle to compensate negative data stream
-	if (pChannelStatus->FreqID == FREQ_L1CA)	// only L1C/A has half cycle
+	if (pChannelStatus->Signal == SIGNAL_L1CA)	// only L1C/A has half cycle
 	{
 		if (pFrameInfo->FrameFlag & POLARITY_VALID)
 		{
@@ -326,7 +325,7 @@ int AlignObsTime(PRECEIVER_INFO ReceiverInfo)
 
 	if (MsCount < 0)	// time not valid, do not adjust obs time
 		return 0;
-	ClockError = GetClockError(FREQ_L1CA) * 1000;	// convert to ms
+	ClockError = GetClockError(SIGNAL_L1CA) * 1000;	// convert to ms
 	if (fabs(ClockError) > 1.1)	// adjust clock error first, do not adjust measurement interval
 	{
 		LocalTimeAdjust = (int)(fabs(ClockError / 2) + 0.5); // LocalTimeAdjust = +-2n for +-2n-1<ClockError<+-2n+1

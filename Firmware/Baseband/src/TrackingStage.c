@@ -55,13 +55,13 @@ static int StageSwitchCondition(PCHANNEL_STATE ChannelState);
 //   none
 void SwitchTrackingStage(PCHANNEL_STATE ChannelState, unsigned int TrackingStage)
 {
-	PTRACKING_CONFIG CurTrackingConfig = TrackingConfig[STAGE_CONFIG_INDEX(TrackingStage)][ChannelState->FreqID];
+	PTRACKING_CONFIG CurTrackingConfig = TrackingConfig[STAGE_CONFIG_INDEX(TrackingStage)][ChannelState->Signal];
 	unsigned int PrevStage = (ChannelState->State & STAGE_MASK);
 	int CohCount, Time = ChannelState->TrackingTime / 10;
 	unsigned int StateValue;
 	PSTATE_BUFFER StateBuffer = &(ChannelState->StateBufferCache);
 
-	DEBUG_OUTPUT(OUTPUT_CONTROL(TRACKING_SWITCH, INFO), "SV%02d switch to %d\n", ChannelState->Svid, TrackingStage);
+	DEBUG_OUTPUT(OUTPUT_CONTROL(TRACKING_SWITCH, INFO), "%c%02d switch to %d at tick %d\n", "GECG"[ChannelState->Signal], ChannelState->Svid, TrackingStage, ChannelState->TickCount);
 	SET_STAGE(ChannelState, TrackingStage);
 	ChannelState->TrackingTime = 0;		// reset tracking time
 	if (TrackingStage == STAGE_RELEASE)		// next acc interrupt will do release operation
@@ -94,7 +94,7 @@ void SwitchTrackingStage(PCHANNEL_STATE ChannelState, unsigned int TrackingStage
 		ChannelState->DataStream.BitCount = ChannelState->DataStream.CurrentAccTime = 0;
 		if (PrevStage == STAGE_BIT_SYNC)	// switch from bit sync, need to align to bit edge
 		{
-			if (FREQ_ID_IS_L1CA(ChannelState->FreqID))	// for L1CA
+			if (SIGNAL_IS_L1CA(ChannelState->Signal))	// for L1CA
 			{
 				CohCount = ChannelState->BitSyncResult % CurTrackingConfig->CoherentNumber;
 				ChannelState->DataStream.CurrentAccTime = ChannelState->TrackingTime = ChannelState->BitSyncResult - CohCount;		// reset tracking time from previous bit edge
@@ -113,8 +113,7 @@ void SwitchTrackingStage(PCHANNEL_STATE ChannelState, unsigned int TrackingStage
 				STATE_BUF_DATA_IN_I(StateBuffer);
 				// remove 1.023MHz carrier offset
 				ChannelState->StateBufferCache.CarrierFreq -= DIVIDE_ROUND(1023000LL << 32, SAMPLE_FREQ);
-				ChannelState->CarrierFreqBase -= DIVIDE_ROUND(1023000LL << 32, SAMPLE_FREQ);
-				ChannelState->CarrierFreqSave -= DIVIDE_ROUND(1023000LL << 32, SAMPLE_FREQ);
+				ChannelState->CarrierFreqBase = ChannelState->CarrierFreqSave = ChannelState->StateBufferCache.CarrierFreq;
 				ChannelState->State |= (STATE_4QUAD_DISC | DATA_STREAM_PRN2 | STATE_ENABLE_BOC | STATE_CACHE_FREQ_DIRTY);
 				// adjust carrier phase
 				StateValue = GetRegValue((U32)(&(ChannelState->StateBufferHW->CarrierPhase)));
@@ -134,7 +133,7 @@ void SwitchTrackingStage(PCHANNEL_STATE ChannelState, unsigned int TrackingStage
 	}
 	else if (TrackingStage == STAGE_TRACK1)
 	{
-		if (FREQ_ID_IS_B1C_L1C(ChannelState->FreqID))
+		if (SIGNAL_IS_B1C_L1C(ChannelState->Signal))
 		{
 			// switch to decode data channel
 			STATE_BUF_ENABLE_PRN2(StateBuffer);
@@ -188,7 +187,7 @@ int StageDetermination(PCHANNEL_STATE ChannelState)
 	PSTATE_BUFFER StateBuffer = &(ChannelState->StateBufferCache);
 
 	// lose lock, switch to hold
-	if (CurStage >= STAGE_PULL_IN && ChannelState->LoseLockCounter > 100 && ChannelState->NonCohCount == 0)
+	if (CurStage >= STAGE_PULL_IN && (ChannelState->CarrLoseLockCounter > 240 || ChannelState->CodeLoseLockCounter > 240) && ChannelState->NonCohCount == 0)
 	{
 		SwitchTrackingStage(ChannelState, STAGE_HOLD3);
 		return 1;
@@ -203,7 +202,7 @@ int StageDetermination(PCHANNEL_STATE ChannelState)
 			if (ChannelState->FastCN0 > 2800)	// signal recovered
 			{
 				SwitchTrackingStage(ChannelState, STAGE_PULL_IN);
-				ChannelState->LoseLockCounter = 0;
+				ChannelState->CarrLoseLockCounter = ChannelState->CodeLoseLockCounter = 0;
 				StageChange = 1;
 			}
 			else	// scan code phases within code search range
@@ -230,7 +229,7 @@ int StageDetermination(PCHANNEL_STATE ChannelState)
 				SwitchTrackingStage(ChannelState, STAGE_RELEASE);
 			else
 			{
-				if (FREQ_ID_IS_L1CA(ChannelState->FreqID))	// for L1CA
+				if (SIGNAL_IS_L1CA(ChannelState->Signal))	// for L1CA
 					ChannelState->BitSyncResult = (ChannelState->TrackingTime- ChannelState->BitSyncResult) % 20;	// ms number passed bit edge
 				else	// for E1, recalculate current millisecond count within 100ms NH cycle
 					ChannelState->BitSyncResult = (1000 - (ChannelState->BitSyncResult - ChannelState->TrackingTime)) % 100;	// add 100 to make sure result if positive
@@ -276,7 +275,7 @@ int StageDetermination(PCHANNEL_STATE ChannelState)
 		ChannelState->BitSyncData.PrevCorData = 0;	// clear previous correlation result for first round
 		memset(ChannelState->ToggleCount, 0, sizeof(ChannelState->ToggleCount));
 		ChannelState->BitSyncResult = 0;
-		if (FREQ_ID_IS_B1C_L1C(ChannelState->FreqID))	// B1C/L1C secondary code sync performed at TRACK0 stage
+		if (SIGNAL_IS_B1C_L1C(ChannelState->Signal))	// B1C/L1C secondary code sync performed at TRACK0 stage
 			SwitchTrackingStage(ChannelState, STAGE_TRACK0);
 		else	// other signal switch to bit-sync
 			SwitchTrackingStage(ChannelState, STAGE_BIT_SYNC);
@@ -287,7 +286,7 @@ int StageDetermination(PCHANNEL_STATE ChannelState)
 			SwitchTrackingStage(ChannelState,  STAGE_TRACK1);
 			// if previous decoded acc data sign and symbol not consistent, rotate phase by PI
 			// in track 1 stage, will use acc data to determine symbol
-			if (FREQ_ID_IS_L1CA(ChannelState->FreqID) && (((ChannelState->DataStream.PrevReal >> 31) & 1) ^ (ChannelState->DataStream.Symbols & 1)))
+			if (SIGNAL_IS_L1CA(ChannelState->Signal) && (((ChannelState->DataStream.PrevReal >> 31) & 1) ^ (ChannelState->DataStream.Symbols & 1)))
 			{
 				StateValue = GetRegValue((U32)(&(ChannelState->StateBufferHW->CarrierPhase)));
 				StateValue ^= 0x80000000;
@@ -307,14 +306,14 @@ int StageSwitchCondition(PCHANNEL_STATE ChannelState)
 {
 	if ((ChannelState->State & STAGE_MASK) == STAGE_TRACK0)
 	{
-		switch (ChannelState->FreqID)
+		switch (ChannelState->Signal)
 		{
-		case FREQ_L1CA:
+		case SIGNAL_L1CA:
 			return (ChannelState->TrackingTime >= 500) ? 1 : 0;
-		case FREQ_E1:
+		case SIGNAL_E1:
 			return (ChannelState->TrackingTime >= 500) ? 1 : 0;
-		case FREQ_B1C:
-		case FREQ_L1C:
+		case SIGNAL_B1C:
+		case SIGNAL_L1C:
 			return ((ChannelState->BitSyncResult & 0x1800) && (ChannelState->TrackingTime % 20) == 0) ? 1 : 0;
 		}
 	}
