@@ -77,9 +77,10 @@ void SwitchTrackingStage(PCHANNEL_STATE ChannelState, unsigned int TrackingStage
 	{
 		// restore carrier and code frequency to values before lose lock
 		ChannelState->CarrierFreqBase = ChannelState->CarrierFreqSave;
-		ChannelState->CodeFreqBase = ChannelState->CodeFreqSave;
-		STATE_BUF_SET_CARRIER_FREQ(&(ChannelState->StateBufferCache), ChannelState->CarrierFreqSave);
-		STATE_BUF_SET_CODE_FREQ(&(ChannelState->StateBufferCache), ChannelState->CodeFreqSave);
+//		ChannelState->CodeFreqBase = ChannelState->CodeFreqSave;
+		ChannelState->CodeFreqBase = CARR_TO_CODE_FREQ(ChannelState->CarrierFreqSave);
+		STATE_BUF_SET_CARRIER_FREQ(&(ChannelState->StateBufferCache), ChannelState->CarrierFreqBase);
+		STATE_BUF_SET_CODE_FREQ(&(ChannelState->StateBufferCache), ChannelState->CodeFreqBase);
 		ChannelState->State |= STATE_CACHE_FREQ_DIRTY;
 		ChannelState->CodeSearchCount = 0;
 	}
@@ -88,12 +89,12 @@ void SwitchTrackingStage(PCHANNEL_STATE ChannelState, unsigned int TrackingStage
 	}
 	else if (TrackingStage == STAGE_TRACK0)
 	{
-		// reset data for data decode, switch to tracking stage at epoch of bit edge
-		ChannelState->DataStream.PrevReal = ChannelState->DataStream.PrevImag = 0;
-		ChannelState->DataStream.CurReal = ChannelState->DataStream.CurImag = 0;
-		ChannelState->DataStream.BitCount = ChannelState->DataStream.CurrentAccTime = 0;
 		if (PrevStage == STAGE_BIT_SYNC)	// switch from bit sync, need to align to bit edge
 		{
+			// reset data for data decode, switch to tracking stage at epoch of bit edge
+			ChannelState->DataStream.PrevReal = ChannelState->DataStream.PrevImag = 0;
+			ChannelState->DataStream.CurReal = ChannelState->DataStream.CurImag = 0;
+			ChannelState->DataStream.BitCount = ChannelState->DataStream.CurrentAccTime = 0;
 			if (SIGNAL_IS_L1CA(ChannelState->Signal))	// for L1CA
 			{
 				CohCount = ChannelState->BitSyncResult % CurTrackingConfig->CoherentNumber;
@@ -130,6 +131,16 @@ void SwitchTrackingStage(PCHANNEL_STATE ChannelState, unsigned int TrackingStage
 				ChannelState->DataStream.BitCount = ChannelState->DataStream.CurrentAccTime = 0;	// reset data count for data stream decode
 			}
 		}
+		else if (PrevStage == STAGE_HOLD3)
+		{
+			if (SIGNAL_IS_B1C_L1C(ChannelState->Signal))	// B1C/L1C from HOLD3 to TRACK0, sync secondary code again
+			{
+				ChannelState->State &= ~(STATE_4QUAD_DISC | DATA_STREAM_PRN2 | NH_SEGMENT_UPDATE);
+				STATE_BUF_DISABLE_PRN2(StateBuffer);
+				STATE_BUF_SET_NH_CONFIG(StateBuffer, 0, 0);
+				ChannelState->State |= STATE_CACHE_CONFIG_DIRTY;
+			}
+		}
 	}
 	else if (TrackingStage == STAGE_TRACK1)
 	{
@@ -144,9 +155,9 @@ void SwitchTrackingStage(PCHANNEL_STATE ChannelState, unsigned int TrackingStage
 			STATE_BUF_SET_DECODE_BIT(StateBuffer, 3);
 			STATE_BUF_DATA_IN_Q(StateBuffer);
 			// remove 1.023MHz carrier offset
-			ChannelState->StateBufferCache.CarrierFreq -= DIVIDE_ROUND(1023000LL << 32, SAMPLE_FREQ);
-			ChannelState->CarrierFreqBase -= DIVIDE_ROUND(1023000LL << 32, SAMPLE_FREQ);
-			ChannelState->CarrierFreqSave -= DIVIDE_ROUND(1023000LL << 32, SAMPLE_FREQ);
+			if (!(ChannelState->State & STATE_ENABLE_BOC))
+				ChannelState->StateBufferCache.CarrierFreq -= DIVIDE_ROUND(1023000LL << 32, SAMPLE_FREQ);
+			ChannelState->CarrierFreqBase = ChannelState->CarrierFreqSave = ChannelState->StateBufferCache.CarrierFreq;
 			ChannelState->State |= (STATE_4QUAD_DISC | DATA_STREAM_PRN2 | STATE_ENABLE_BOC | NH_SEGMENT_UPDATE | STATE_CACHE_FREQ_DIRTY);
 			Time += ChannelState->BitSyncResult & 0x7ff;
 			// adjust carrier phase
@@ -201,7 +212,17 @@ int StageDetermination(PCHANNEL_STATE ChannelState)
 		{
 			if (ChannelState->FastCN0 > 2800)	// signal recovered
 			{
-				SwitchTrackingStage(ChannelState, STAGE_PULL_IN);
+				// force adjust carrier frequency and align correlator peak
+				ChannelState->StateBufferCache.CarrierFreq += ChannelState->FrequencyDiff;
+				ChannelState->State |= STATE_CACHE_FREQ_DIRTY;
+				Jump = (ChannelState->DelayDiff + 57344) / 16384 - 3;	// apply 3.5 CorInterval offset (16384) then round down to get nearest rounding
+				if (Jump != 0)
+				{
+					StateValue = GetRegValue((U32)(&(ChannelState->StateBufferHW->DumpCount)));
+					StateValue |= (Jump & 0xff) << 8;
+					SetRegValue((U32)(&(ChannelState->StateBufferHW->DumpCount)),  StateValue);
+				}
+				SwitchTrackingStage(ChannelState, STAGE_TRACK0);
 				ChannelState->CarrLoseLockCounter = ChannelState->CodeLoseLockCounter = 0;
 				StageChange = 1;
 			}

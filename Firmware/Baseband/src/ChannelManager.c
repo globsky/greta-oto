@@ -35,6 +35,7 @@ int StageDetermination(PCHANNEL_STATE ChannelState);
 static void ProcessCohData(PCHANNEL_STATE ChannelState);
 static void CollectBitSyncData(PCHANNEL_STATE ChannelState);
 static void DecodeDataStream(PCHANNEL_STATE ChannelState);
+static void DummyDataStream(PCHANNEL_STATE ChannelState);
 static void CalcCN0(PCHANNEL_STATE ChannelState);
 static int GpsL1CABitSyncTask(void *Param);
 static int GalE1BitSyncTask(void *Param);
@@ -278,11 +279,7 @@ void ProcessCohData(PCHANNEL_STATE ChannelState)
 		CollectBitSyncData(ChannelState);
 	// keep bit edge at tracking hold
 	else if ((ChannelState->State & STAGE_MASK) == STAGE_HOLD3)
-	{
-		ChannelState->DataStream.CurrentAccTime += ChannelState->CoherentNumber;
-		if (ChannelState->DataStream.CurrentAccTime >= ChannelState->DataStream.TotalAccTime)
-			ChannelState->DataStream.CurrentAccTime = 0;
-	}
+		DummyDataStream(ChannelState);
 	// do data decode at tracking stage
 	else if (((ChannelState->State & STAGE_MASK) >= STAGE_TRACK) && ((ChannelState->State & DATA_STREAM_MASK) != 0))
 		DecodeDataStream(ChannelState);
@@ -513,6 +510,41 @@ void DecodeDataStream(PCHANNEL_STATE ChannelState)
 			DataStream->BitCount = 0;
 		}
 	}
+}
+
+//*************** Fill dummy data stream at HOLD3 ****************
+//* In order to avoid symbol counting error at data process
+//* dummy data (0 filled, to minimize impect on Viterbi and LDPC decode
+// Parameters:
+//   ChannelState: Pointer to channel state structure
+// Return value:
+//   none
+void DummyDataStream(PCHANNEL_STATE ChannelState)
+{
+	PDATA_STREAM DataStream = &(ChannelState->DataStream);
+	int DataStreamMask = (ChannelState->State & DATA_STREAM_MASK);
+	int InsertBits = (DataStreamMask == DATA_STREAM_1BIT) ? 1 : (DataStreamMask == DATA_STREAM_4BIT) ? 4 : 8;
+	DATA_FOR_DECODE DataForDecode;
+
+	DataStream->CurrentAccTime += ChannelState->CoherentNumber;
+	if (DataStream->CurrentAccTime < DataStream->TotalAccTime)
+		return;
+	DataStream->CurrentAccTime -= DataStream->TotalAccTime;
+
+	DataStream->Symbols <<= InsertBits;
+	DataStream->BitCount += InsertBits;
+
+	if (DataStream->BitCount < 32)
+		return;
+
+	DataForDecode.ChannelState = ChannelState;
+	DataForDecode.DataStream = DataStream->Symbols;
+	DataForDecode.SymbolIndex = SIGNAL_IS_L1CA(ChannelState->Signal) ? -1 : (ChannelState->NHIndex * 20 + (ChannelState->StateBufferCache.CorrState >> 27));
+	DataForDecode.TickCount = BasebandTickCount;
+	DataStream->BitCount = 0;
+	AddToTask(TASK_BASEBAND, DoDataDecode, &DataForDecode, sizeof(DATA_FOR_DECODE));
+
+	return;
 }
 
 //*************** Calculate smoothed CN0 and instant CN0 ****************

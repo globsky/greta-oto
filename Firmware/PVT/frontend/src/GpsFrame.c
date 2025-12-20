@@ -256,11 +256,8 @@ int GpsNavDataProc(PFRAME_INFO pFrameInfo, PDATA_FOR_DECODE DataForDecode)
 					pFrameInfo->TimeTag ++;
 					if (pFrameInfo->TimeTag > MAX_GPS_TOW)
 						pFrameInfo->TimeTag = 0;
-					// assign subframe id
-					frame_id = (pFrameInfo->SymbolData[8] >> 8) & 0x7;
-					if (pFrameInfo->SymbolData[8] & 0x40000000)	// contents of HOW XOR with D30
-						frame_id ^= 7;
-					pFrameInfo->FrameStatus = 30 + frame_id;
+					// increase FrameStatus
+					pFrameInfo->FrameStatus = (pFrameInfo->FrameStatus == 35) ? 31 : pFrameInfo->FrameStatus + 1;
 					// decode current subframe
 					SymbolPackage->ChannelState = ChannelState;
 					SymbolPackage->FrameInfo = pFrameInfo;

@@ -117,11 +117,11 @@ int GalNavDataProc(PFRAME_INFO pFrameInfo, PDATA_FOR_DECODE DataForDecode)
 			pFrameInfo->SymbolNumber ++;
 			if (pFrameInfo->SymbolNumber == 240)	// one page completed
 			{
-				// do Viterbi decode on page data
-				GalViterbiDecode(pFrameInfo->FrameData, PageData);
 				pFrameInfo->SymbolNumber = -10;	// skip first 10 symbols for next page as sync pattern
 				pFrameInfo->TickCount = DataForDecode->TickCount - data_count * 4;	// TickCount of current symbol (will not change until next page part)
-				SymbolCount = GalPageProc(pFrameInfo, DataForDecode, PageData) + data_count;
+				// do Viterbi decode on page data, 	assume each symbol has at least +-2 amplitude, 240 symbols total distance will be less than (7-2)*240
+				if (GalViterbiDecode(pFrameInfo->FrameData, PageData) < 1200)
+					SymbolCount = GalPageProc(pFrameInfo, DataForDecode, PageData) + data_count;
 			}
 		}
 	}
@@ -476,7 +476,7 @@ int GalViterbiDecode(unsigned int SymbolBuffer[30], unsigned int DecodeResult[4]
 	DecodeResult[3] = (unsigned int)(Trace[MinState]);
 	TotalMinDistance = Distance[MinState];
 
-	return 0;
+	return TotalMinDistance;
 }
 static const int OutputTable[4][8] = {
 	{ 3, 5, 11, 13, 16, 22, 24, 30, },	// output 00 if input 0

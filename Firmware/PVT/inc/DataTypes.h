@@ -275,17 +275,8 @@ typedef struct
 	KINEMATIC_INFO PosVel;	// receiver position/velocity in ECEF coordinate
 	LLH PosLLH;				// receiver position
 	GROUND_SPEED GroundSpeed;// receiver group speed
-//	double GpsClkError;		// receiver clock error to GPS time, in second
-//	double GalileoClkError;	// receiver clock error to Galileo time, in second
-//	double BdsClkError;		// receiver clock error to BDS time, in second
-//	double ClkDrifting;		// receiver clock drifting, in m/s
 	double DopArray[8];		// HDOP, VDOP, PDOP, TDOP, SigmaEE, SigmaNN, SigmaEN, reserved
 
-//	int GpsMsCount;			// millisecond count within a week, identical to all systems
-//	int WeekNumber;			// week number of receiver time used by GPS
-//	TimeAccuracy GpsTimeQuality;
-//	TimeAccuracy BdsTimeQuality;
-//	TimeAccuracy GalileoTimeQuality;
 	RECEIVER_TIME *ReceiverTime;
 	PosAccuracy PosQuality;
 	unsigned int PosFlag;	// Positioning flag

@@ -29,7 +29,7 @@
 U32 EphAlmMutex;
 static int AdjustIntervalDelay;
 
-static void MsrProc(PBB_MEAS_PARAM MeasParam);
+static int MsrProc(PBB_MEAS_PARAM MeasParam);
 static void CalculateRawMsr(PCHANNEL_STATUS pChannelStatus, PBB_MEASUREMENT pMsr, int MsInterval, int TimeAdjust);
 static int AlignObsTime(PRECEIVER_INFO ReceiverInfo);
 
@@ -126,7 +126,7 @@ int DoDataDecode(void* Param)
 //   0
 int MeasProcTask(void *Param)
 {
-	int OutputBasebandMeas = 1;
+	int MeasurementNumber, OutputBasebandMeas = 1;
 	PBB_MEAS_PARAM MeasParam = (PBB_MEAS_PARAM)Param;
 	PBB_MEASUREMENT Msr = BasebandMeasurement;
 
@@ -144,7 +144,7 @@ int MeasProcTask(void *Param)
 	UpdateReceiverTime(MeasParam->TickCount, MeasParam->Interval + MeasParam->ClockAdjust);
 #endif
 	// calculate raw measurement
-	MsrProc(MeasParam);
+	MeasurementNumber = MsrProc(MeasParam);
 	if (OutputBasebandMeas)
 	{
 		MeasParam->TimeQuality = GnssTime.TimeQuality;
@@ -153,7 +153,8 @@ int MeasProcTask(void *Param)
 		AddToTask(TASK_INOUT, MeasPrintTask, Param, sizeof(BB_MEAS_PARAM));
 	}
 	// do PVT
-	PvtProc(MeasParam->Interval, MeasParam->ClockAdjust);
+	if (MeasurementNumber > 0)
+		PvtProc(MeasParam->Interval, MeasParam->ClockAdjust);
 
 	return 0;
 }
@@ -165,8 +166,8 @@ int MeasProcTask(void *Param)
 //   CurMsInterval: actual time interval between current epoch and previous epoch
 //   DefaultMsInterval: nominal time interval between two epochs
 // Return value:
-//   none
-void MsrProc(PBB_MEAS_PARAM MeasParam)
+//   Valid measurement number
+int MsrProc(PBB_MEAS_PARAM MeasParam)
 {
 	int ch_num, svid, SatID, meas_num;
 	U8 Signal;
@@ -232,6 +233,7 @@ void MsrProc(PBB_MEAS_PARAM MeasParam)
 	}
 
 	// TODO: check for cross correlation by comparing data message
+	return meas_num;
 }
 
 //*************** Calculate raw measurement from baseband measurement ****************

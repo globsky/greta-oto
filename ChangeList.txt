@@ -268,3 +268,13 @@
 		Fix bug in filling AE buffer that BOC signal need to add 1.023MHz bias to carrier frequency
 		Fix bug that CarrierFreqSave updated without assigning valid value when when BOC signal tracking switch from sideband to dualband
 		Mismatch of angle variables (M0/n/omega0/omega_dot etc.) decode as semi-cycle but used as rad in SatPosSpeedAlm()
+12/19/2025
+	Function and feature change
+		Add constellation selection at start up stage
+		Add correlator and frequency alignment when recover from HOLD3 stage
+		When switch to HOLD3, code frequency uses saved carrier frequency to prevent save code frequency has large bias
+		Add minimum distance check on Galileo Viterbi decode
+	Bug fix
+		Add DummyDataStream() to prevent data stream interruption during HOLD3 state
+		Fix bug of using incorrect af1 compensation to Doppler observation in ApplyCorrection()
+		Have FrameStatus increase by itself in GPS data process to prevent incorrect frame ID decoded		

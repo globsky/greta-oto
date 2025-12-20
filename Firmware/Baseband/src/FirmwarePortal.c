@@ -125,10 +125,15 @@ void FirmwareInitialize(StartType Start, PSYSTEM_TIME CurTime, LLH *CurPosition)
 //   none
 void DoAllSearch()
 {
-	SearchSatelliteRange(SIGNAL_L1CA, 1, 32);
-	SearchSatelliteRange(SIGNAL_E1, 1, 32);
-	SearchSatelliteRange(SIGNAL_B1C, 1, 32);
-	SearchSatelliteRange(SIGNAL_B1C, 33, 31);
+	if (g_PvtConfig.PvtConfigFlags & PVT_CONFIG_USE_GPS)
+		SearchSatelliteRange(SIGNAL_L1CA, 1, 32);
+	if (g_PvtConfig.PvtConfigFlags & PVT_CONFIG_USE_GAL)
+		SearchSatelliteRange(SIGNAL_E1, 1, 32);
+	if (g_PvtConfig.PvtConfigFlags & PVT_CONFIG_USE_BDS)
+	{
+		SearchSatelliteRange(SIGNAL_B1C, 1, 32);
+		SearchSatelliteRange(SIGNAL_B1C, 33, 31);
+	}
 }
 
 //*************** add an acquisition task for a given of satellites ****************
@@ -179,6 +184,8 @@ void SearchSatelliteInView(int SatNumber, PSAT_PREDICT_PARAM SatList[], U8 Signa
 		{
 			if (!SIGNAL_IS_L1CA(GET_SIGNAL(SignalSvid[i])))
 				break;
+			if (!(g_PvtConfig.PvtConfigFlags & PVT_CONFIG_USE_GPS))
+				continue;
 			pAcqConfig->SatConfig[SatCount].SignalSvid = SignalSvid[i];
 			pAcqConfig->SatConfig[SatCount].CodeSpan = 3;
 			pAcqConfig->SatConfig[SatCount].CenterFreq = SatList[i]->Doppler;
@@ -198,6 +205,10 @@ void SearchSatelliteInView(int SatNumber, PSAT_PREDICT_PARAM SatList[], U8 Signa
 	{
 		for (; i < SatNumber; i ++)
 		{
+			if (!(g_PvtConfig.PvtConfigFlags & PVT_CONFIG_USE_GAL) && SIGNAL_IS_E1(GET_SIGNAL(SignalSvid[i])))
+				continue;
+			if (!(g_PvtConfig.PvtConfigFlags & PVT_CONFIG_USE_BDS) && SIGNAL_IS_B1C(GET_SIGNAL(SignalSvid[i])))
+				continue;
 			pAcqConfig->SatConfig[SatCount].SignalSvid = SignalSvid[i];
 			pAcqConfig->SatConfig[SatCount].CodeSpan = SIGNAL_IS_E1(GET_SIGNAL(SignalSvid[i])) ? 12 : 30;
 			pAcqConfig->SatConfig[SatCount].CenterFreq = SatList[i]->Doppler;

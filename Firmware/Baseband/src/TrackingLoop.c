@@ -70,66 +70,80 @@ void CalcDiscriminator(PCHANNEL_STATE ChannelState, unsigned int Method)
 			SearchPeakFft(ChannelState->NoncohBuffer, &SearchResult);
 		ChannelState->PeakPower = SearchResult.PeakPower * SearchResult.PeakPower;
 	}
-	if ((Method & TRACKING_UPDATE_FLL) && ChannelState->fll_k1 > 0)
+	if (Method & TRACKING_UPDATE_FLL)
 	{
 		Denominator = 2 * SearchResult.PeakPower - SearchResult.LeftBinPower - SearchResult.RightBinPower;
 		Numerator = SearchResult.LeftBinPower - SearchResult.RightBinPower;
 		// atan((L-R)/(2P-R-L))
 		ChannelState->FrequencyDiff = (CordicAtan(Denominator, Numerator, 0) >> 1);
 		ChannelState->FrequencyDiff += (SearchResult.FreqBinDiff << 13);
-		// lock indicator
-		AdjustLockIndicator(&(ChannelState->FLD), ChannelState->FrequencyDiff >> 10);
-//		printf("FLD=%3d\n", ChannelState->FLD);
-		if (ChannelState->TrackingTime > 1000)	// 1s converge time before update lose lock counter
+		// only update indicator/counter/loop when loop filter coefficient valid
+		if (ChannelState->fll_k1 > 0)
 		{
-			if (SearchResult.FreqBinDiff)
-				ChannelState->CarrLoseLockCounter += NoncohLength;
-			else
-				ChannelState->CarrLoseLockCounter -= NoncohLength;
+			// lock indicator
+			AdjustLockIndicator(&(ChannelState->FLD), ChannelState->FrequencyDiff >> 10);
+//			printf("FLD=%3d\n", ChannelState->FLD);
+			if (ChannelState->TrackingTime > 1000)	// 1s converge time before update lose lock counter
+			{
+				if (SearchResult.FreqBinDiff)
+					ChannelState->CarrLoseLockCounter += NoncohLength;
+				else
+					ChannelState->CarrLoseLockCounter -= NoncohLength;
+			}
+			ChannelState->State |= TRACKING_UPDATE_FLL;
 		}
-		ChannelState->State |= TRACKING_UPDATE_FLL;
 	}
-	if ((Method & TRACKING_UPDATE_DLL) && ChannelState->dll_k1 > 0)
+	if (Method & TRACKING_UPDATE_DLL)
 	{
-		DEBUG_OUTPUT(OUTPUT_CONTROL(TRACKING_LOOP, INFO), "EPL = %5d %5d %5d\n", SearchResult.EarlyPower, SearchResult.PeakPower, SearchResult.LatePower);
+		DEBUG_OUTPUT(OUTPUT_CONTROL(TRACKING_LOOP, OFF), "EPL = %5d %5d %5d\n", SearchResult.EarlyPower, SearchResult.PeakPower, SearchResult.LatePower);
 		Denominator = 2 * SearchResult.PeakPower - SearchResult.EarlyPower - SearchResult.LatePower;
 		Numerator = SearchResult.EarlyPower - SearchResult.LatePower;
 		// (E-L)/(2P-E-L))
 		ChannelState->DelayDiff = Denominator ? ((Numerator << (13 - NarrowFactor)) / Denominator) : 0;
 		ChannelState->DelayDiff += (SearchResult.CorDiff << 14);
-		// lock indicator
-		AdjustLockIndicator(&(ChannelState->DLD), ChannelState->DelayDiff >> 11);
-//		printf("DLD=%3d\n", ChannelState->DLD);
-		if (ChannelState->TrackingTime > 1000)	// 1s converge time before update lose lock counter
+		// only update indicator/counter/loop when loop filter coefficient valid
+		if (ChannelState->dll_k1 > 0)
 		{
-			if (SearchResult.CorDiff)
-				ChannelState->CodeLoseLockCounter += NoncohLength;
-			else
-				ChannelState->CodeLoseLockCounter -= NoncohLength;
+			// lock indicator
+			AdjustLockIndicator(&(ChannelState->DLD), ChannelState->DelayDiff >> 11);
+//			printf("DLD=%3d\n", ChannelState->DLD);
+			if (ChannelState->TrackingTime > 1000)	// 1s converge time before update lose lock counter
+			{
+				if (SearchResult.CorDiff)
+					ChannelState->CodeLoseLockCounter += NoncohLength;
+				else
+					ChannelState->CodeLoseLockCounter -= NoncohLength;
+			}
+			ChannelState->State |= TRACKING_UPDATE_DLL;
 		}
-		ChannelState->State |= TRACKING_UPDATE_DLL;
 	}
-	if ((Method & TRACKING_UPDATE_PLL) && ChannelState->pll_k1 > 0)
+	if (Method & TRACKING_UPDATE_PLL)
 	{
 		CorResutReal = (S16)(ChannelState->PendingCoh[4] >> 16);
 		CorResultImag = (S16)(ChannelState->PendingCoh[4] & 0xffff);
 		ChannelState->PhaseDiff = CordicAtan(CorResutReal, CorResultImag, (ChannelState->State & STATE_4QUAD_DISC) ? 1 : 0);
-		// lock indicator
-		AdjustLockIndicator(&(ChannelState->PLD), ChannelState->PhaseDiff >> 9);
-//		printf("PLD=%3d\n", ChannelState->PLD);
-		if (ChannelState->TrackingTime > 1000)	// 1s converge time before update lose lock counter
+		// only update indicator/counter/loop when loop filter coefficient valid
+		if (ChannelState->pll_k1 > 0)
 		{
-			if (ChannelState->PhaseDiff > 4096 || ChannelState->PhaseDiff < -4096)
-				ChannelState->CarrLoseLockCounter += CohLength;
-			else
-				ChannelState->CarrLoseLockCounter -= CohLength;
+			// lock indicator
+			AdjustLockIndicator(&(ChannelState->PLD), ChannelState->PhaseDiff >> 9);
+//			printf("PLD=%3d\n", ChannelState->PLD);
+			if (ChannelState->TrackingTime > 1000)	// 1s converge time before update lose lock counter
+			{
+				if (ChannelState->PhaseDiff > 4096 || ChannelState->PhaseDiff < -4096)
+					ChannelState->CarrLoseLockCounter += CohLength;
+				else
+					ChannelState->CarrLoseLockCounter -= CohLength;
+			}
+			ChannelState->State |= TRACKING_UPDATE_PLL;
 		}
-		ChannelState->State |= TRACKING_UPDATE_PLL;
 	}
 	if (ChannelState->CarrLoseLockCounter < 0)
 		ChannelState->CarrLoseLockCounter = 0;
 	if (ChannelState->CodeLoseLockCounter < 0)
 		ChannelState->CodeLoseLockCounter = 0;
+	DEBUG_OUTPUT(OUTPUT_CONTROL(TRACKING_LOOP, INFO), "Tick %6d PLD/FLD/DLD = %3d %3d %3d CarrLLC = %5d CodeLLC = %5d\n", ChannelState->TickCount,
+		ChannelState->PLD, ChannelState->FLD, ChannelState->DLD, ChannelState->CarrLoseLockCounter, ChannelState->CodeLoseLockCounter);
 }
 
 //*************** Do 8 point FFT on coherent buffer and accumulate to noncoherent buffer ****************
