@@ -278,3 +278,9 @@
 		Add DummyDataStream() to prevent data stream interruption during HOLD3 state
 		Fix bug of using incorrect af1 compensation to Doppler observation in ApplyCorrection()
 		Have FrameStatus increase by itself in GPS data process to prevent incorrect frame ID decoded		
+1/20/2026
+	Function and feature change
+		Expand TE FIFO round number from 12bit to 16bit to increase round time from 10s to 163s
+		Change AE buffer data timeout time from 4s to 30s
+		Change pull-in FLL from 2nd order to 1st order to prevent overshooting at large Doppler difference
+		Add unit and correct code chip count in debug output file

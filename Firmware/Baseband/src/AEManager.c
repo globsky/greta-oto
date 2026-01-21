@@ -115,7 +115,7 @@ void DoAcqTask()
 		return;
 
 	CurAcqTask = &AcqConfig[i];
-	if (CurSignalType != (CurAcqTask->SearchMode & SEARCH_MODE_TYPE_MASK) || (BasebandTickCount - AcqBufferTimeTag) > 4000)	// AE buffer not filled desired signal or too old (>4s)
+	if (CurSignalType != (CurAcqTask->SearchMode & SEARCH_MODE_TYPE_MASK) || (BasebandTickCount - AcqBufferTimeTag) > 30000)	// AE buffer not filled desired signal or too old (>4s)
 		FillAeBuffer(CurAcqTask);
 	else
 		StartAcquisition();
@@ -292,12 +292,12 @@ int ProcessAcqResult(void *Param)
 
 	// get AE latch address
 	RegValue = GetRegValue(ADDR_TE_FIFO_LWADDR_AE);
-	LatchRound = (RegValue >> 20);
-	LatchAddress = ((RegValue >> 6) & 0x3fff) + LatchRound * 10240;
+	LatchRound = (RegValue >> 16);
+	LatchAddress = ((RegValue >> 2) & 0x3fff) + LatchRound * 10240;
 	// get write address and round
 	RegValue = GetRegValue(ADDR_TE_FIFO_WRITE_ADDR);
-	ReadRound = (RegValue >> 20);
-	WriteAddress = (RegValue >> 6) & 0x3fff;
+	ReadRound = (RegValue >> 16);
+	WriteAddress = (RegValue >> 2) & 0x3fff;
 	// get read address and compare with write address to determine whether it has roll-over
 	RegValue = GetRegValue(ADDR_TE_FIFO_READ_ADDR);
 	if ((int)RegValue > WriteAddress)	// write address roll-over
@@ -305,7 +305,7 @@ int ProcessAcqResult(void *Param)
 	ReadAddress = RegValue + ReadRound * 10240;
 	AddressGap = ReadAddress - LatchAddress;
 	if (AddressGap < 0)
-		AddressGap += 41943040;	// 2^12 * 10240
+		AddressGap += ((1 << 16) * 10240);	// 2^16 * 10240
 	// get remnant of address gap
 	TimeGap = AddressGap / SAMPLES_1MS;	// time elapsed in ms
 	AddressGap %= (SAMPLES_1MS * 20);	// remnant of 20ms

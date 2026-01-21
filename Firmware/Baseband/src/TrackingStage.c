@@ -20,7 +20,7 @@
 // in order to have stage switch at correct data edge, positive Timeout value should be multiple of 20
 static TRACKING_CONFIG TrackingConfigTable[] = {
 // Coh FFT NonCoh Narrow Post  BnPLL   BnFLL   BnDLL  Timeout
- {  1,  5,   2,      0,    1,      0,  80|C2,  80|C2,   200,},	// 0 for pull-in
+ {  1,  5,   2,      0,    1,      0,  80|C1,  80|C1,   200,},	// 0 for pull-in
  {  1,  5,   2,      0,    1,      0,  80|C2,  80|C2,  1500,},	// 1 for bit_sync
  {  4,  5,   4,      0,    2,      0,      0,      0, 30000,},	// 2 for GPS L1 tracking hold
  {  5,  1,   4,      0,    2, 320|C2,   0|C2,  80|C2,  5000,},	// 3 for GPS L1 track 0
@@ -28,7 +28,7 @@ static TRACKING_CONFIG TrackingConfigTable[] = {
  {  4,  5,  16,      0,    3,   0|C2,  80|C2,  40|C2,    -1,},	// 5 for GPS L1 track 2
  {  5,  1,   4,      0,    2, 320|C2,   0|C2,  80|C2,     0,},	// 6 for BDS B1C track 0
  { 10,  1,   4,      0,    3, 240|C2,   0|C2,  40|C2,    -1,},	// 7 for BDS B1C track 1
- {  1,  4,   2,      0,    1,      0,  80|C2,  80|C2,   200,},	// 8 for GAL E1 pull-in
+ {  1,  4,   2,      0,    1,      0,  80|C1,  80|C1,   200,},	// 8 for GAL E1 pull-in
  {  4,  1,   5,      0,    2, 320|C2,   0|C2,  80|C2,  1500,},	// 9 for GAL E1 bit_sync
  {  4,  1,   5,      0,    2, 320|C2,   0|C2,  80|C2,  5000,},	//10 for GAL E1 track 0
 };

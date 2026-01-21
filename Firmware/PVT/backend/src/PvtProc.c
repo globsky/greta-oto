@@ -89,7 +89,7 @@ void PvtProcInit(StartType Start, PSYSTEM_TIME CurTime, LLH *CurPosition)
 	g_ReceiverInfo.PosVel.vx = g_ReceiverInfo.PosVel.vy = g_ReceiverInfo.PosVel.vz = 0.0;
 
 	g_PvtConfig.PvtConfigFlags = PVT_CONFIG_USE_GPS | PVT_CONFIG_USE_BDS | PVT_CONFIG_USE_GAL;
-	g_PvtConfig.PvtConfigFlags = PVT_CONFIG_USE_BDS;
+//	g_PvtConfig.PvtConfigFlags = PVT_CONFIG_USE_BDS;
 	g_PvtConfig.PvtConfigFlags |= ENABLE_KALMAN_FILTER ? PVT_CONFIG_USE_KF : 0;
 	g_PvtConfig.ElevationMask = 5.0;
 

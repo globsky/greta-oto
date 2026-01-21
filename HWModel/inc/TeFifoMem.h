@@ -42,7 +42,7 @@ public:
 	reg_uint FifoGuard;					// 16bit
 	reg_uint ReadAddress;				// 14bit
 	reg_uint WriteAddress;				// 14bit
-	reg_uint WriteAddressRound;			// 12bit
+	reg_uint WriteAddressRound;			// 16bit
 	reg_uint CurReadAddress;			// 14bit
 	reg_uint BlockSize;					// 14bit
 	reg_int  BlockSizeAdjust;			// 8bit
@@ -53,7 +53,7 @@ public:
 	reg_uint WriteAddressLatchCPURound;	// 12bit
 	reg_uint WriteAddressLatchEMRound;	// 12bit
 	reg_uint WriteAddressLatchPPSRound;	// 12bit
-	reg_uint WriteAddressLatchAERound;	// 12bit
+	reg_uint WriteAddressLatchAERound;	// 16bit
 	
 	int RealBlockSize;					// this is a wire instead of register, the value equals to BlockSize + BlockSizeAdjust
 	int GuardThreshold;					// this is a wire instead of register, the value equals to FifoSize - FifoGuard

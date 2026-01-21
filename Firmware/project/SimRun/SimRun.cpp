@@ -26,6 +26,7 @@ int main(int argc, char *argv[])
 	DebugFile = fopen("TrackState.txt", "w");
 	SetInputFile(ScenarioFile);
 	fprintf(DebugFile, "SV# SatPhase SatDoppler SatCode LocalPhase LocalFre LocalCode PhaseDiff FreqDiff  PsrDiff\n");
+	fprintf(DebugFile, "SV#  Cycle       Hz      Chip     Cycle       Hz       Chip      Cycle     Hz        m   \n");
 
 	AttachDebugFunc(DebugOutput);
 	FirmwareInitialize(ColdStart, &InitTime, &InitPosition);
@@ -53,7 +54,7 @@ void DebugOutput(void *DebugParam, int DebugValue)
 	if (!DebugFile)
 		return;
 //	if ((DebugValue % 100) != 0 && !(DebugValue >= 29000 && DebugValue <= 30100))
-	if ((DebugValue % 100) != 0)
+	if ((DebugValue % 10) != 0)
 		return;
 	fprintf(DebugFile, "Time %6d\n", DebugValue);
 	for (i = 0, EnableMask = 1; i < 32; i ++, EnableMask <<= 1)
@@ -70,17 +71,17 @@ void DebugOutput(void *DebugParam, int DebugValue)
 			CarrierPhase = 1 - CarrierPhase;
 			Doppler = GetDoppler(pSatParam, 0);
 			TransmitTime = GetTransmitTime(GnssTop->CurTime, GetTravelTime(pSatParam, 0));
-			PeakPosition = TransmitTime.SubMilliSeconds * 2046;
+			PeakPosition = TransmitTime.SubMilliSeconds * 1023;
 			if (TrackingChannel->SystemSel == SignalE1)	// Galileo E1
-				PeakPosition += (TransmitTime.MilliSeconds % 4) * 2046;
+				PeakPosition += (TransmitTime.MilliSeconds % 4) * 1023;
 			else if (TrackingChannel->SystemSel >= SignalB1C)	// B1C or L1C
-				PeakPosition += (TransmitTime.MilliSeconds % 10) * 2046;
+				PeakPosition += (TransmitTime.MilliSeconds % 10) * 1023;
 			LocalPhase = TrackingChannel->CarrierPhase / 4294967296.;
 			LocalDoppler = TrackingChannel->CarrierFreq - IF_FREQ;
 			if (TrackingChannel->SystemSel != SignalL1CA && TrackingChannel->EnableBOC == 0)	// using sidelobe tracking
 				LocalDoppler -= 1023000.;
 			PrnCount2x = TrackingChannel->PrnCount * 2 + TrackingChannel->CodeSubPhase - 4;
-			CodePhase = PrnCount2x + (double)TrackingChannel->CodePhase / 4294967296.;
+			CodePhase = (PrnCount2x + (double)TrackingChannel->CodePhase / 4294967296.) / 2;
 			PhaseDiff = LocalPhase - CarrierPhase;
 			if (PhaseDiff < -0.25)
 				PhaseDiff += 1.0;
@@ -89,7 +90,7 @@ void DebugOutput(void *DebugParam, int DebugValue)
 			DopplerDiff = LocalDoppler - Doppler;
 			CodeDiff = CodePhase - PeakPosition;
 			fprintf(DebugFile, "%c%02d %8.6f %9.3f %9.3f %8.6f %9.3f %9.3f %9.6f %8.3f %8.3f\n", (pSatParam->system == GpsSystem) ? 'G' : (pSatParam->system == BdsSystem) ? 'C' : 'E',
-				pSatParam->svid, CarrierPhase, Doppler, PeakPosition, LocalPhase, LocalDoppler, CodePhase, PhaseDiff, DopplerDiff, CodeDiff * CodeLength / 2);
+				pSatParam->svid, CarrierPhase, Doppler, PeakPosition, LocalPhase, LocalDoppler, CodePhase, PhaseDiff, DopplerDiff, CodeDiff * CodeLength);
 		}
 	}
 }

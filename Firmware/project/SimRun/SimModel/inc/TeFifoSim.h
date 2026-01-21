@@ -30,7 +30,7 @@ public:
 	unsigned int FifoGuard;					// 16bit
 	unsigned int ReadAddress;				// 14bit
 	unsigned int WriteAddress;				// 14bit
-	unsigned int WriteAddressRound;			// 12bit
+	unsigned int WriteAddressRound;			// 16bit
 	unsigned int BlockSize;					// 14bit
 	unsigned int WriteAddressLatchCPU;		// 14bit
 	unsigned int WriteAddressLatchEM;		// 14bit
@@ -39,7 +39,7 @@ public:
 	unsigned int WriteAddressLatchCPURound;	// 12bit
 	unsigned int WriteAddressLatchEMRound;	// 12bit
 	unsigned int WriteAddressLatchPPSRound;	// 12bit
-	unsigned int WriteAddressLatchAERound;	// 12bit
+	unsigned int WriteAddressLatchAERound;	// 16bit
 };
 
 #endif //__TE_FIFO_SIM_H__

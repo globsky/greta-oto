@@ -88,7 +88,7 @@ U32 CTeFifoSim::GetRegValue(int Address)
 	case ADDR_OFFSET_TE_FIFO_READ_ADDR:
 		return ReadAddress;
 	case ADDR_OFFSET_TE_FIFO_WRITE_ADDR:
-		return (WriteAddress << CLK_COUNT_WIDTH) | (WriteAddressRound << 20);
+		return (WriteAddress << (CLK_COUNT_WIDTH - 4)) | (WriteAddressRound << 16);
 	case ADDR_OFFSET_TE_FIFO_BLOCK_SIZE:
 		return BlockSize;
 	case ADDR_OFFSET_TE_FIFO_BLOCK_ADJ:
@@ -100,7 +100,7 @@ U32 CTeFifoSim::GetRegValue(int Address)
 	case ADDR_OFFSET_TE_FIFO_LWADDR_PPS:
 		return (WriteAddressLatchPPS << CLK_COUNT_WIDTH) | (WriteAddressLatchPPSRound << 20);
 	case ADDR_OFFSET_TE_FIFO_LWADDR_AE:
-		return (WriteAddressLatchAE << CLK_COUNT_WIDTH) | (WriteAddressLatchAERound << 20);
+		return (WriteAddressLatchAE << (CLK_COUNT_WIDTH - 4)) | (WriteAddressLatchAERound << 16);
 	default:
 		return 0;
 	}
@@ -116,7 +116,7 @@ void CTeFifoSim::StepOneBlock(int BlockSize)
 	{
 		WriteAddress -= FIFO_SIZE;
 		WriteAddressRound ++;
-		WriteAddressRound &= 0xfff;
+		WriteAddressRound &= 0xffff;
 	}
 }
 
@@ -126,15 +126,15 @@ void CTeFifoSim::LatchWriteAddress(int Source)
 	{
 	case 0:	// CPU
 		WriteAddressLatchCPU = WriteAddress;
-		WriteAddressLatchCPURound = WriteAddressRound;
+		WriteAddressLatchCPURound = WriteAddressRound & 0xfff;
 		break;
 	case 1:	// EM
 		WriteAddressLatchEM = WriteAddress;
-		WriteAddressLatchEMRound = WriteAddressRound;
+		WriteAddressLatchEMRound = WriteAddressRound & 0xfff;
 		break;
 	case 2:	// PPS
 		WriteAddressLatchPPS = WriteAddress;
-		WriteAddressLatchPPSRound = WriteAddressRound;
+		WriteAddressLatchPPSRound = WriteAddressRound & 0xfff;
 		break;
 	case 3:	// AE
 		WriteAddressLatchAE = WriteAddress;

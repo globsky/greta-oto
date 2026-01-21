@@ -67,7 +67,7 @@ reg [GUARD_WIDTH-1:0] fifo_guard;
 reg [ADDR_WIDTH-1:0] read_addr;
 reg [ADDR_WIDTH-1:0] write_addr;
 reg [ADDR_WIDTH-1:0] block_size;
-reg [11:0] write_addr_round;
+reg [15:0] write_addr_round;
 reg [DATA_COUNT_WIDTH-1:0] fifo_data_count;
 reg [CLK_COUNT_WIDTH-1:0] data_clk_count;
 reg [7:0]  fifo_block_adjust;
@@ -75,11 +75,11 @@ reg [7:0]  fifo_block_adjust;
 reg[19:0] cpu_lwaddr;
 reg[19:0] em_lwaddr;
 reg[19:0] pps_lwaddr;
-reg[19:0] ae_lwaddr;
+reg[15:0] ae_lwaddr;
 reg[11:0]  cpu_round_lwaddr;
 reg[11:0]  em_round_lwaddr;
 reg[11:0]  pps_round_lwaddr;
-reg[11:0]  ae_round_lwaddr;
+reg[15:0]  ae_round_lwaddr;
 
 wire clear;
 wire fifo_enable;
@@ -130,7 +130,7 @@ always @ (*) begin
 			`TE_FIFO_STATUS       : fifo_d4rd = {{(24-DATA_COUNT_WIDTH){1'b0}}, fifo_data_count, 5'h0, fifo_enable, guard_alarm_flag, overflow_flag};
 			`TE_FIFO_GUARD        : fifo_d4rd = {{(24-GUARD_WIDTH){1'b0}}, fifo_guard, 8'h0};
 			`TE_FIFO_READ_ADDR    : fifo_d4rd = {{(32-ADDR_WIDTH){1'b0}}, read_addr};
-			`TE_FIFO_WRITE_ADDR   : fifo_d4rd = {write_addr_round, write_addr, {CLK_COUNT_WIDTH{1'b0}}};
+			`TE_FIFO_WRITE_ADDR   : fifo_d4rd = {write_addr_round, write_addr, {(CLK_COUNT_WIDTH - 4){1'b0}}};
 			`TE_FIFO_BLOCK_SIZE   : fifo_d4rd = {{(32-ADDR_WIDTH){1'b0}}, block_size};
 			`TE_FIFO_BLOCK_ADJUST : fifo_d4rd = {{24{fifo_block_adjust[7]}}, fifo_block_adjust};
 			`TE_FIFO_LWADDR_CPU   : fifo_d4rd = {cpu_round_lwaddr, cpu_lwaddr};
@@ -458,7 +458,7 @@ always @(posedge clk or negedge rst_b)
 		if(~cpu_latch_d & cpu_latch)
 		begin
 			cpu_lwaddr <= {write_addr, data_clk_count};
-			cpu_round_lwaddr <= write_addr_round;
+			cpu_round_lwaddr <= write_addr_round[11:0];
 		end
 
 always @(posedge clk or negedge rst_b)
@@ -470,7 +470,7 @@ always @(posedge clk or negedge rst_b)
 		if(~em_latch_d & em_latch)
 		begin
 			em_lwaddr <= {write_addr, data_clk_count};
-			em_round_lwaddr <= write_addr_round;
+			em_round_lwaddr <= write_addr_round[11:0];
 		end
 
 always @(posedge clk or negedge rst_b)
@@ -482,7 +482,7 @@ always @(posedge clk or negedge rst_b)
 		if(~pps_latch_d & pps_latch)
 		begin
 			pps_lwaddr <= {write_addr, data_clk_count};
-			pps_round_lwaddr <= write_addr_round;
+			pps_round_lwaddr <= write_addr_round[11:0];
 		end
 
 always @(posedge clk or negedge rst_b)
@@ -493,7 +493,7 @@ always @(posedge clk or negedge rst_b)
 	else
 		if(~ae_latch_d & ae_latch)
 		begin
-			ae_lwaddr <= {write_addr, data_clk_count};
+			ae_lwaddr <= {write_addr, data_clk_count[CLK_COUNT_WIDTH-1:4]};
 			ae_round_lwaddr <= write_addr_round;
 		end
 
